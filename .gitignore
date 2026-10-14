@@ -1,0 +1,33 @@
+.env
+.env.*
+!.env.example
+
+# Go binaries and build output
+bin/
+build/
+/backend/server
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# JavaScript output
+node_modules/
+dist/
+coverage/
+
+# OS junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Local editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

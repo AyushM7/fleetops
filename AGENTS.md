@@ -1,0 +1,8 @@
+- Work on one ticket at a time. Do not touch files outside the ticket.
+- Never change schema.graphql, docs/safety-rules.md, or tool signatures unless told to.
+- Every change needs tests. Run them and report the real output.
+- No new dependencies without approval.
+- No hardcoded secrets.
+- If a requirement is unclear, stop and ask. Do not guess.
+- Keep functions small and typed. Comment only non-obvious logic.
+- End every task with: files changed, test results, anything unfinished or guessed.

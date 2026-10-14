@@ -1,0 +1,52 @@
+name: CI
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: backend/go.mod
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: npm ci --prefix agent
+      - run: npm ci --prefix web
+      - run: npm ci --prefix evals
+      - run: make test
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Verify and run Gitleaks
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive=gitleaks_8.30.1_linux_x64.tar.gz
+          checksums=gitleaks_8.30.1_checksums.txt
+          base=https://github.com/gitleaks/gitleaks/releases/download/v8.30.1
+          expected=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          curl --fail --show-error --location "$base/$archive" --output "$RUNNER_TEMP/$archive"
+          curl --fail --show-error --location "$base/$checksums" --output "$RUNNER_TEMP/$checksums"
+          official=$(awk -v file="$archive" '$2 == file {print $1}' "$RUNNER_TEMP/$checksums")
+          if [ "$official" != "$expected" ]; then
+            echo "Official Gitleaks checksum does not match the pinned checksum." >&2
+            exit 1
+          fi
+          printf '%s  %s\n' "$expected" "$RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+          version=$("$RUNNER_TEMP/gitleaks" version)
+          echo "Gitleaks $version"
+          test "$version" = "8.30.1"
+          "$RUNNER_TEMP/gitleaks" git --redact --exit-code 1 .
