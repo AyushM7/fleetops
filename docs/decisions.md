@@ -76,3 +76,54 @@ Verified on 2026-10-13 (America/Chicago). The 14-day rule requires a release to 
 - Docker lifecycle checks used Windows GNU Make with an explicit Git Bash shell because no user WSL distribution is installed. `make up` passed, PostgreSQL reported healthy on `127.0.0.1:5432`, and `make down` passed. The existing `fleetops_postgres_data` volume retained its name and creation timestamp after shutdown. README setup instructions use WSL as required.
 - FleetOps has no HEAD commit. Its final pre-push full-history scan is pending: uncommitted files have not been scanned by a history scan. The owner must create the local commit, scan it with the verified binary, and resolve findings before pushing. No FleetOps commit or push was performed.
 - CI: Not verified. The owner must provide actual push and throwaway pull-request run URLs and configure both `test` and `gitleaks` as required branch-protection checks. Setup remains In progress until the owner's separate acceptance commit.
+
+## P1-01A: simulator contracts and pure helpers
+
+- The approved split supersedes P1-01. This part freezes the exported state types, enum values, camelCase JSON tags, nine sentinel errors, and all approved Config defaults. Battery is an integer percentage; empty assignment strings remain serialized, done jobs retain their assigned robot, and an aisle pointer to zero remains present.
+- Grid lookups resolve out of bounds before wall, station, aisle, and free. Aisle IDs are zero-based. Job cells include only free/aisle cells in row-major order; the default grid has 238. Clone copies all four configuration slices, and each DefaultConfig call returns independent slices.
+- Helpers use only the Go standard library with no I/O, clock, environment, or external state. Config.Validate and comprehensive validation tests belong to P1-01B; no stub is provided. P1-02 will implement Sim and initialize State slices so they serialize as [] rather than null.
+- DYNAMICS, READ, DRIVER, and COMMAND boundaries are documented in the package and architecture. Background dispatch is not an operator command or a safety bypass; trusted injection is never an agent tool. Phase 3 owns command validation, approval, auditing, and serialized access to the future non-goroutine-safe Sim.
+
+## P1-01B: configuration validation
+
+- Config.Validate enforces V1–V11 without changing its input. Deterministic checks wrap ErrInvalidConfig with an explanation; raw aisle geometry detects overlaps that CellTypeAt's lookup precedence intentionally hides. Robot starts may occupy stations or aisles, but never walls.
+- Table-driven tests cover every validation rule, invalid boundaries and overlaps, accepted boundaries, repeated-call determinism, and non-mutation for valid and invalid inputs. cfgRobotOnStation places R1 and R2 on the default stations for future in-package tests.
+- The V11 fixture is a 4×4 grid with four stations, one aisle cell, and eleven walls; five unique robot starts occupy the stations and aisle. It fails specifically for one eligible job cell. Removing one wall gives two eligible cells and passes validation, preserving all other constraints. P1-01A contracts/defaults/helpers remain unchanged; Sim implementation remains deferred.
+
+## P1-02A: simulator core and seeded jobs
+
+- New validates and clones Config, owns one rand.New(rand.NewSource(seed)) generator, and initializes tick zero, the seed, non-nil entity slices, and per-robot unresponsive countdown bookkeeping. Countdown values are initialized but not processed. Sim is not goroutine-safe.
+- Job endpoints use the configuration's row-major eligible cells. Each job uses two random draws; the second index skips the first, guaranteeing distinct endpoints without retries. Integer Tick increments first, adds one job at NewJobEvery intervals below MaxJobs, then calls stepRobots.
+- Entity slices retain append-only numeric creation order with unpadded R/S/J IDs. idNumber reads numeric suffixes of internal IDs; lowestPendingJob returns the lowest-numbered pending entry even in shuffled input, without sorting or assigning it.
+- stepRobots is explicitly a no-op until P1-03. No movement, dispatch, battery drain, charging, or fault injection is implemented. Non-nil state slices prepare the [] JSON contract; Snapshot, deep copies, recordFault, and their JSON tests are deferred exclusively to P1-02B.
+- In-package tests cover initial entities, invalid configuration, ownership of all Config slices, grid lookup, same/different seeds, endpoint eligibility, default and custom schedules, J1–J20 ordering, pending selection, job caps, and no-op robot/countdown behavior. Existing contracts and dependencies are unchanged.
+
+## P1-02B: snapshots and internal fault records
+
+- Snapshot copies all four entity slices plus each fault's robot list and optional aisle value. Copies preserve numeric creation order and normalize empty slices to non-nil storage so the frozen State JSON arrays encode as [] instead of null.
+- Internal recordFault appends F1, F2, ... at the current tick, owning copies of caller inputs. Fault robot lists are non-nil; nil aisles remain omitted and aisle zero remains present. No public injectors or robot behavior were added.
+- Tests verify snapshot/input isolation, F1–F10 ordering and fields, exact State keys and empty arrays, identical seed-42 snapshot JSON at ticks 0 and 200, and J2 before J10. Existing different-seed job tests remain intact.
+- The former no-op test now disables AutoDispatch and checks positions, unassigned pending jobs, and absence of automatic faults after 20 ticks. It does not freeze battery levels or active countdowns, preserving compatibility with P1-03. Exported method comments retain the DYNAMICS/READ boundaries.
+
+## P1-03A: dispatch, movement, battery, and countdown
+
+- Background dispatch is DYNAMICS, not an operator command. Robots act in numeric ID order and eligible idle robots claim the lowest numeric pending job, then move in the same tick. AutoDispatch disables only new assignments.
+- Movement takes one X-first, then Y step per tick with arrival checks before and after. Completed jobs retain AssignedRobot while robots clear JobID. Every actual step drains MovingDrain, including arrival/completion; idle drain occurs at IdleDrainEvery intervals before assignment. Both drains floor at zero and depletion faults the robot without losing unfinished work.
+- Countdown decrements first, including while faulted; expiry makes the robot offline without movement or drain. Offline overrides faulted and preserves position, battery, assignment, and stations. Status transitions never create FaultState records; those remain injector-only.
+- Tests fix job geometry and cover numeric dispatch, movement, battery boundaries, exact countdown A/B traces, normal expiry, and idle depletion during countdown. Charging, SetCharging, and invariants remain deferred to P1-03B; no public injectors or dependencies are added.
+
+## P1-03B: robot charging and state invariants
+
+- SetCharging is COMMAND; Phase 3 owns validation and operator approval before execution. Checks run in order: unknown robot, unknown station, occupied station (including the same occupant), busy robot (non-idle or holding a job), then station position. Only successful calls change robot status and station occupancy.
+- Charging adds configured ChargeGain capped at 100. Completion frees the robot's station and makes it idle, ending that robot's tick without dispatch, movement, or idle drain. A robot already at 100 may enter charging and completes on its next tick.
+- Countdown processing still precedes all robot behavior, including charging and faulted status. Expiry makes the robot offline without gaining charge and preserves its occupied station indefinitely; no recovery command exists in Phase 1. Battery depletion does not cancel countdowns, offline overrides faulted, and transitions create no FaultState records.
+- The test-only checkInvariants(State, Config) checks I1–I11 using the configuration supplied to New, without a public accessor or new production API. It accepts faulted robots retaining unfinished jobs, offline robots retaining jobs or stations, and completed-job assignment history; wall avoidance remains deferred to Phase 2.
+- Tests cover command error precedence and atomicity, charging ticks 42/43, full-battery completion, independent stations and custom charge gain, charging countdown expiry and retained occupancy. Corrupted states exercise every invariant with an expected invariant identifier; seeds 1, 2, and 3 are checked after each of 300 ticks. Charging lifecycle and offline station ownership are also checked. Existing P1-03A behavior and tests remain unchanged.
+
+## P1-05: simulator CLI and final verification
+
+- The standalone simrun CLI uses a fresh FlagSet per run, defaults to seed 42 and 200 ticks, accepts signed int64 seeds and 0–100000 ticks, and emits only indented Snapshot JSON with a final newline. Invalid arguments return 2; simulator, encoding, and output failures return 1; success returns 0. Tests invoke run directly to avoid go run's exit-code wrapping.
+- The seed-42, tick-200 default snapshot is compared byte-for-byte with testdata/golden_seed42_tick200.json. Only the explicit test -update flag writes the fixture. The owner must review this generated behavior reference before final Phase 1 acceptance.
+- The production simulator guard parses Go ASTs and resolves symbols to handle aliases, dot imports, and shadowing. It rejects time, os, net, and net/* imports and package-level math/rand functions other than New/NewSource, including function-value aliases; owned RNG methods remain allowed. Tests and the CLI are outside the production-simulator scan. Map-driven determinism still requires testing and source review.
+- The final invariant matrix adds independent default-injection and charging/offline scenarios for seeds 1, 2, 3, 42, and 99, each lasting 500 ticks. It checks after every tick and injected state change, asserts successful scheduled injections, and verifies exact charging, countdown, fault history, and retained station occupancy through tick 500. Earlier tests and the checkInvariants(State, Config) signature remain intact.
+- Architecture documentation now describes implemented validation and simulator behavior. Phase 2 still owns routing/conflicts; Phase 3 owns validation, approval, execution, auditing, reassignment, and serialized access. No runtime dependencies or simulator contracts change.
