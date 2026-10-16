@@ -43,10 +43,19 @@ func run() error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	handler, closeDatabase, err := application(ctx)
+	if err != nil {
+		return err
+	}
+	defer closeDatabase()
 	server := &http.Server{
 		Addr:              ":" + strconv.Itoa(port),
-		Handler:           newHandler(),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    8192,
 	}
 	return serve(ctx, server)
 }

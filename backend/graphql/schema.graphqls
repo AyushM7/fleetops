@@ -1,0 +1,37 @@
+scalar Time
+
+type Query {
+  fleetState: FleetState!
+  proposal(id: ID!): Proposal
+}
+
+type Mutation {
+  submitProposal(input: SetChargingInput!): MutationResult!
+  approveProposal(id: ID!): MutationResult!
+  rejectProposal(id: ID!): MutationResult!
+}
+
+input SetChargingInput { robotId: ID!, stationId: ID!, expiresAt: Time! }
+type Robot { id: ID!, x: Int!, y: Int!, battery: Int!, status: String!, jobId: String!, waitTicks: Int!, blocked: Boolean! }
+type Station { id: ID!, x: Int!, y: Int!, occupiedBy: String!, reservedBy: String! }
+type FleetState { tick: Int!, robots: [Robot!]!, stations: [Station!]!, poisoned: Boolean! }
+type Proposal {
+  id: ID!
+  action: String!
+  robotId: ID!
+  stationId: ID!
+  createdAt: Time!
+  expiresAt: Time!
+  state: String!
+  execution: String!
+  submittedBy: String!
+  currentRuntime: Boolean!
+}
+type MutationResult {
+  proposalId: ID!
+  state: String!
+  execution: String!
+  auditCommitted: Boolean!
+  executionAttempted: Boolean!
+  error: String
+}
