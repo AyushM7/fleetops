@@ -182,6 +182,7 @@ func (s *Sim) recoverTraffic(skip []bool) []recoveryEvent {
 			s.clearRecoveryCycle(s.state.Robots[i].ID)
 		}
 	}
+	events = append(events, s.recoverIdleAisleMouths(skip)...)
 	return events
 }
 
