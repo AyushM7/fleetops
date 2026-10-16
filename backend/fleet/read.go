@@ -2,8 +2,10 @@ package fleet
 
 import (
 	"context"
+
 	"github.com/AyushM7/fleetops/backend/db"
 	"github.com/AyushM7/fleetops/backend/proposal"
+	"github.com/AyushM7/fleetops/backend/sim"
 )
 
 // Read DTOs contain no simulator capabilities. Returned values are detached copies.
@@ -20,11 +22,32 @@ type StationView struct {
 	OccupiedBy, ReservedBy string
 }
 type StateView struct {
+	Layout   LayoutView
 	Tick     int
 	Robots   []RobotView
 	Stations []StationView
 	Poisoned bool
 }
+
+type CellView struct {
+	X, Y int
+	Kind string
+}
+type LayoutView struct {
+	Width, Height int
+	Cells         []CellView
+}
+
+func layoutFromConfig(cfg sim.Config) LayoutView {
+	layout := LayoutView{Width: cfg.Width, Height: cfg.Height, Cells: make([]CellView, 0, cfg.Width*cfg.Height)}
+	for y := 0; y < cfg.Height; y++ {
+		for x := 0; x < cfg.Width; x++ {
+			layout.Cells = append(layout.Cells, CellView{x, y, string(cfg.CellTypeAt(sim.Point{X: x, Y: y}))})
+		}
+	}
+	return layout
+}
+
 type ProposalView struct {
 	Proposal       proposal.Proposal
 	Execution      Execution
@@ -37,6 +60,8 @@ func (s *Service) ReadState(context.Context) (StateView, error) {
 	defer s.mu.Unlock()
 	snapshot := s.commander.Snapshot()
 	view := StateView{Tick: snapshot.Tick, Poisoned: s.poisoned, Robots: []RobotView{}, Stations: []StationView{}}
+	view.Layout = s.layout
+	view.Layout.Cells = append([]CellView{}, s.layout.Cells...)
 	for _, r := range snapshot.Robots {
 		view.Robots = append(view.Robots, RobotView{r.ID, r.X, r.Y, r.Battery, string(r.Status), r.JobID, r.WaitTicks, r.Blocked})
 	}

@@ -39,6 +39,7 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	FleetState struct {
+		Layout   func(childComplexity int) int
 		Poisoned func(childComplexity int) int
 		Robots   func(childComplexity int) int
 		Stations func(childComplexity int) int
@@ -74,8 +75,9 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		FleetState func(childComplexity int) int
-		Proposal   func(childComplexity int, id string) int
+		FleetState       func(childComplexity int) int
+		PendingProposals func(childComplexity int) int
+		Proposal         func(childComplexity int, id string) int
 	}
 
 	Robot struct {
@@ -96,6 +98,18 @@ type ComplexityRoot struct {
 		X          func(childComplexity int) int
 		Y          func(childComplexity int) int
 	}
+
+	WarehouseCell struct {
+		Kind func(childComplexity int) int
+		X    func(childComplexity int) int
+		Y    func(childComplexity int) int
+	}
+
+	WarehouseLayout struct {
+		Cells  func(childComplexity int) int
+		Height func(childComplexity int) int
+		Width  func(childComplexity int) int
+	}
 }
 
 // endregion ***************************** api!.gotpl *****************************
@@ -110,6 +124,7 @@ type MutationResolver interface {
 type QueryResolver interface {
 	FleetState(ctx context.Context) (*model.FleetState, error)
 	Proposal(ctx context.Context, id string) (*model.Proposal, error)
+	PendingProposals(ctx context.Context) ([]*model.Proposal, error)
 }
 
 // endregion ************************** generated!.gotpl **************************
@@ -130,6 +145,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	_ = ec
 	switch typeName + "." + field {
 
+	case "FleetState.layout":
+		if e.ComplexityRoot.FleetState.Layout == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FleetState.Layout(childComplexity), true
 	case "FleetState.poisoned":
 		if e.ComplexityRoot.FleetState.Poisoned == nil {
 			break
@@ -294,6 +315,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Query.FleetState(childComplexity), true
 
+	case "Query.pendingProposals":
+		if e.ComplexityRoot.Query.PendingProposals == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.PendingProposals(childComplexity), true
 	case "Query.proposal":
 		if e.ComplexityRoot.Query.Proposal == nil {
 			break
@@ -385,6 +412,44 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Station.Y(childComplexity), true
+
+	case "WarehouseCell.kind":
+		if e.ComplexityRoot.WarehouseCell.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WarehouseCell.Kind(childComplexity), true
+	case "WarehouseCell.x":
+		if e.ComplexityRoot.WarehouseCell.X == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WarehouseCell.X(childComplexity), true
+	case "WarehouseCell.y":
+		if e.ComplexityRoot.WarehouseCell.Y == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WarehouseCell.Y(childComplexity), true
+
+	case "WarehouseLayout.cells":
+		if e.ComplexityRoot.WarehouseLayout.Cells == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WarehouseLayout.Cells(childComplexity), true
+	case "WarehouseLayout.height":
+		if e.ComplexityRoot.WarehouseLayout.Height == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WarehouseLayout.Height(childComplexity), true
+	case "WarehouseLayout.width":
+		if e.ComplexityRoot.WarehouseLayout.Width == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WarehouseLayout.Width(childComplexity), true
 
 	}
 	return 0, false
@@ -491,6 +556,8 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
 func (ec *executionContext) childFields_FleetState(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
+	case "layout":
+		return ec.fieldContext_FleetState_layout(ctx, field)
 	case "tick":
 		return ec.fieldContext_FleetState_tick(ctx, field)
 	case "robots":
@@ -583,6 +650,30 @@ func (ec *executionContext) childFields_Station(ctx context.Context, field graph
 		return ec.fieldContext_Station_reservedBy(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Station", field.Name)
+}
+
+func (ec *executionContext) childFields_WarehouseCell(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "x":
+		return ec.fieldContext_WarehouseCell_x(ctx, field)
+	case "y":
+		return ec.fieldContext_WarehouseCell_y(ctx, field)
+	case "kind":
+		return ec.fieldContext_WarehouseCell_kind(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type WarehouseCell", field.Name)
+}
+
+func (ec *executionContext) childFields_WarehouseLayout(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "width":
+		return ec.fieldContext_WarehouseLayout_width(ctx, field)
+	case "height":
+		return ec.fieldContext_WarehouseLayout_height(ctx, field)
+	case "cells":
+		return ec.fieldContext_WarehouseLayout_cells(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type WarehouseLayout", field.Name)
 }
 
 func (ec *executionContext) childFields___Directive(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -830,6 +921,38 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 // endregion ***************************** args.gotpl *****************************
 
 // region    **************************** field.gotpl *****************************
+
+func (ec *executionContext) _FleetState_layout(ctx context.Context, field graphql.CollectedField, obj *model.FleetState) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FleetState_layout(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Layout, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.WarehouseLayout) graphql.Marshaler {
+			return ec.marshalNWarehouseLayout2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐWarehouseLayout(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FleetState_layout(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FleetState",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_WarehouseLayout(ctx, field)
+		},
+	}
+	return fc, nil
+}
 
 func (ec *executionContext) _FleetState_tick(ctx context.Context, field graphql.CollectedField, obj *model.FleetState) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
@@ -1517,6 +1640,38 @@ func (ec *executionContext) fieldContext_Query_proposal(ctx context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_pendingProposals(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_pendingProposals(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().PendingProposals(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.Proposal) graphql.Marshaler {
+			return ec.marshalNProposal2ᚕᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐProposalᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_pendingProposals(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Proposal(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1890,6 +2045,153 @@ func (ec *executionContext) _Station_reservedBy(ctx context.Context, field graph
 }
 func (ec *executionContext) fieldContext_Station_reservedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Station", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _WarehouseCell_x(ctx context.Context, field graphql.CollectedField, obj *model.WarehouseCell) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_WarehouseCell_x(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.X, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_WarehouseCell_x(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("WarehouseCell", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _WarehouseCell_y(ctx context.Context, field graphql.CollectedField, obj *model.WarehouseCell) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_WarehouseCell_y(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Y, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_WarehouseCell_y(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("WarehouseCell", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _WarehouseCell_kind(ctx context.Context, field graphql.CollectedField, obj *model.WarehouseCell) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_WarehouseCell_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_WarehouseCell_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("WarehouseCell", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _WarehouseLayout_width(ctx context.Context, field graphql.CollectedField, obj *model.WarehouseLayout) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_WarehouseLayout_width(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Width, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_WarehouseLayout_width(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("WarehouseLayout", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _WarehouseLayout_height(ctx context.Context, field graphql.CollectedField, obj *model.WarehouseLayout) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_WarehouseLayout_height(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Height, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_WarehouseLayout_height(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("WarehouseLayout", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _WarehouseLayout_cells(ctx context.Context, field graphql.CollectedField, obj *model.WarehouseLayout) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_WarehouseLayout_cells(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Cells, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.WarehouseCell) graphql.Marshaler {
+			return ec.marshalNWarehouseCell2ᚕᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐWarehouseCellᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_WarehouseLayout_cells(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WarehouseLayout",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_WarehouseCell(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql.CollectedField, obj *introspection.Directive) (ret graphql.Marshaler) {
@@ -3015,6 +3317,11 @@ func (ec *executionContext) _FleetState(ctx context.Context, sel ast.SelectionSe
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("FleetState")
+		case "layout":
+			out.Values[i] = ec._FleetState_layout(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "tick":
 			out.Values[i] = ec._FleetState_tick(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -3328,6 +3635,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "pendingProposals":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_pendingProposals(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -3470,6 +3799,102 @@ func (ec *executionContext) _Station(ctx context.Context, sel ast.SelectionSet, 
 			}
 		case "reservedBy":
 			out.Values[i] = ec._Station_reservedBy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var warehouseCellImplementors = []string{"WarehouseCell"}
+
+func (ec *executionContext) _WarehouseCell(ctx context.Context, sel ast.SelectionSet, obj *model.WarehouseCell) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, warehouseCellImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("WarehouseCell")
+		case "x":
+			out.Values[i] = ec._WarehouseCell_x(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "y":
+			out.Values[i] = ec._WarehouseCell_y(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._WarehouseCell_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var warehouseLayoutImplementors = []string{"WarehouseLayout"}
+
+func (ec *executionContext) _WarehouseLayout(ctx context.Context, sel ast.SelectionSet, obj *model.WarehouseLayout) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, warehouseLayoutImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("WarehouseLayout")
+		case "width":
+			out.Values[i] = ec._WarehouseLayout_width(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "height":
+			out.Values[i] = ec._WarehouseLayout_height(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cells":
+			out.Values[i] = ec._WarehouseLayout_cells(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -3954,6 +4379,32 @@ func (ec *executionContext) marshalNMutationResult2ᚖgithubᚗcomᚋAyushM7ᚋf
 	return ec._MutationResult(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNProposal2ᚕᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐProposalᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Proposal) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNProposal2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐProposal(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNProposal2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐProposal(ctx context.Context, sel ast.SelectionSet, v *model.Proposal) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Proposal(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNRobot2ᚕᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐRobotᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Robot) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -4041,6 +4492,42 @@ func (ec *executionContext) marshalNTime2timeᚐTime(ctx context.Context, sel as
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) marshalNWarehouseCell2ᚕᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐWarehouseCellᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.WarehouseCell) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNWarehouseCell2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐWarehouseCell(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNWarehouseCell2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐWarehouseCell(ctx context.Context, sel ast.SelectionSet, v *model.WarehouseCell) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._WarehouseCell(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNWarehouseLayout2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐWarehouseLayout(ctx context.Context, sel ast.SelectionSet, v *model.WarehouseLayout) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._WarehouseLayout(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v introspection.Directive) graphql.Marshaler {

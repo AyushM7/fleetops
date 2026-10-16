@@ -2,10 +2,11 @@ package graphql
 
 import (
 	"context"
+	"time"
+
 	"github.com/AyushM7/fleetops/backend/fleet"
 	"github.com/AyushM7/fleetops/backend/proposal"
 	"github.com/AyushM7/fleetops/backend/safety"
-	"time"
 )
 
 // Service exposes workflow operations and detached reads, never simulator capabilities.
@@ -14,5 +15,6 @@ type Service interface {
 	Decide(context.Context, string, proposal.Decision, proposal.OperatorIdentity) (fleet.Result, error)
 	ReadState(context.Context) (fleet.StateView, error)
 	ReadProposal(context.Context, string) (*fleet.ProposalView, error)
+	ReadPendingProposals(context.Context) ([]fleet.ProposalView, error)
 }
 type Resolver struct{ Service Service }

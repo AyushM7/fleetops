@@ -3,6 +3,7 @@ scalar Time
 type Query {
   fleetState: FleetState!
   proposal(id: ID!): Proposal
+  pendingProposals: [Proposal!]!
 }
 
 type Mutation {
@@ -14,7 +15,9 @@ type Mutation {
 input SetChargingInput { robotId: ID!, stationId: ID!, expiresAt: Time! }
 type Robot { id: ID!, x: Int!, y: Int!, battery: Int!, status: String!, jobId: String!, waitTicks: Int!, blocked: Boolean! }
 type Station { id: ID!, x: Int!, y: Int!, occupiedBy: String!, reservedBy: String! }
-type FleetState { tick: Int!, robots: [Robot!]!, stations: [Station!]!, poisoned: Boolean! }
+type WarehouseCell { x: Int!, y: Int!, kind: String! }
+type WarehouseLayout { width: Int!, height: Int!, cells: [WarehouseCell!]! }
+type FleetState { layout: WarehouseLayout!, tick: Int!, robots: [Robot!]!, stations: [Station!]!, poisoned: Boolean! }
 type Proposal {
   id: ID!
   action: String!

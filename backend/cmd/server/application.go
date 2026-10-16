@@ -15,6 +15,10 @@ import (
 )
 
 func application(ctx context.Context) (http.Handler, func(), error) {
+	ticking, err := parseTickConfig(os.Getenv("FLEETOPS_AUTO_TICK"), os.Getenv("FLEETOPS_TICK_INTERVAL"))
+	if err != nil {
+		return nil, nil, err
+	}
 	credentials, err := auth.New(os.Getenv("FLEETOPS_AUTH_TOKENS"))
 	if err != nil {
 		return nil, nil, err
@@ -49,5 +53,6 @@ func application(ctx context.Context) (http.Handler, func(), error) {
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", newHandler())
 	mux.Handle("/graphql", api.NewHandler(service, credentials))
-	return mux, pool.Close, nil
+	stopTicks := startTicks(ctx, service.Tick, ticking)
+	return mux, func() { stopTicks(); pool.Close() }, nil
 }

@@ -24,6 +24,9 @@ func (f *readOnlyFixture) ReadState(context.Context) (fleet.StateView, error) {
 func (*readOnlyFixture) ReadProposal(context.Context, string) (*fleet.ProposalView, error) {
 	return nil, nil
 }
+func (*readOnlyFixture) ReadPendingProposals(context.Context) ([]fleet.ProposalView, error) {
+	return nil, fleet.ErrUnauthorized
+}
 func (*readOnlyFixture) Submit(context.Context, safety.SetChargingRequest, time.Time) (fleet.Result, error) {
 	panic("unexpected mutation")
 }
@@ -77,7 +80,7 @@ func TestHTTPBoundaryAndLimits(t *testing.T) {
 			readFields++
 		}
 	}
-	if readFields != 2 {
+	if readFields != 3 || schema.Query.Fields.ForName("pendingProposals") == nil {
 		t.Fatal("read surface changed")
 	}
 }

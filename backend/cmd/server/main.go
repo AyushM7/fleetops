@@ -43,11 +43,11 @@ func run() error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	handler, closeDatabase, err := application(ctx)
+	handler, closeApplication, err := application(ctx)
 	if err != nil {
 		return err
 	}
-	defer closeDatabase()
+	defer closeApplication()
 	server := &http.Server{
 		Addr:              ":" + strconv.Itoa(port),
 		Handler:           handler,

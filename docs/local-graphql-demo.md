@@ -34,6 +34,7 @@ $credentials = @(foreach ($role in @('viewer', 'proposer', 'operator')) {
 })
 $env:FLEETOPS_AUTH_TOKENS = ConvertTo-Json -InputObject $credentials -Compress
 $env:FLEETOPS_CHARGING_DEMO = '1'
+$env:FLEETOPS_AUTO_TICK = '0'
 $env:PORT = '8080'
 $go = 'C:/Users/Ayush/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.1.windows-amd64/bin/go.exe'
 & $go version

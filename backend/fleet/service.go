@@ -63,6 +63,7 @@ type Service struct {
 	runtimeID string
 	canonical map[string]proposal.Proposal
 	poisoned  bool
+	layout    LayoutView
 }
 
 // New creates and exclusively owns a simulator. Callers never receive its
@@ -75,7 +76,12 @@ func New(cfg sim.Config, seed int64, pool *db.Pool, clock proposal.Clock, author
 	if err != nil {
 		return nil, err
 	}
-	return newService(simulator, simulator.Tick, pool, clock, authorize)
+	service, err := newService(simulator, simulator.Tick, pool, clock, authorize)
+	if err != nil {
+		return nil, err
+	}
+	service.layout = layoutFromConfig(cfg)
+	return service, nil
 }
 
 func newService(commander sim.Commander, tick func(), pool *db.Pool, clock proposal.Clock, authorize Authorizer) (*Service, error) {

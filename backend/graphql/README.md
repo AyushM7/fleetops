@@ -22,7 +22,10 @@ For a local station-ready demonstration, also export `FLEETOPS_CHARGING_DEMO=1`.
 This explicit profile places R1 at S1, disables initial jobs and dispatch, and
 leaves simulator defaults and safety contracts unchanged. Start with
 `cd backend; go run ./cmd/server`. No background ticking is introduced by this
-ticket. Read state remains available after the charging mutation.
+ticket. Read state remains available after the charging mutation. Automatic ticking
+is now available as an opt-in server setting: `FLEETOPS_AUTO_TICK=1`, with
+`FLEETOPS_TICK_INTERVAL=500ms` by default. Keep it disabled for this stationary
+charging walkthrough. See [live runtime instructions](../../docs/live-runtime.md).
 
 Send `Content-Type: application/json` and `Authorization: Bearer <private token>`.
 Use a proposer token for submission, an independent operator token for decisions,

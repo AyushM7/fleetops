@@ -7,10 +7,11 @@ import (
 )
 
 type FleetState struct {
-	Tick     int        `json:"tick"`
-	Robots   []*Robot   `json:"robots"`
-	Stations []*Station `json:"stations"`
-	Poisoned bool       `json:"poisoned"`
+	Layout   *WarehouseLayout `json:"layout"`
+	Tick     int              `json:"tick"`
+	Robots   []*Robot         `json:"robots"`
+	Stations []*Station       `json:"stations"`
+	Poisoned bool             `json:"poisoned"`
 }
 
 type Mutation struct {
@@ -64,4 +65,16 @@ type Station struct {
 	Y          int    `json:"y"`
 	OccupiedBy string `json:"occupiedBy"`
 	ReservedBy string `json:"reservedBy"`
+}
+
+type WarehouseCell struct {
+	X    int    `json:"x"`
+	Y    int    `json:"y"`
+	Kind string `json:"kind"`
+}
+
+type WarehouseLayout struct {
+	Width  int              `json:"width"`
+	Height int              `json:"height"`
+	Cells  []*WarehouseCell `json:"cells"`
 }
