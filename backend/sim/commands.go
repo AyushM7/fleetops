@@ -1,7 +1,7 @@
 package sim
 
 // SetCharging is COMMAND: Phase 3 must validate and obtain operator approval
-// before execution. It reserves a station without moving the robot.
+// before execution. It starts charging at a station without moving the robot.
 func (s *Sim) SetCharging(robotID, stationID string) error {
 	var robot *RobotState
 	for i := range s.state.Robots {
@@ -26,13 +26,15 @@ func (s *Sim) SetCharging(robotID, stationID string) error {
 	if station.OccupiedBy != "" {
 		return ErrStationOccupied
 	}
+	if station.ReservedBy != "" && station.ReservedBy != robot.ID {
+		return ErrStationReserved
+	}
 	if robot.Status != RobotIdle || robot.JobID != "" {
 		return ErrRobotBusy
 	}
 	if robot.X != station.X || robot.Y != station.Y {
 		return ErrNotAtStation
 	}
-	robot.Status = RobotCharging
-	station.OccupiedBy = robot.ID
+	s.beginCharging(robot, station)
 	return nil
 }

@@ -19,6 +19,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	flags.SetOutput(stderr)
 	seed := flags.Int64("seed", 42, "random seed")
 	ticks := flags.Int("ticks", 200, "number of ticks (0–100000)")
+	layout := flags.String("layout", "default", "layout (default|warehouse)")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -30,7 +31,16 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "simrun: ticks must be between 0 and 100000")
 		return 2
 	}
-	s, err := sim.New(sim.DefaultConfig(), *seed)
+	cfg := sim.DefaultConfig()
+	switch *layout {
+	case "default":
+	case "warehouse":
+		cfg = sim.WarehouseConfig()
+	default:
+		fmt.Fprintln(stderr, "simrun: layout must be default or warehouse")
+		return 2
+	}
+	s, err := sim.New(cfg, *seed)
 	if err != nil {
 		fmt.Fprintf(stderr, "simrun: create simulator: %v\n", err)
 		return 1

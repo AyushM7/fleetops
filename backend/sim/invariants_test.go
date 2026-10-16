@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func checkInvariants(s State, cfg Config) error {
+func checkInvariants(s State, cfg Config, navigation ...map[string]robotNavigation) error {
 	if len(s.Jobs) > cfg.MaxJobs {
 		return fmt.Errorf("I10: %d jobs exceed limit %d", len(s.Jobs), cfg.MaxJobs)
 	}
@@ -25,10 +25,19 @@ func checkInvariants(s State, cfg Config) error {
 			return err
 		}
 	}
+	if err := checkTrafficInvariants(s.Robots, cfg); err != nil {
+		return err
+	}
 	for _, job := range s.Jobs {
 		if err := checkJobInvariants(job, robots); err != nil {
 			return err
 		}
+	}
+	if err := checkReservationInvariants(s, cfg, robots, navigation...); err != nil {
+		return err
+	}
+	if err := checkTripInvariants(s, cfg, navigation...); err != nil {
+		return err
 	}
 	if err := checkStationInvariants(s.Stations, robots); err != nil {
 		return err
@@ -36,14 +45,60 @@ func checkInvariants(s State, cfg Config) error {
 	if err := checkFaultInvariants(s.Faults, s.Tick, robots); err != nil {
 		return err
 	}
-	return checkEntityOrder(s)
+	if err := checkEntityOrder(s); err != nil {
+		return err
+	}
+	return checkAisleInvariants(s, cfg)
+}
+
+func checkTripInvariants(state State, cfg Config, navigation ...map[string]robotNavigation) error {
+	for _, station := range state.Stations {
+		if station.ReservedBy == "" {
+			continue
+		}
+		for _, robot := range state.Robots {
+			if robot.ID != station.ReservedBy && robot.X == station.X && robot.Y == station.Y {
+				return fmt.Errorf("I20: %s reservation occupied by %s", station.ID, robot.ID)
+			}
+		}
+	}
+	if len(navigation) == 0 {
+		return nil
+	}
+	protected := protectedCells(cfg)
+	destinations := make(map[Point]string)
+	for _, robot := range state.Robots {
+		if robot.Status != RobotMoving || robot.JobID != "" {
+			continue
+		}
+		nav, recorded := navigation[0][robot.ID]
+		reservations := 0
+		for _, station := range state.Stations {
+			if station.ReservedBy == robot.ID {
+				reservations++
+				if !recorded || nav.target != (Point{X: station.X, Y: station.Y}) {
+					return fmt.Errorf("I19: %s charging route lost destination", robot.ID)
+				}
+			}
+		}
+		if !recorded || nav.relocation && reservations != 0 || !nav.relocation && reservations != 1 {
+			return fmt.Errorf("I19: %s missing or ambiguous trip", robot.ID)
+		}
+		if nav.relocation {
+			if protected[nav.target] || destinations[nav.target] != "" {
+				return fmt.Errorf("I19: %s protected or duplicate relocation target", robot.ID)
+			}
+			destinations[nav.target] = robot.ID
+		}
+	}
+	return nil
 }
 
 func checkRobotInvariants(robot RobotState, cfg Config, jobs map[string]JobState) error {
 	if robot.Battery < 0 || robot.Battery > 100 {
 		return fmt.Errorf("I1: %s battery %d", robot.ID, robot.Battery)
 	}
-	if !cfg.InBounds(Point{robot.X, robot.Y}) {
+	if !cfg.InBounds(Point{robot.X, robot.Y}) || cfg.CellTypeAt(Point{robot.X, robot.Y}) == CellWall {
 		return fmt.Errorf("I2: %s outside %dx%d grid", robot.ID, cfg.Width, cfg.Height)
 	}
 	if !slices.Contains([]RobotStatus{RobotIdle, RobotMoving, RobotCharging, RobotFaulted, RobotOffline}, robot.Status) {
@@ -61,12 +116,97 @@ func checkRobotInvariants(robot RobotState, cfg Config, jobs map[string]JobState
 			return fmt.Errorf("I6: %s is %s with a job", robot.ID, robot.Status)
 		}
 	case RobotMoving:
-		if robot.JobID == "" {
+		if robot.JobID == "" && !cfg.AutoCharge {
 			return fmt.Errorf("I6: %s moving without a job", robot.ID)
 		}
 	case RobotFaulted:
 		if robot.Battery != 0 {
 			return fmt.Errorf("I6: %s faulted with battery %d", robot.ID, robot.Battery)
+		}
+	}
+	if robot.WaitTicks < 0 || robot.Blocked != (robot.WaitTicks >= cfg.BlockedAfter) || robot.Status != RobotMoving && robot.WaitTicks != 0 {
+		return fmt.Errorf("I14: %s inconsistent waiting state", robot.ID)
+	}
+	return nil
+}
+
+func checkReservationInvariants(s State, cfg Config, robots map[string]RobotState, navigation ...map[string]robotNavigation) error {
+	relocating := make(map[string]bool)
+	if len(navigation) > 0 {
+		for id, nav := range navigation[0] {
+			if !nav.relocation {
+				continue
+			}
+			robot, exists := robots[id]
+			arrived := len(nav.route) == 0 && nav.target == (Point{X: robot.X, Y: robot.Y})
+			if !exists || !cfg.Recovery || robot.Status != RobotMoving || robot.JobID != "" || cfg.CellTypeAt(nav.target) != CellFree || !arrived && (len(nav.route) == 0 || nav.route[len(nav.route)-1] != nav.target) {
+				return fmt.Errorf("I6: %s has invalid relocation trip", id)
+			}
+			previous := Point{X: robot.X, Y: robot.Y}
+			for _, point := range nav.route {
+				dx, dy := point.X-previous.X, point.Y-previous.Y
+				if dx*dx+dy*dy != 1 || cfg.CellTypeAt(point) != CellFree && cfg.CellTypeAt(point) != CellAisle {
+					return fmt.Errorf("I6: %s has invalid relocation route", id)
+				}
+				previous = point
+			}
+			relocating[id] = true
+		}
+	}
+	reserved := make(map[string]bool)
+	for _, station := range s.Stations {
+		if station.ReservedBy == "" {
+			continue
+		}
+		robot, exists := robots[station.ReservedBy]
+		if station.OccupiedBy != "" || !exists || !cfg.AutoCharge || robot.Status != RobotMoving || robot.JobID != "" || reserved[robot.ID] || relocating[robot.ID] {
+			return fmt.Errorf("I16: station %s has invalid or duplicate reservation %s", station.ID, station.ReservedBy)
+		}
+		reserved[robot.ID] = true
+	}
+	for _, robot := range s.Robots {
+		if robot.Status == RobotMoving && robot.JobID == "" && !reserved[robot.ID] && !relocating[robot.ID] {
+			return fmt.Errorf("I6: %s moving without a job or valid charging/relocation trip", robot.ID)
+		}
+	}
+	return nil
+}
+
+func checkTrafficInvariants(robots []RobotState, cfg Config) error {
+	cells := make(map[Point]string)
+	aisles := make(map[int]string)
+	for _, robot := range robots {
+		position := Point{X: robot.X, Y: robot.Y}
+		if other := cells[position]; other != "" {
+			return fmt.Errorf("I12: %s and %s share %v", other, robot.ID, position)
+		}
+		cells[position] = robot.ID
+		if cfg.onAisle(position) {
+			if other := aisles[position.X]; other != "" {
+				return fmt.Errorf("I13: %s and %s share aisle column %d", other, robot.ID, position.X)
+			}
+			aisles[position.X] = robot.ID
+		}
+	}
+	return nil
+}
+
+func checkAisleInvariants(s State, cfg Config) error {
+	if s.Aisles == nil || len(s.Aisles) != len(cfg.AisleColumns) {
+		return fmt.Errorf("I15: aisle records do not match configured aisles")
+	}
+	for id, column := range cfg.AisleColumns {
+		occupant := ""
+		for _, robot := range s.Robots {
+			if robot.X != column || robot.Y < cfg.AisleYMin || robot.Y > cfg.AisleYMax {
+				continue
+			}
+			if occupant == "" || idNumber(robot.ID) < idNumber(occupant) {
+				occupant = robot.ID
+			}
+		}
+		if s.Aisles[id].ID != id || s.Aisles[id].OccupiedBy != occupant {
+			return fmt.Errorf("I15: aisle %d does not match physical occupancy %q", id, occupant)
 		}
 	}
 	return nil
@@ -156,9 +296,61 @@ func checkEntityOrder(s State) error {
 
 func assertInvariants(t *testing.T, s *Sim, cfg Config) {
 	t.Helper()
-	if err := checkInvariants(s.Snapshot(), cfg); err != nil {
+	if err := checkInvariants(s.Snapshot(), cfg, s.navigation); err != nil {
 		t.Fatalf("tick %d: %v", s.state.Tick, err)
 	}
+	if err := checkRecoveryInvariants(s); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func checkRecoveryInvariants(s *Sim) error {
+	for _, robot := range s.state.Robots {
+		recovery := s.recovery[robot.ID]
+		progress := recovery.cycle
+		if progress.age < 0 || (progress.key == "") != (progress.age == 0) || progress.key != "" && (!s.cfg.Recovery || progress.best < 0 || progress.tick != s.state.Tick || progress.job != robot.JobID || progress.target != s.recoveryTarget(robot) || robot.Status != RobotIdle && robot.Status != RobotMoving) {
+			return fmt.Errorf("I14: %s invalid private cycle progress", robot.ID)
+		}
+		if recovery.hold < 0 || recovery.hold > s.cfg.HoldTicks || recovery.hold > 0 && (!recovery.resume || robot.WaitTicks != 0 || robot.Blocked) {
+			return fmt.Errorf("I14: %s inconsistent recovery hold", robot.ID)
+		}
+		if recovery.resume {
+			nav, exists := s.navigation[robot.ID]
+			if !s.cfg.Recovery || robot.Status != RobotMoving || !exists || nav.target != s.recoveryTarget(robot) {
+				return fmt.Errorf("I6: %s hold lost mission or navigation", robot.ID)
+			}
+			previous := Point{X: robot.X, Y: robot.Y}
+			for _, point := range nav.route {
+				dx, dy := point.X-previous.X, point.Y-previous.Y
+				if dx*dx+dy*dy != 1 || s.cfg.CellTypeAt(point) == CellWall || s.cfg.CellTypeAt(point) == CellOutOfBounds || s.cfg.CellTypeAt(point) == CellStation && point != nav.target {
+					return fmt.Errorf("I6: %s hold has invalid route", robot.ID)
+				}
+				previous = point
+			}
+			if previous != nav.target {
+				return fmt.Errorf("I6: %s hold has incomplete route", robot.ID)
+			}
+		}
+		previous, count := -1, 0
+		for _, tick := range recovery.retreats {
+			if tick < 0 || tick > s.state.Tick || tick <= previous {
+				return fmt.Errorf("I14: %s invalid retreat history", robot.ID)
+			}
+			if tick > s.state.Tick-200 {
+				count++
+			}
+			previous = tick
+		}
+		if count > 10 {
+			return fmt.Errorf("I14: %s exceeded retreat limit", robot.ID)
+		}
+	}
+	for id := range s.recovery {
+		if s.faultRobot(id) == nil {
+			return fmt.Errorf("I6: unknown recovery robot %s", id)
+		}
+	}
+	return nil
 }
 
 func TestInvariantViolations(t *testing.T) {
@@ -222,6 +414,20 @@ func TestInvariantViolations(t *testing.T) {
 		{"unknown fault robot", "I11", func(s *State) { s.Faults[0].Robots = []string{"R99"} }},
 		{"future fault", "I11", func(s *State) { s.Faults[0].Tick = s.Tick + 1 }},
 		{"duplicate fault", "I11", func(s *State) { s.Faults = append(s.Faults, s.Faults[0]) }},
+		{"same cell", "I12", func(s *State) { s.Robots[1].X, s.Robots[1].Y = s.Robots[0].X, s.Robots[0].Y }},
+		{"same aisle", "I13", func(s *State) {
+			s.Robots[0].X, s.Robots[0].Y = 4, 1
+			s.Robots[1].X, s.Robots[1].Y = 4, 2
+		}},
+		{"negative waiting", "I14", func(s *State) { s.Robots[0].WaitTicks = -1 }},
+		{"blocked without waiting", "I14", func(s *State) { s.Robots[0].Blocked = true }},
+		{"idle waiting", "I14", func(s *State) { s.Robots[0].WaitTicks = 1 }},
+		{"nil aisles", "I15", func(s *State) { s.Aisles = nil }},
+		{"missing aisle", "I15", func(s *State) { s.Aisles = s.Aisles[:2] }},
+		{"extra aisle", "I15", func(s *State) { s.Aisles = append(s.Aisles, AisleState{ID: 3}) }},
+		{"aisle order", "I15", func(s *State) { s.Aisles[0], s.Aisles[1] = s.Aisles[1], s.Aisles[0] }},
+		{"incorrect aisle occupant", "I15", func(s *State) { s.Aisles[0].OccupiedBy = "R1" }},
+		{"missing physical occupant", "I15", func(s *State) { s.Robots[0].X, s.Robots[0].Y = 4, 1 }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := cfgRobotOnStation()

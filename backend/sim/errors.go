@@ -11,5 +11,6 @@ var (
 	ErrRobotBusy        = errors.New("robot busy")
 	ErrNotAtStation     = errors.New("robot not at station")
 	ErrStationOccupied  = errors.New("station occupied")
+	ErrStationReserved  = errors.New("station reserved")
 	ErrRobotUnavailable = errors.New("robot unavailable")
 )

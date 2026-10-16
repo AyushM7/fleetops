@@ -161,7 +161,7 @@ func TestFaultPublicCountdownPrecedence(t *testing.T) {
 	s := newTestSim(t, cfg, 1)
 	setJobCells(t, s, "J1", Point{1, 5}, Point{19, 5})
 	s.Tick()
-	if want := (RobotState{"R1", 1, 10, 99, RobotMoving, "J1"}); s.state.Robots[0] != want {
+	if want := (RobotState{ID: "R1", X: 1, Y: 10, Battery: 99, Status: RobotMoving, JobID: "J1"}); s.state.Robots[0] != want {
 		t.Fatalf("tick 1: %+v, want %+v", s.state.Robots[0], want)
 	}
 	requireInjection(t, s.InjectLowBattery("R1"))
@@ -174,24 +174,36 @@ func TestFaultPublicCountdownPrecedence(t *testing.T) {
 		t.Fatal("incorrect public injection results at tick 1")
 	}
 	assertInvariants(t, s, cfg)
+	traffic := []struct {
+		position      Point
+		battery, wait int
+	}{
+		{Point{3, 5}, 8, 1}, {Point{3, 5}, 8, 2}, {Point{3, 5}, 8, 3},
+		{Point{3, 4}, 7, 0}, {Point{3, 3}, 6, 0},
+		{Point{3, 3}, 6, 1}, {Point{3, 3}, 6, 2},
+		{Point{3, 2}, 5, 0}, {Point{3, 1}, 4, 0}, {Point{3, 0}, 3, 0},
+		{Point{4, 0}, 2, 0}, {Point{5, 0}, 1, 0},
+	}
 	for tick := 2; tick <= 40; tick++ {
 		s.Tick()
-		want := RobotState{"R1", 1, 11 - tick, max(0, 16-tick), RobotMoving, "J1"}
+		want := RobotState{ID: "R1", X: 1, Y: 11 - tick, Battery: max(0, 16-tick), Status: RobotMoving, JobID: "J1"}
 		jobStatus := JobAssigned
 		if tick >= 6 {
 			want.X, want.Y, jobStatus = 1+min(tick-6, 10), 5, JobInProgress
 		}
-		if tick >= 16 {
-			want.Status = RobotFaulted
+		if tick >= 9 && tick <= 20 {
+			frame := traffic[tick-9]
+			want.X, want.Y, want.Battery, want.WaitTicks = frame.position.X, frame.position.Y, frame.battery, frame.wait
 		}
 		if tick >= 21 {
+			want.X, want.Y, want.Battery = 5, 0, 1
 			want.Status = RobotOffline
 		}
 		job := s.state.Jobs[0]
 		if s.state.Robots[0] != want || s.unresponsiveTicks["R1"] != max(0, 21-tick) || job.Status != jobStatus || job.AssignedRobot != "R1" || !reflect.DeepEqual(s.state.Faults, wantFaults) {
 			t.Fatalf("tick %d: robot %+v, job %+v, countdown %d, faults %+v", tick, s.state.Robots[0], job, s.unresponsiveTicks["R1"], s.state.Faults)
 		}
-		if tick == 16 || tick == 21 {
+		if tick == 21 {
 			assertInjectionFailure(t, s, func() error { return s.InjectUnresponsive("R1") }, ErrRobotUnavailable)
 			assertInjectionFailure(t, s, func() error { return s.InjectLowBattery("R1") }, ErrRobotUnavailable)
 		}
@@ -211,7 +223,7 @@ func TestFaultShortJobBelowAssignmentThreshold(t *testing.T) {
 	assertInvariants(t, s, cfg)
 	for tick := 2; tick <= 25; tick++ {
 		s.Tick()
-		want := RobotState{"R1", 1, 9, 14 - tick/20, RobotIdle, ""}
+		want := RobotState{ID: "R1", X: 1, Y: 9, Battery: 14 - tick/20, Status: RobotIdle, JobID: ""}
 		if s.state.Robots[0] != want || s.state.Jobs[0].Status != JobDone || s.state.Jobs[0].AssignedRobot != "R1" || len(s.state.Faults) != 1 {
 			t.Fatalf("tick %d: short job completion or low-battery idle state changed: %+v", tick, s.state.Robots[0])
 		}

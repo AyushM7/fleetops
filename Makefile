@@ -1,7 +1,10 @@
-.PHONY: test-backend test-agent test-web test-evals test up down
+.PHONY: test-backend test-integration test-agent test-web test-evals test up down
 
 test-backend:
 	cd backend && go test ./... && go vet ./...
+
+test-integration:
+	cd backend && go test -race ./db/... ./fleet/... ./graphql/... -run Integration -count=1 -v
 
 test-agent:
 	cd agent && npm test && npm run typecheck

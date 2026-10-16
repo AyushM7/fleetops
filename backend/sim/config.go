@@ -24,6 +24,14 @@ type Config struct {
 	UnresponsiveDelay     int
 	LowBatteryInjectLevel int
 	AutoDispatch          bool
+	ReplanAfter           int
+	BlockedAfter          int
+	ReserveBattery        int
+	AutoCharge            bool
+	ChargeBelow           int
+	Recovery              bool
+	RecoverAfter          int
+	HoldTicks             int
 }
 
 func DefaultConfig() Config {
@@ -46,6 +54,14 @@ func DefaultConfig() Config {
 		UnresponsiveDelay:     3,
 		LowBatteryInjectLevel: 15,
 		AutoDispatch:          true,
+		ReplanAfter:           3,
+		BlockedAfter:          10,
+		ReserveBattery:        5,
+		AutoCharge:            false,
+		ChargeBelow:           40,
+		Recovery:              false,
+		RecoverAfter:          15,
+		HoldTicks:             3,
 	}
 }
 
@@ -139,6 +155,34 @@ func (c Config) Validate() error {
 	}
 	if len(c.JobCells()) < 2 {
 		return fmt.Errorf("%w: at least two eligible job cells are required", ErrInvalidConfig)
+	}
+	if err := c.validateConnectivity(); err != nil {
+		return err
+	}
+	if err := c.validateInitialAisles(); err != nil {
+		return err
+	}
+	return c.validateWarehouseSettings()
+}
+
+func (c Config) validateWarehouseSettings() error {
+	if c.ReplanAfter < 1 || c.BlockedAfter <= c.ReplanAfter {
+		return fmt.Errorf("%w: V14 requires ReplanAfter >= 1 and BlockedAfter > ReplanAfter", ErrInvalidConfig)
+	}
+	if c.ReserveBattery < 0 || c.ReserveBattery > 50 {
+		return fmt.Errorf("%w: V14 ReserveBattery must be in [0,50]", ErrInvalidConfig)
+	}
+	if c.AutoCharge && (c.ReserveBattery < 5 || c.ReserveBattery > 25) {
+		return fmt.Errorf("%w: V14 AutoCharge requires ReserveBattery in [5,25]", ErrInvalidConfig)
+	}
+	if c.AutoCharge && (c.ChargeBelow <= c.MinAssignBattery || c.ChargeBelow > 100) {
+		return fmt.Errorf("%w: V14 AutoCharge requires MinAssignBattery < ChargeBelow <= 100", ErrInvalidConfig)
+	}
+	if c.Recovery && (!c.AutoCharge || c.RecoverAfter <= c.BlockedAfter) {
+		return fmt.Errorf("%w: Recovery requires AutoCharge and RecoverAfter > BlockedAfter", ErrInvalidConfig)
+	}
+	if c.HoldTicks < 1 {
+		return fmt.Errorf("%w: HoldTicks must be at least 1", ErrInvalidConfig)
 	}
 	return nil
 }

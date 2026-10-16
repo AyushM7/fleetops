@@ -25,7 +25,7 @@ func TestNewInitialState(t *testing.T) {
 	if state.Tick != 0 || state.Seed != 42 || len(state.Robots) != 6 || len(state.Jobs) != 8 || len(state.Stations) != 2 {
 		t.Fatalf("unexpected initial state: %+v", state)
 	}
-	if state.Robots == nil || state.Jobs == nil || state.Stations == nil || state.Faults == nil || len(state.Faults) != 0 {
+	if state.Robots == nil || state.Jobs == nil || state.Stations == nil || state.Faults == nil || state.Aisles == nil || len(state.Faults) != 0 {
 		t.Fatal("initial slices must be non-nil and faults empty")
 	}
 	for i, p := range cfg.RobotStarts {
@@ -134,6 +134,9 @@ func TestSnapshotOwnership(t *testing.T) {
 		snapshot.Robots[0].Battery = 0
 		snapshot.Jobs[0].From.X = -1
 		snapshot.Stations[0].OccupiedBy = "changed"
+		snapshot.Stations[0].ReservedBy = "changed"
+		snapshot.Robots[0].WaitTicks, snapshot.Robots[0].Blocked = 99, true
+		snapshot.Aisles[0].OccupiedBy = "changed"
 		snapshot.Faults[0].ID = "changed"
 		snapshot.Faults[0].Type = FaultLowBattery
 		snapshot.Faults[0].Tick = -1
@@ -149,14 +152,14 @@ func TestSnapshotJSONContract(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.InitialJobs = 0
 	snapshot := newTestSim(t, cfg, 42).Snapshot()
-	if snapshot.Robots == nil || snapshot.Jobs == nil || snapshot.Stations == nil || snapshot.Faults == nil {
+	if snapshot.Robots == nil || snapshot.Jobs == nil || snapshot.Stations == nil || snapshot.Faults == nil || snapshot.Aisles == nil {
 		t.Fatal("all snapshot slices must be non-nil")
 	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(stateJSON(t, snapshot)), &fields); err != nil {
 		t.Fatal(err)
 	}
-	keys := []string{"tick", "seed", "robots", "jobs", "stations", "faults"}
+	keys := []string{"tick", "seed", "robots", "jobs", "stations", "faults", "aisles"}
 	if len(fields) != len(keys) {
 		t.Fatalf("unexpected State keys: %v", fields)
 	}
@@ -168,9 +171,9 @@ func TestSnapshotJSONContract(t *testing.T) {
 	if string(fields["tick"]) != "0" || string(fields["seed"]) != "42" || string(fields["jobs"]) != "[]" || string(fields["faults"]) != "[]" {
 		t.Fatalf("incorrect scalar or empty-array JSON: %s", stateJSON(t, snapshot))
 	}
-	// Exercise all four empty arrays even though valid configs require robots and stations.
+	// Exercise all five empty arrays even though valid configs require entities.
 	empty := (&Sim{}).Snapshot()
-	want := `{"tick":0,"seed":0,"robots":[],"jobs":[],"stations":[],"faults":[]}`
+	want := `{"tick":0,"seed":0,"robots":[],"jobs":[],"stations":[],"faults":[],"aisles":[]}`
 	if got := stateJSON(t, empty); got != want {
 		t.Fatalf("empty State = %s, want %s", got, want)
 	}
