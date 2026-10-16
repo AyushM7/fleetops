@@ -4,6 +4,7 @@ import (
 	"errors"
 	"maps"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -11,12 +12,52 @@ func assertChargingFailure(t *testing.T, s *Sim, robotID, stationID string, want
 	t.Helper()
 	before, cfg := s.Snapshot(), s.cfg.Clone()
 	countdowns := maps.Clone(s.unresponsiveTicks)
+	navigation := make(map[string]robotNavigation, len(s.navigation))
+	for id, nav := range s.navigation {
+		nav.route = slices.Clone(nav.route)
+		navigation[id] = nav
+	}
 	if err := s.SetCharging(robotID, stationID); !errors.Is(err, want) {
 		t.Fatalf("SetCharging(%q, %q) = %v, want %v", robotID, stationID, err, want)
 	}
-	if !reflect.DeepEqual(s.Snapshot(), before) || !reflect.DeepEqual(s.cfg, cfg) || !reflect.DeepEqual(s.unresponsiveTicks, countdowns) {
+	if !reflect.DeepEqual(s.Snapshot(), before) || !reflect.DeepEqual(s.cfg, cfg) || !reflect.DeepEqual(s.unresponsiveTicks, countdowns) || !reflect.DeepEqual(s.navigation, navigation) {
 		t.Fatal("failed command changed state, config, or countdowns")
 	}
+}
+
+func TestSetChargingReservationPrecedence(t *testing.T) {
+	for _, tc := range []struct {
+		name, robot, station string
+		status               RobotStatus
+		occupant, reserved   string
+		want                 error
+	}{
+		{name: "unknown robot before reservation", robot: "missing", station: "S1", reserved: "R2", want: ErrUnknownRobot},
+		{name: "unknown station before busy", robot: "R1", station: "missing", status: RobotMoving, reserved: "R2", want: ErrUnknownStation},
+		{name: "occupied before reserved", robot: "R1", station: "S1", status: RobotMoving, occupant: "R2", reserved: "R2", want: ErrStationOccupied},
+		{name: "reserved before busy", robot: "R1", station: "S1", status: RobotMoving, reserved: "R2", want: ErrStationReserved},
+		{name: "reserved before position", robot: "R2", station: "S1", status: RobotIdle, reserved: "R1", want: ErrStationReserved},
+		{name: "own reservation moving", robot: "R1", station: "S1", status: RobotMoving, reserved: "R1", want: ErrRobotBusy},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestSim(t, cfgRobotOnStation(), 42)
+			for i := range s.state.Robots {
+				if s.state.Robots[i].ID == tc.robot {
+					s.state.Robots[i].Status = tc.status
+				}
+			}
+			s.state.Stations[0].OccupiedBy, s.state.Stations[0].ReservedBy = tc.occupant, tc.reserved
+			assertChargingFailure(t, s, tc.robot, tc.station, tc.want)
+		})
+	}
+}
+
+func TestSetChargingDuringOwnChargeTrip(t *testing.T) {
+	s := autochargeSim(t, DefaultConfig(), Point{3, 0}, 15)
+	s.Tick()
+	assertChargingFailure(t, s, "R1", "S1", ErrRobotBusy)
+	assertChargingFailure(t, s, "R2", "S1", ErrStationReserved)
+	assertInvariants(t, s, s.cfg)
 }
 
 func TestSetChargingErrors(t *testing.T) {

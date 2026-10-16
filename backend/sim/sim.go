@@ -12,6 +12,9 @@ type Sim struct {
 	rng               *rand.Rand
 	jobCells          []Point
 	unresponsiveTicks map[string]int
+	navigation        map[string]robotNavigation
+	recovery          map[string]robotRecovery
+	protected         map[Point]bool
 }
 
 // New constructs an isolated deterministic simulator from a configuration and seed.
@@ -25,6 +28,9 @@ func New(cfg Config, seed int64) (*Sim, error) {
 		rng:               rand.New(rand.NewSource(seed)),
 		jobCells:          cfg.JobCells(),
 		unresponsiveTicks: make(map[string]int),
+		navigation:        make(map[string]robotNavigation),
+		recovery:          make(map[string]robotRecovery),
+		protected:         protectedCells(cfg),
 		state: State{
 			Seed:     seed,
 			Robots:   make([]RobotState, 0, len(cfg.RobotStarts)),
@@ -48,6 +54,7 @@ func New(cfg Config, seed int64) (*Sim, error) {
 	for i := 0; i < cfg.InitialJobs; i++ {
 		s.addJob()
 	}
+	s.state.Aisles = s.snapshotAisles()
 	return s, nil
 }
 
@@ -58,6 +65,7 @@ func (s *Sim) Tick() {
 		s.addJob()
 	}
 	s.stepRobots()
+	s.state.Aisles = s.snapshotAisles()
 }
 
 // CellAt is READ: it looks up a cell without mutating simulation state.
@@ -71,6 +79,7 @@ func (s *Sim) Snapshot() State {
 	state.Robots = append([]RobotState{}, s.state.Robots...)
 	state.Jobs = append([]JobState{}, s.state.Jobs...)
 	state.Stations = append([]StationState{}, s.state.Stations...)
+	state.Aisles = s.snapshotAisles()
 	state.Faults = make([]FaultState, len(s.state.Faults))
 	for i, fault := range s.state.Faults {
 		state.Faults[i] = copyFault(fault)

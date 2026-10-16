@@ -26,6 +26,14 @@ func TestDefaultConfig(t *testing.T) {
 		UnresponsiveDelay:     3,
 		LowBatteryInjectLevel: 15,
 		AutoDispatch:          true,
+		ReplanAfter:           3,
+		BlockedAfter:          10,
+		ReserveBattery:        5,
+		AutoCharge:            false,
+		ChargeBelow:           40,
+		Recovery:              false,
+		RecoverAfter:          15,
+		HoldTicks:             3,
 	}
 	if got := DefaultConfig(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("defaults = %+v, want %+v", got, want)
@@ -126,13 +134,13 @@ func TestJSONContracts(t *testing.T) {
 		want  string
 	}{
 		{"point", Point{2, 3}, `{"x":2,"y":3}`},
-		{"robot", RobotState{"R1", 2, 3, 100, RobotIdle, ""}, `{"id":"R1","x":2,"y":3,"battery":100,"status":"idle","jobId":""}`},
-		{"unassigned job", JobState{"J1", Point{1, 2}, Point{3, 4}, JobPending, ""}, `{"id":"J1","from":{"x":1,"y":2},"to":{"x":3,"y":4},"status":"pending","assignedRobot":""}`},
-		{"done job", JobState{"J1", Point{}, Point{}, JobDone, "R1"}, `{"id":"J1","from":{"x":0,"y":0},"to":{"x":0,"y":0},"status":"done","assignedRobot":"R1"}`},
-		{"station", StationState{"S1", 0, 0, ""}, `{"id":"S1","x":0,"y":0,"occupiedBy":""}`},
-		{"fault with aisle zero", FaultState{"F1", FaultAisleConflict, []string{"R1"}, &zero, 7}, `{"id":"F1","type":"aisle_conflict","robots":["R1"],"aisle":0,"tick":7}`},
-		{"fault without aisle", FaultState{"F2", FaultLowBattery, []string{"R2"}, nil, 8}, `{"id":"F2","type":"low_battery","robots":["R2"],"tick":8}`},
-		{"state", State{9, 42, []RobotState{}, []JobState{}, []StationState{}, []FaultState{}}, `{"tick":9,"seed":42,"robots":[],"jobs":[],"stations":[],"faults":[]}`},
+		{"robot", RobotState{ID: "R1", X: 2, Y: 3, Battery: 100, Status: RobotIdle, JobID: ""}, `{"id":"R1","x":2,"y":3,"battery":100,"status":"idle","jobId":"","waitTicks":0,"blocked":false}`},
+		{"unassigned job", JobState{ID: "J1", From: Point{1, 2}, To: Point{3, 4}, Status: JobPending, AssignedRobot: ""}, `{"id":"J1","from":{"x":1,"y":2},"to":{"x":3,"y":4},"status":"pending","assignedRobot":""}`},
+		{"done job", JobState{ID: "J1", From: Point{}, To: Point{}, Status: JobDone, AssignedRobot: "R1"}, `{"id":"J1","from":{"x":0,"y":0},"to":{"x":0,"y":0},"status":"done","assignedRobot":"R1"}`},
+		{"station", StationState{ID: "S1", X: 0, Y: 0, OccupiedBy: ""}, `{"id":"S1","x":0,"y":0,"occupiedBy":"","reservedBy":""}`},
+		{"fault with aisle zero", FaultState{ID: "F1", Type: FaultAisleConflict, Robots: []string{"R1"}, Aisle: &zero, Tick: 7}, `{"id":"F1","type":"aisle_conflict","robots":["R1"],"aisle":0,"tick":7}`},
+		{"fault without aisle", FaultState{ID: "F2", Type: FaultLowBattery, Robots: []string{"R2"}, Aisle: nil, Tick: 8}, `{"id":"F2","type":"low_battery","robots":["R2"],"tick":8}`},
+		{"state", State{Tick: 9, Seed: 42, Robots: []RobotState{}, Jobs: []JobState{}, Stations: []StationState{}, Faults: []FaultState{}, Aisles: []AisleState{}}, `{"tick":9,"seed":42,"robots":[],"jobs":[],"stations":[],"faults":[],"aisles":[]}`},
 		{"cells", []CellType{CellFree, CellAisle, CellStation, CellWall, CellOutOfBounds}, `["free","aisle","station","wall","out_of_bounds"]`},
 		{"robot statuses", []RobotStatus{RobotIdle, RobotMoving, RobotCharging, RobotFaulted, RobotOffline}, `["idle","moving","charging","faulted","offline"]`},
 		{"job statuses", []JobStatus{JobPending, JobAssigned, JobInProgress, JobDone}, `["pending","assigned","in_progress","done"]`},

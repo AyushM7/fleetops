@@ -5,6 +5,89 @@ import (
 	"testing"
 )
 
+func TestQueuedChargingLowPower(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		battery, drain int
+		change         func(*Sim)
+		queued         bool
+	}{
+		{"queued boundary", 3, 1, func(*Sim) {}, true},
+		{"stranded", 2, 1, func(*Sim) {}, false},
+		{"movement multiplier", 5, 2, func(*Sim) {}, true},
+		{"multiplier stranded", 4, 2, func(*Sim) {}, false},
+		{"disabled", 10, 1, func(s *Sim) { s.cfg.AutoCharge = false }, false},
+		{"above threshold", 40, 1, func(*Sim) {}, false},
+		{"ready", 10, 1, func(s *Sim) { s.state.Stations[0].OccupiedBy = ""; s.state.Robots[1].X, s.state.Robots[1].Y = 3, 11 }, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := autochargeSim(t, DefaultConfig(), Point{2, 0}, tc.battery)
+			for i, p := range []Point{{0, 0}, {19, 0}} {
+				r := &s.state.Robots[i+1]
+				r.X, r.Y = p.X, p.Y
+				s.state.Stations[i].OccupiedBy = r.ID
+			}
+			s.cfg.MovingDrain = tc.drain
+			tc.change(s)
+			s.state.Tick = 20
+			r := &s.state.Robots[0]
+			if s.queuedForCharging(*r) != tc.queued {
+				t.Fatal("wrong queue eligibility")
+			}
+			s.stepIdle(r)
+			want := tc.battery
+			if !tc.queued {
+				want--
+			}
+			if r.Battery != want {
+				t.Fatalf("battery=%d want%d", r.Battery, want)
+			}
+			assertInvariants(t, s, s.cfg)
+		})
+	}
+}
+
+func TestQueuedChargingReevaluation(t *testing.T) {
+	s := autochargeSim(t, DefaultConfig(), Point{2, 0}, 3)
+	for i, p := range []Point{{0, 0}, {19, 0}} {
+		r := &s.state.Robots[i+1]
+		r.X, r.Y = p.X, p.Y
+		s.state.Stations[i].OccupiedBy = r.ID
+	}
+	r := &s.state.Robots[0]
+	for tick := 20; tick <= 80; tick += 20 {
+		s.state.Tick = tick
+		s.stepIdle(r)
+		if r.Battery != 3 {
+			t.Fatal("genuine queue drained")
+		}
+	}
+	s.state.Stations[0].OccupiedBy = ""
+	s.state.Robots[1].X, s.state.Robots[1].Y = 3, 11
+	s.stepIdle(r)
+	if r.Battery != 2 || s.queuedForCharging(*r) {
+		t.Fatal("ready/stranded robot retained an exemption")
+	}
+	for _, status := range []RobotStatus{RobotMoving, RobotFaulted, RobotOffline, RobotCharging} {
+		copy := *r
+		copy.Status = status
+		if s.queuedForCharging(copy) {
+			t.Fatalf("exempted %s", status)
+		}
+	}
+	copy := *r
+	copy.JobID = "J1"
+	if s.queuedForCharging(copy) {
+		t.Fatal("job owner exempted")
+	}
+	copy = *r
+	copy.X, copy.Y = 0, 0
+	copy.Battery = 1
+	if s.queuedForCharging(copy) {
+		t.Fatal("robot ready on its station classified queued")
+	}
+}
+
 func setJobCells(t *testing.T, s *Sim, id string, from, to Point) {
 	t.Helper()
 	for i := range s.state.Jobs {
@@ -97,7 +180,7 @@ func TestIdleDrainBeforeDispatch(t *testing.T) {
 		s := movementSim(t, DefaultConfig())
 		s.state.Tick, s.state.Robots[0].Battery = 19, battery
 		s.Tick()
-		want := RobotState{"R1", 1, 11, 29, RobotIdle, ""}
+		want := RobotState{ID: "R1", X: 1, Y: 11, Battery: 29, Status: RobotIdle, JobID: ""}
 		if battery == 31 {
 			want.Y, want.Status, want.JobID = 10, RobotMoving, "J1"
 		}
@@ -117,20 +200,20 @@ func TestMovementRoute(t *testing.T) {
 		battery  int
 		status   JobStatus
 	}{
-		{Point{2, 11}, 99, JobAssigned},
-		{Point{3, 11}, 98, JobAssigned},
-		{Point{3, 10}, 97, JobInProgress},
-		{Point{2, 10}, 96, JobInProgress},
-		{Point{2, 9}, 95, JobDone},
-		{Point{2, 9}, 95, JobDone},
+		{Point{3, 10}, 99, JobInProgress},
+		{Point{3, 9}, 98, JobInProgress},
+		{Point{2, 9}, 97, JobDone},
+		{Point{2, 9}, 97, JobDone},
+		{Point{2, 9}, 97, JobDone},
+		{Point{2, 9}, 97, JobDone},
 	} {
 		s.Tick()
-		robot, job := s.state.Robots[0], s.state.Jobs[0]
-		wantRobot := RobotState{ID: "R1", X: want.position.X, Y: want.position.Y, Battery: want.battery, Status: RobotMoving, JobID: "J1"}
+		robot, job := s.state.Robots[1], s.state.Jobs[0]
+		wantRobot := RobotState{ID: "R2", X: want.position.X, Y: want.position.Y, Battery: want.battery, Status: RobotMoving, JobID: "J1"}
 		if want.status == JobDone {
 			wantRobot.Status, wantRobot.JobID = RobotIdle, ""
 		}
-		if robot != wantRobot || job.Status != want.status || job.AssignedRobot != "R1" {
+		if robot != wantRobot || job.Status != want.status || job.AssignedRobot != "R2" {
 			t.Fatalf("tick %d: robot %+v job %+v; want %+v, %s", i+1, robot, job, wantRobot, want.status)
 		}
 		s.cfg.AutoDispatch = false // Existing work must continue with new dispatch disabled.
@@ -146,10 +229,10 @@ func TestMovementBoundaries(t *testing.T) {
 		want        RobotState
 		jobStatus   JobStatus
 	}{
-		{"zero first leg", Point{1, 11}, Point{2, 11}, 100, false, RobotState{"R1", 2, 11, 97, RobotIdle, ""}, JobDone},
-		{"active depletion", Point{1, 5}, Point{19, 5}, 1, false, RobotState{"R1", 1, 10, 0, RobotFaulted, "J1"}, JobAssigned},
-		{"completed depletion", Point{1, 11}, Point{2, 11}, 1, false, RobotState{"R1", 2, 11, 0, RobotFaulted, ""}, JobDone},
-		{"already at destination", Point{1, 5}, Point{1, 11}, 1, true, RobotState{"R1", 1, 11, 1, RobotIdle, ""}, JobDone},
+		{"zero first leg", Point{1, 11}, Point{2, 11}, 100, false, RobotState{ID: "R1", X: 2, Y: 11, Battery: 97, Status: RobotIdle, JobID: ""}, JobDone},
+		{"active depletion", Point{1, 5}, Point{19, 5}, 1, false, RobotState{ID: "R1", X: 1, Y: 10, Battery: 0, Status: RobotFaulted, JobID: "J1"}, JobAssigned},
+		{"completed depletion", Point{1, 11}, Point{2, 11}, 1, false, RobotState{ID: "R1", X: 2, Y: 11, Battery: 0, Status: RobotFaulted, JobID: ""}, JobDone},
+		{"already at destination", Point{1, 5}, Point{1, 11}, 1, true, RobotState{ID: "R1", X: 1, Y: 11, Battery: 1, Status: RobotIdle, JobID: ""}, JobDone},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := DefaultConfig()
@@ -158,6 +241,11 @@ func TestMovementBoundaries(t *testing.T) {
 			s := movementSim(t, cfg)
 			setJobCells(t, s, "J1", tc.from, tc.to)
 			s.state.Robots[0].Battery = tc.battery
+			// Existing work may deplete; the scheduler now rejects infeasible new work.
+			if tc.battery == 1 && !tc.alreadyAtTo {
+				s.state.Robots[0].Status, s.state.Robots[0].JobID = RobotMoving, "J1"
+				s.state.Jobs[0].Status, s.state.Jobs[0].AssignedRobot = JobAssigned, "R1"
+			}
 			if tc.alreadyAtTo {
 				s.state.Robots[0].Status, s.state.Robots[0].JobID = RobotMoving, "J1"
 				s.state.Jobs[0].Status, s.state.Jobs[0].AssignedRobot = JobInProgress, "R1"
@@ -175,7 +263,15 @@ func TestMovementBoundaries(t *testing.T) {
 		{Point{2, 1}, Point{2, 1}},
 		{Point{2, 2}, Point{2, 2}},
 	} {
-		if got := stepToward(Point{2, 2}, tc.target); got != tc.want {
+		route, err := newTestSim(t, DefaultConfig(), 1).PlanRoute(Point{2, 2}, tc.target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := Point{2, 2}
+		if len(route) > 0 {
+			got = route[0]
+		}
+		if got != tc.want {
 			t.Errorf("step toward %v = %v, want %v", tc.target, got, tc.want)
 		}
 	}
@@ -225,7 +321,7 @@ func TestUnresponsiveCountdown(t *testing.T) {
 			s := movementSim(t, DefaultConfig())
 			s.Tick()
 			robot := &s.state.Robots[0]
-			want := RobotState{"R1", 1, 10, 99, RobotMoving, "J1"}
+			want := RobotState{ID: "R1", X: 1, Y: 10, Battery: 99, Status: RobotMoving, JobID: "J1"}
 			if *robot != want {
 				t.Fatalf("tick 1 = %+v, want %+v", robot, want)
 			}

@@ -16,15 +16,18 @@ func cfgRobotOnStation() Config {
 
 func cfgOneJobCell() Config {
 	cfg := DefaultConfig()
-	cfg.Width, cfg.Height = 4, 4
+	cfg.Width, cfg.Height = 5, 5
 	cfg.AisleColumns = []int{3}
 	cfg.AisleYMin, cfg.AisleYMax = 3, 3
-	cfg.Stations = []Point{{0, 0}, {1, 0}, {2, 0}, {3, 0}}
+	cfg.Stations = []Point{{3, 2}, {3, 4}, {4, 3}, {2, 2}}
 	cfg.RobotStarts = append([]Point{}, cfg.Stations...)
 	cfg.RobotStarts = append(cfg.RobotStarts, Point{3, 3})
-	for y := 1; y < cfg.Height; y++ {
+	// Freeing the first wall connects the job cells and gives every station access.
+	cfg.Walls = []Point{{2, 3}}
+	for y := 0; y < cfg.Height; y++ {
 		for x := 0; x < cfg.Width; x++ {
-			if p := (Point{x, y}); p != (Point{3, 3}) {
+			p := Point{x, y}
+			if p != (Point{3, 3}) && p != (Point{2, 3}) && cfg.CellTypeAt(p) != CellStation {
 				cfg.Walls = append(cfg.Walls, p)
 			}
 		}
@@ -166,5 +169,110 @@ func TestValidateJobCellMinimum(t *testing.T) {
 	cfg.Walls = cfg.Walls[1:]
 	if len(cfg.JobCells()) != 2 || cfg.Validate() != nil {
 		t.Fatal("freeing one wall must satisfy V11 with all other rules unchanged")
+	}
+}
+
+func TestValidateInitialAisles(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		starts []Point
+		want   string
+	}{
+		{name: "same aisle endpoints", starts: []Point{{4, 1}, {4, 10}}, want: "V13"},
+		{name: "different aisles", starts: []Point{{4, 1}, {9, 10}}},
+		{name: "same column outside aisle", starts: []Point{{4, 0}, {4, 11}}},
+		{name: "one inside one outside", starts: []Point{{4, 1}, {4, 11}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			copy(cfg.RobotStarts, tc.starts)
+			assertWarehouseValidation(t, cfg, tc.want)
+		})
+	}
+}
+
+func TestValidateWarehouseSettings(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(*Config)
+		want   string
+	}{
+		{name: "zero replan", change: func(c *Config) { c.ReplanAfter = 0 }, want: "V14"},
+		{name: "negative replan", change: func(c *Config) { c.ReplanAfter = -1 }, want: "V14"},
+		{name: "blocked equal replan", change: func(c *Config) { c.BlockedAfter = c.ReplanAfter }, want: "V14"},
+		{name: "blocked below replan", change: func(c *Config) { c.BlockedAfter = c.ReplanAfter - 1 }, want: "V14"},
+		{name: "negative reserve", change: func(c *Config) { c.ReserveBattery = -1 }, want: "V14"},
+		{name: "excessive reserve", change: func(c *Config) { c.ReserveBattery = 51 }, want: "V14"},
+		{name: "minimum settings", change: func(c *Config) { c.ReplanAfter, c.BlockedAfter, c.ReserveBattery = 1, 2, 0 }},
+		{name: "maximum reserve", change: func(c *Config) { c.ReserveBattery = 50 }},
+		{name: "auto charge equal assignment", change: func(c *Config) { c.AutoCharge, c.ChargeBelow = true, c.MinAssignBattery }, want: "V14"},
+		{name: "auto charge below assignment", change: func(c *Config) { c.AutoCharge, c.ChargeBelow = true, c.MinAssignBattery-1 }, want: "V14"},
+		{name: "auto charge above maximum", change: func(c *Config) { c.AutoCharge, c.ChargeBelow = true, 101 }, want: "V14"},
+		{name: "auto charge minimum", change: func(c *Config) { c.AutoCharge, c.ChargeBelow = true, c.MinAssignBattery+1 }},
+		{name: "auto charge maximum", change: func(c *Config) { c.AutoCharge, c.ChargeBelow = true, 100 }},
+		{name: "disabled charge below range", change: func(c *Config) { c.ChargeBelow = -1 }},
+		{name: "disabled charge above range", change: func(c *Config) { c.ChargeBelow = 101 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			tc.change(&cfg)
+			assertWarehouseValidation(t, cfg, tc.want)
+		})
+	}
+}
+
+func TestValidateWarehousePrecedence(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Width, cfg.ReplanAfter = 3, 0
+	assertWarehouseValidation(t, cfg, "width and height")
+	cfg = cfgOneJobCell()
+	cfg.ReplanAfter = 0
+	assertWarehouseValidation(t, cfg, "at least two eligible job cells")
+	cfg = DefaultConfig()
+	cfg.Walls = []Point{{1, 0}, {0, 1}}
+	cfg.RobotStarts[0], cfg.RobotStarts[1] = Point{4, 1}, Point{4, 2}
+	cfg.ReplanAfter = 0
+	assertWarehouseValidation(t, cfg, "V12 station")
+	cfg.Walls = []Point{}
+	assertWarehouseValidation(t, cfg, "V13")
+	cfg.RobotStarts[1] = Point{9, 1}
+	assertWarehouseValidation(t, cfg, "V14")
+}
+
+func TestValidateRecovery(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(*Config)
+		want   string
+	}{
+		{name: "defaults", change: func(*Config) {}},
+		{name: "charging required", change: func(c *Config) { c.AutoCharge = false }, want: "Recovery requires"},
+		{name: "equal threshold", change: func(c *Config) { c.RecoverAfter = c.BlockedAfter }, want: "Recovery requires"},
+		{name: "lower threshold", change: func(c *Config) { c.RecoverAfter = c.BlockedAfter - 1 }, want: "Recovery requires"},
+		{name: "zero hold", change: func(c *Config) { c.HoldTicks = 0 }, want: "HoldTicks"},
+		{name: "negative hold", change: func(c *Config) { c.Recovery = false; c.HoldTicks = -1 }, want: "HoldTicks"},
+		{name: "disabled threshold", change: func(c *Config) { c.Recovery = false; c.AutoCharge = false; c.RecoverAfter = 0 }},
+		{name: "minimums", change: func(c *Config) { c.RecoverAfter = c.BlockedAfter + 1; c.HoldTicks = 1 }},
+		{name: "old validation first", change: func(c *Config) { c.ReplanAfter = 0; c.AutoCharge = false; c.HoldTicks = 0 }, want: "V14"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := WarehouseConfig()
+			tc.change(&cfg)
+			assertWarehouseValidation(t, cfg, tc.want)
+		})
+	}
+}
+
+func TestValidateChargingReserveRange(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		for _, reserve := range []int{0, 4, 5, 10, 15, 20, 25, 26, 50} {
+			cfg := DefaultConfig()
+			cfg.AutoCharge, cfg.ReserveBattery = enabled, reserve
+			want := ""
+			if enabled && (reserve < 5 || reserve > 25) {
+				want = "ReserveBattery"
+			}
+			assertWarehouseValidation(t, cfg, want)
+		}
 	}
 }

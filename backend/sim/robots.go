@@ -9,26 +9,55 @@ func (s *Sim) stepRobots() {
 	slices.SortFunc(s.state.Robots, func(a, b RobotState) int {
 		return cmp.Compare(idNumber(a.ID), idNumber(b.ID))
 	})
+	// Pass A finishes for all robots before dispatch or movement begins.
+	skip := make([]bool, len(s.state.Robots))
 	for i := range s.state.Robots {
+		skip[i] = s.prepareRobot(&s.state.Robots[i])
+	}
+	s.assignPending(skip)   // Pass B.
+	s.seekCharging(skip)    // Pass C.
+	s.clearIdleAisles(skip) // Pass C2.
+	moved := make([]bool, len(s.state.Robots))
+	for i := range s.state.Robots { // Pass D retains numeric movement priority.
 		robot := &s.state.Robots[i]
-		if s.unresponsiveTicks[robot.ID] > 0 {
-			s.unresponsiveTicks[robot.ID]--
-			if s.unresponsiveTicks[robot.ID] == 0 {
-				robot.Status = RobotOffline
-				continue
-			}
-		}
-		if robot.Status == RobotCharging {
-			s.stepCharging(robot)
+		if skip[i] {
 			continue
 		}
-		if robot.Status == RobotIdle {
-			s.stepIdle(robot)
-		}
 		if robot.Status == RobotMoving {
+			before := Point{X: robot.X, Y: robot.Y}
 			s.stepMoving(robot)
+			moved[i] = before != (Point{X: robot.X, Y: robot.Y})
+		}
+		if robot.Status != RobotMoving {
+			s.finishNavigation(robot)
 		}
 	}
+	s.recoverTraffic(moved) // Pass E cannot move a robot twice.
+}
+
+func (s *Sim) prepareRobot(robot *RobotState) bool {
+	if s.unresponsiveTicks[robot.ID] > 0 {
+		s.unresponsiveTicks[robot.ID]--
+		if s.unresponsiveTicks[robot.ID] == 0 {
+			robot.Status = RobotOffline
+			s.finishNavigation(robot)
+			return true
+		}
+	}
+	if robot.Status != RobotMoving {
+		s.finishNavigation(robot)
+	}
+	if s.prepareRecovery(robot) {
+		return true
+	}
+	if robot.Status == RobotCharging {
+		s.stepCharging(robot)
+		return true
+	}
+	if robot.Status == RobotIdle {
+		s.stepIdle(robot)
+	}
+	return false
 }
 
 func (s *Sim) stepCharging(robot *RobotState) {
@@ -45,6 +74,9 @@ func (s *Sim) stepCharging(robot *RobotState) {
 }
 
 func (s *Sim) stepIdle(robot *RobotState) {
+	if s.queuedForCharging(*robot) {
+		return
+	}
 	if s.state.Tick%s.cfg.IdleDrainEvery == 0 {
 		robot.Battery = max(0, robot.Battery-1)
 	}
@@ -52,16 +84,34 @@ func (s *Sim) stepIdle(robot *RobotState) {
 		robot.Status = RobotFaulted
 		return
 	}
-	if !s.cfg.AutoDispatch || robot.Battery < s.cfg.MinAssignBattery || robot.JobID != "" {
-		return
+}
+
+// Low-power waiting applies only while an affordable charger is unavailable.
+func (s *Sim) queuedForCharging(robot RobotState) bool {
+	if !s.cfg.AutoCharge || robot.Status != RobotIdle || robot.JobID != "" || robot.Battery >= s.cfg.ChargeBelow {
+		return false
 	}
-	if job := lowestPendingJob(s.state.Jobs); job != nil {
-		job.Status, job.AssignedRobot = JobAssigned, robot.ID
-		robot.Status, robot.JobID = RobotMoving, job.ID
+	for _, station := range s.state.Stations {
+		if robot.X == station.X && robot.Y == station.Y && station.OccupiedBy == "" && station.ReservedBy == "" {
+			return false
+		}
 	}
+	if station, _ := s.nearestChargingStation(robot); station != nil {
+		return false
+	}
+	exit := s.relocationExit(robot, Point{X: robot.X, Y: robot.Y})
+	return exit >= 0 && robot.Battery-exit*s.cfg.MovingDrain >= 1
 }
 
 func (s *Sim) stepMoving(robot *RobotState) {
+	if robot.JobID == "" {
+		if s.navigation[robot.ID].relocation {
+			s.stepRelocation(robot)
+		} else {
+			s.stepChargeTrip(robot)
+		}
+		return
+	}
 	for i := range s.state.Jobs {
 		job := &s.state.Jobs[i]
 		if job.ID != robot.JobID || job.AssignedRobot != robot.ID {
@@ -77,14 +127,15 @@ func (s *Sim) stepMoving(robot *RobotState) {
 		if job.Status == JobInProgress {
 			target = job.To
 		}
-		position := Point{robot.X, robot.Y}
-		next := stepToward(position, target)
-		if next == position {
+		if !s.advanceNavigation(robot, target) {
 			return
 		}
-		robot.X, robot.Y = next.X, next.Y
+		previousStatus := job.Status
 		updateArrival(robot, job)
 		robot.Battery = max(0, robot.Battery-s.cfg.MovingDrain)
+		if previousStatus == JobAssigned && job.Status == JobInProgress {
+			s.prepareNavigation(robot, job.To)
+		}
 		if robot.Battery == 0 {
 			robot.Status = RobotFaulted
 		}
@@ -103,18 +154,4 @@ func updateArrival(robot *RobotState, job *JobState) bool {
 		return true
 	}
 	return false
-}
-
-func stepToward(position, target Point) Point {
-	switch {
-	case position.X < target.X:
-		position.X++
-	case position.X > target.X:
-		position.X--
-	case position.Y < target.Y:
-		position.Y++
-	case position.Y > target.Y:
-		position.Y--
-	}
-	return position
 }

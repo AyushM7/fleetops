@@ -43,12 +43,14 @@ const (
 )
 
 type RobotState struct {
-	ID      string      `json:"id"`
-	X       int         `json:"x"`
-	Y       int         `json:"y"`
-	Battery int         `json:"battery"` // Integer percentage, 0..100.
-	Status  RobotStatus `json:"status"`
-	JobID   string      `json:"jobId"` // Empty means no assignment.
+	ID        string      `json:"id"`
+	X         int         `json:"x"`
+	Y         int         `json:"y"`
+	Battery   int         `json:"battery"` // Integer percentage, 0..100.
+	Status    RobotStatus `json:"status"`
+	JobID     string      `json:"jobId"` // Empty means no assignment.
+	WaitTicks int         `json:"waitTicks"`
+	Blocked   bool        `json:"blocked"`
 }
 
 type JobState struct {
@@ -63,6 +65,12 @@ type StationState struct {
 	ID         string `json:"id"`
 	X          int    `json:"x"`
 	Y          int    `json:"y"`
+	OccupiedBy string `json:"occupiedBy"`
+	ReservedBy string `json:"reservedBy"`
+}
+
+type AisleState struct {
+	ID         int    `json:"id"`
 	OccupiedBy string `json:"occupiedBy"`
 }
 
@@ -81,4 +89,5 @@ type State struct {
 	Jobs     []JobState     `json:"jobs"`
 	Stations []StationState `json:"stations"`
 	Faults   []FaultState   `json:"faults"`
+	Aisles   []AisleState   `json:"aisles"`
 }

@@ -1,4 +1,4 @@
-Status: in progress
+Status: Phase 1 complete; Phase 2 feature-complete but not fully accepted.
 
 # FleetOps
 
@@ -9,8 +9,8 @@ LLM proposes, Go decides
 | Component | Status |
 | --- | --- |
 | Setup | In progress |
-| Go simulator | Not started |
-| Scheduler and routing | Not started |
+| Go simulator | Phase 1 complete; Phase 2 feature-complete, not fully accepted |
+| Scheduler and routing | Phase 2 feature-complete, not fully accepted |
 | Validator | Not started |
 | Postgres persistence | Not started |
 | GraphQL API | Not started |
