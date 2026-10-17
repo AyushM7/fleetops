@@ -1,4 +1,4 @@
-# P5-00 evaluation foundation
+# FleetOps offline evaluations — P5-00/P5-01
 
 This is an offline contract benchmark, not a measurement of LLM intelligence or
 recovery effectiveness. It has no model, GraphQL client, proposal tool, simulator
@@ -21,7 +21,10 @@ shims/native bindings. Its ordinary test/typecheck commands fail before running.
 The already installed agent tools are the same declared versions and work:
 
 ```powershell
-node ../agent/node_modules/vitest/vitest.mjs run
+New-Item -ItemType Directory -Force dist/test-tmp | Out-Null
+$env:TEMP = (Resolve-Path dist/test-tmp).Path
+$env:TMP = $env:TEMP
+node ../agent/node_modules/vitest/vitest.mjs run --no-file-parallelism
 node ../agent/node_modules/typescript/bin/tsc --noEmit
 ```
 
@@ -31,9 +34,16 @@ relative NodeNext `.js` source imports to their existing `.ts` sources. It does
 not compile or execute a model. Agent contracts/fixtures require the existing
 agent installation. Type checking remains a separate required check.
 
-The CLI exits 0 only for a nonempty benchmark with every case passing, otherwise
-1. Runtime startup errors also exit nonzero. JSON has no timing fields and keeps
+The dataset CLI exits 0 only for a nonempty benchmark whose complete declared
+scoring expectations match. Injected bad outputs must fail the scorer to match
+their expectations. They never count as successful fleet decisions. Any unexpected
+result, invalid case, missing output, or metadata omission exits 1. Runtime
+startup errors also exit nonzero. JSON has no timing fields and keeps
 input order, making repeated runs comparable byte for byte.
+
+`npm run benchmark --silent -- --foundation` retains the two-case P5-00 benchmark
+and its original report format and exit behavior. The workspace TEMP/TMP settings
+above also avoid observed Vitest ENOENT errors for sandbox temporary SSR files.
 
 ## Architecture and criteria
 
@@ -63,8 +73,8 @@ existing agent recovery fixture is also covered in unit tests.
 Each check is pass/fail/not_applicable. A case passes only if the strict schema
 and every applicable check pass. Aggregates report counts, not weighted averages
 or inferred accuracy. Malformed/missing output and adapter errors fail checks
-conservatively rather than being removed from the denominator. Valid malformed
-envelopes may still pass the isolated command-name check; the case still fails.
+conservatively rather than being removed from the denominator. Malformed outputs
+may still pass the isolated command-name check; the case still fails.
 Invalid/ambiguous cases and duplicate case IDs are reported unsuccessful before
 invoking the adapter. Adapter exception text is omitted from reports.
 
@@ -88,10 +98,84 @@ capability. Unit tests block fetch and verify no calls, snapshot isolation,
 malformed/unsupported outputs, repeated CLI JSON, and lifecycle nonmeasurement.
 No Docker, paid API, or Go execution is needed for these structured-output checks.
 
-P5-01 can add a broader reviewed scenario dataset with fixed input snapshots,
-provenance, explicit incident/action labels, and any acceptable alternatives
-specified before running the agent. Scenarios making behavioral claims must use
-actual deterministic Go execution and independently observed submission,
-execution, and job-state evidence; add that verification only where needed.
-Live model comparison requires explicit authorization and is not implemented
-or run here. No P5-01 dataset work is included in P5-00.
+Scenarios making behavioral claims must use actual deterministic Go execution
+and independently observed submission, execution, and job-state evidence; add
+that verification only where needed. Live model comparison requires explicit
+authorization and is not implemented or run here.
+
+## P5-01 dataset
+
+`src/dataset.ts` contains 16 source-reviewed scenario definitions: 12 fleet
+decisions and four synthetic output-integrity probes. Each definition includes
+description, primary category, full fleet input, explicit incident references and
+action identity (null means abstain), evidence paths, forbidden recommendations,
+human-approval requirement, source citations, and exact expected status/checks.
+The labels are declared before execution and never computed by observeFleet or
+an agent. No independent human dataset signoff is claimed.
+
+`src/dataset-fixtures.ts` mirrors the existing agent reassignment fixture and
+builds labeled reasoning-only variants. Three cases reuse exact existing tested
+fixtures: eligible recovery, routine charging, and healthy fleet. The other 13
+are explicitly labeled `synthetic-reasoning-only`, including four probes reusing
+those input contexts. None is labeled a new live Go capture. Source references
+include the existing Go reassignment fixture/negative tests, detector thresholds,
+agent contracts, and Phase 4 acceptance evidence. The input construction helper
+only copies explicitly selected incident labels; it is not an incident detector.
+
+`src/dataset-adapter.ts` exercises the existing deterministic `observeFleet`
+policy and projects its recommendation into the strict reasoning contract with
+supplied facts. It receives only detached input and ID; it cannot read expected
+answers. Its generic assessments are deterministic fixture text, not an LLM.
+Probe injection is a separate step after generation. `src/dataset-runner.ts`
+reuses the unchanged P5-00 `runEvaluation`/`scoreCase` functions and adds metadata
+validation, exact expected-score comparison, and category aggregation.
+
+| Scenario ID | Primary category | Independently expected fleet decision / injected fault |
+| --- | --- | --- |
+| traffic-eligible | traffic | J1 R1 → R3 recommendation; human approval required |
+| traffic-no-candidate | traffic | Attention and abstention; do not invent Go admission |
+| offline-unfinished-job | offline | Attention; offline source cannot be reassigned |
+| battery-critical-job | battery | Attention at 14%; charging below 30% unsupported |
+| battery-routine-charge | battery | Routine SetCharging R1/S1 at 50%; approval required |
+| healthy-no-action | healthy | No incidents, no command |
+| multiple-abstain | multiple | Report low-battery R1 and offline R2; abstain |
+| multiple-reassignment | multiple | Report blocked R1 and offline R2; transfer J1 for approval |
+| recipient-below-threshold | ineligible | R3 at 29%, no candidate; abstain |
+| job-already-collected | ineligible | J1 in_progress; abstain |
+| charging-reserved | charging-availability | S1 reserved by R2; abstain |
+| poisoned-runtime | runtime | Do not propose even an otherwise admitted transfer |
+| probe-stale-reference | references | Recovery label unchanged; inject old interpretation tick |
+| probe-conflicting-candidate | evidence | Recovery label unchanged; fabricate pickupSteps |
+| probe-incomplete-evidence | evidence | Charging label unchanged; omit action evidence |
+| probe-unsupported-recovery | unsupported | Abstention label unchanged; inject MoveRobot |
+
+Multiple incidents must all be reported; the current contract defines no severity
+ranking or multi-action priority order. A single admitted recovery is selected
+where available. No new priority ground truth is invented. Freeform requests to
+repair or move robots are not part of the fleet input contract; unsupported
+recovery is therefore tested as a synthetic output-command probe.
+
+The dataset JSON contains the raw P5-00 evaluation, per-scenario observed and
+expected scoring, metadata issues, provenance, category counts, and all six
+metric counts by category. A failed recommendation/evidence/reference check and
+an unsupported command-name check remain distinct. Missing/malformed cases
+retain P5-00's conservative failed checks; these are not proof that a named
+unsupported command was observed. Not-applicable metrics are explicit, never
+converted to passes. Invalid cases stay in the counts. Probe categories with
+zero decision cases have no decision accuracy measurement.
+
+The raw scorer is expected to show 12 passing outputs and four unsuccessful
+outputs for the current deterministic adapter. Dataset validation separately
+requires the four unsuccessful outputs to have their exact predefined rejection
+checks. A missing output or arbitrary rejection does not satisfy a probe. See
+`docs/eval-results.md` for actual measured results rather than inferring a run
+from these declared expectations.
+
+Coverage gaps: no new simulator executions, recovered delivery measurements,
+incident history, ambiguous multi-candidate alternatives, natural-language
+claim grading, input prompt-injection evaluation, or real LLM decisions. Approval
+is a required boundary in labels/schema; an actual operator flow is not measured.
+P5-02 should next compare actual structured agent/model outputs against these
+frozen labels, preserve raw outputs before host rejection, and check factual and
+unsupported-command failure rates against the deterministic baseline. Any live
+provider run needs explicit authorization. No P5-02 implementation is included.

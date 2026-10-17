@@ -106,7 +106,7 @@ it("isolates adapter snapshot mutation from the case and scorer", async () => {
   expect(cases).toEqual(before); expect(report.totals.passed).toBe(0);
 });
 it("emits stable machine JSON separately from the CLI summary with exit zero", () => {
-  const run = () => spawnSync(process.execPath, ["scripts/run.mjs"], { encoding: "utf8" });
+  const run = () => spawnSync(process.execPath, ["scripts/run.mjs", "--foundation"], { encoding: "utf8" });
   const first = run(); const second = run();
   expect(first.status).toBe(0); expect(second.status).toBe(0);
   expect(second.stdout).toBe(first.stdout);
