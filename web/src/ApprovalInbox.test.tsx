@@ -22,6 +22,34 @@ describe("operator inbox", () => {
     expect(render({ ...ready, phase: "unavailable" })).toContain("Displayed proposals may be stale");
     expect(render({ ...ready, proposals: [{ ...proposal, expiresAt: "2020-01-01T00:00:00Z" }] })).toContain("Expiration time has passed");
   });
+  it("keeps both decision controls disabled for expired, prior-runtime and decided proposals", () => {
+    for (const changed of [{ expiresAt: "2020-01-01T00:00:00Z" }, { currentRuntime: false }, { state: "approved" as const }]) {
+      const output = render({ ...ready, proposals: [{ ...proposal, ...changed }] });
+      expect(output).toMatch(/class="approve-button" disabled/);
+      expect(output).toMatch(/class="reject-button" disabled/);
+    }
+  });
+  it("keeps action controls and safety warnings outside optional proposal evidence", () => {
+    const visible = (output: string): string => output.replace(/<details[^>]*>[\s\S]*?<\/details>/g, "");
+    const output = render();
+    expect(output).toContain('<details class="proposal-details"><summary>Evidence, expiry &amp; validation</summary>');
+    expect(visible(output)).toContain('class="approve-button"');
+    expect(visible(output)).toContain('class="reject-button"');
+    expect(visible(output)).toContain("No rationale recorded");
+    expect(visible(output)).not.toContain("<code>P-example</code>");
+    const expired = render({ ...ready, proposals: [{ ...proposal, expiresAt: "2020-01-01T00:00:00Z" }] });
+    expect(visible(expired)).toContain("Expiration time has passed");
+    const historical = render({ ...ready, proposals: [{ ...proposal, currentRuntime: false }] });
+    expect(visible(historical)).toContain("Prior runtime; decisions are disabled");
+  });
+  it("keeps uncertain execution and reconciliation outside progressive disclosure", () => {
+    const receipt: Receipt = { id: proposal.id, proposal, decision: "approve", result: null, latest: null, refreshing: false, refreshFailed: true };
+    const visible = render(ready, receipt).replace(/<details[^>]*>[\s\S]*?<\/details>/g, "");
+    expect(visible).toContain("Decision outcome unknown");
+    expect(visible).toContain("Do not assume execution failed or retry automatically");
+    expect(visible).toContain("Could not refresh the stored status");
+    expect(visible).toContain("Refresh stored status");
+  });
   it("displays real duplicate and expiration denials with historical execution flags", () => {
     for (const error of ["proposal already decided", "proposal expired", "proposal belongs to a prior runtime", "self approval forbidden", "request denied"]) {
       const receipt: Receipt = { id: proposal.id, proposal, decision: "approve", result: { proposalId: proposal.id, state: "approved", execution: "succeeded", auditCommitted: true, executionAttempted: false, error }, latest: { ...proposal, state: "approved", execution: "succeeded" }, refreshing: false, refreshFailed: false };

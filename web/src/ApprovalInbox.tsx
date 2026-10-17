@@ -27,7 +27,9 @@ interface InboxViewProps {
 
 function DecisionReceipt({ receipt, refreshStatus, busy }: { receipt: Receipt; refreshStatus: () => void; busy: boolean }): JSX.Element {
   const result = receipt.result;
-  return <div className="decision-receipt" role="status" aria-label="Decision result">
+  const outcome = !result?.auditCommitted || result.execution === "unknown" ? "uncertain" : result.error ? "declined" : result.state === "rejected" ? "rejected" : result.execution;
+  return <div className="decision-receipt" data-outcome={outcome} role="status" aria-label="Decision result">
+    <p className="eyebrow">03 / GO EXECUTION RECEIPT</p>
     <div className="receipt-heading"><h3>{!result || !result.auditCommitted || result.execution === "unknown" ? "Decision outcome unknown" : result.error ? "Decision declined" : "Decision recorded"}</h3><code>{receipt.id}</code></div>
     <p>{receipt.proposal.action === "reassign_unstarted_job" ? `Job ${receipt.proposal.jobId} · ${receipt.proposal.fromRobotId} → ${receipt.proposal.toRobotId}` : `SetCharging · ${receipt.proposal.robotId} → ${receipt.proposal.stationId}`}</p>
     <p className="execution-summary">{executionMessage(receipt)}</p>
@@ -42,20 +44,34 @@ function DecisionReceipt({ receipt, refreshStatus, busy }: { receipt: Receipt; r
   </div>;
 }
 
+function ProposalEvidence({ proposal: p }: { proposal: Proposal }): JSX.Element {
+  return <div className="proposal-evidence"><p className="evidence-label">Proposal parameters · compare with fleet telemetry</p><dl>
+    {p.action === "reassign_unstarted_job" ? <><div><dt>Uncollected job</dt><dd>{p.jobId}</dd></div><div><dt>From robot</dt><dd>{p.fromRobotId}</dd></div><div><dt>To robot</dt><dd>{p.toRobotId}</dd></div></> : <><div><dt>Robot</dt><dd>{p.robotId}</dd></div><div><dt>Current station</dt><dd>{p.stationId}</dd></div></>}
+  </dl></div>;
+}
+
 export function InboxView({ feed, busy, receipt, runtimeAvailable, decide, refresh, refreshStatus }: InboxViewProps): JSX.Element {
   const allowed = feed.phase === "ready" && runtimeAvailable && busy === null;
   return <section id="approval-inbox" className="approval-inbox" aria-label="Operator approval inbox">
-    <div className="panel-heading"><div><h2>Approval inbox</h2><p>Current runtime · up to 50 pending proposals, oldest first</p></div><button className="secondary-button" onClick={refresh} disabled={busy !== null}>Refresh inbox</button></div>
+    <div className="panel-heading"><div><h2>Human decision</h2></div><button className="secondary-button" onClick={refresh} disabled={busy !== null}>Refresh inbox</button></div>
     {feed.phase === "loading" && <p className="inbox-message" role="status">Loading pending proposals…</p>}
     {feed.phase === "forbidden" && <p className="inbox-message">Operator access required. Viewer and proposer credentials cannot review this inbox or approve decisions. Fleet monitoring remains available.</p>}
     {feed.phase === "unavailable" && <p className="inbox-message decision-error" role="alert">Approval inbox unavailable. Retrying… Displayed proposals may be stale; decisions are disabled.</p>}
     {feed.phase === "ready" && feed.proposals.length === 0 && <p className="inbox-message">No pending proposals in this runtime.</p>}
     {feed.phase !== "forbidden" && feed.proposals.length > 0 && <ul className="proposal-list">{feed.proposals.map(p => <li className="proposal-card" key={p.id} data-proposal-id={p.id}>
-      <div className="proposal-summary"><div>{p.action === "reassign_unstarted_job" ? <><h3>Job {p.jobId}: {p.fromRobotId} <span>→ {p.toRobotId}</span></h3><p>Requested action: <strong>ReassignUnstartedJob</strong></p><p>Transfer an uncollected job to another robot. Approval does not complete delivery.</p></> : <><h3>{p.robotId} <span>→ {p.stationId}</span></h3><p>Requested action: <strong>SetCharging</strong></p><p>Start charging at the robot’s current station.</p></>}</div><span className="status">{p.state}</span></div>
-      <code>{p.id}</code><p className="rationale">{isLocalDemo() ? "AI recommendation · Deterministic local adapter. Review the requested action and incident telemetry before deciding." : "No rationale recorded"}</p>
-      <p className="proposal-meta">Submitted by {p.submittedBy || "Not recorded"} · Expires {new Date(p.expiresAt).toLocaleString()}</p>
+      <div className="proposal-summary"><div>{p.action === "reassign_unstarted_job" ? <><p className="action-label">Reassign uncollected job</p><h3>Job {p.jobId}: {p.fromRobotId} <span>→ {p.toRobotId}</span></h3><p>Approval does not complete delivery.</p></> : <><p className="action-label">Start charging in place</p><h3>{p.robotId} <span>→ {p.stationId}</span></h3><p>At the robot’s current station.</p></>}</div><span className="status">{p.state}</span></div>
+      <p className="rationale">{isLocalDemo() ? "Deterministic local adapter · not a live LLM." : "No rationale recorded"}</p>
+      {!p.currentRuntime && <p className="decision-error">Prior runtime; decisions are disabled.</p>}
       {Date.parse(p.expiresAt) <= Date.now() && <p className="decision-error">Expiration time has passed. Go will recheck expiration before deciding.</p>}
-      <div className="proposal-actions"><button className="approve-button" disabled={!allowed || !p.currentRuntime || p.state !== "pending" || Date.parse(p.expiresAt) <= Date.now()} onClick={() => decide(p, "approve")}>{busy === p.id ? "Processing…" : "Approve"}</button><button className="reject-button" disabled={!allowed || !p.currentRuntime || p.state !== "pending" || Date.parse(p.expiresAt) <= Date.now()} onClick={() => decide(p, "reject")}>Reject</button><span>Go revalidates before execution</span></div>
+      <div className="proposal-actions"><button className="approve-button" disabled={!allowed || !p.currentRuntime || p.state !== "pending" || Date.parse(p.expiresAt) <= Date.now()} onClick={() => decide(p, "approve")}>{busy === p.id ? "Processing…" : "Approve"}</button><button className="reject-button" disabled={!allowed || !p.currentRuntime || p.state !== "pending" || Date.parse(p.expiresAt) <= Date.now()} onClick={() => decide(p, "reject")}>Reject</button><span>Human decision required · Go revalidates before execution</span></div>
+      <details className="proposal-details"><summary>Evidence, expiry & validation</summary>
+        <p>Requested action: <strong>{p.action === "reassign_unstarted_job" ? "ReassignUnstartedJob" : "SetCharging"}</strong></p>
+        <ProposalEvidence proposal={p} />
+        <code>{p.id}</code>
+        <p className="proposal-meta">Submitted by {p.submittedBy || "Not recorded"} · Expires {new Date(p.expiresAt).toLocaleString()}</p>
+        <p>Go rechecks authorization, current runtime, expiration and safety before execution. Compare proposal parameters with current fleet telemetry.</p>
+        {isLocalDemo() && <p>The recommendation uses scripted demo facts. No model-written rationale is recorded.</p>}
+      </details>
     </li>)}</ul>}
     {feed.proposals.length === 50 && <p className="inbox-message">The 50-result limit has been reached. Resolve proposals and refresh to see additional pending requests.</p>}
     {receipt && <DecisionReceipt receipt={receipt} refreshStatus={refreshStatus} busy={busy !== null} />}

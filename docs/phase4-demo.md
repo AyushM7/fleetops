@@ -21,11 +21,12 @@ pwsh -NoProfile -File evals/phase4/start-demo.ps1 -LocalDemo -Submit
 For a clean checkout, first run `npm ci --prefix agent` and `npm ci --prefix web`.
 The runner builds both apps, creates its own loopback-only PostgreSQL container
 and temporary backend test copy, and reuses P4-03/P4-04's trusted scenario helpers.
-There are no new product features, test-control HTTP endpoints or UI fault controls.
+DEMO-04 adds a fixed Restart Scenario operation only inside this temporary local
+harness. There are no public GraphQL lifecycle mutations or UI fault controls.
 `-Submit` is mandatory: without it the runner refuses to submit. No provider API
 key is needed. Do not add `--live` or configure a paid provider for this guide.
 
-Wait for `READY: http://127.0.0.1:... / proposal ...` and open that URL.
+Wait for `READY: http://127.0.0.1:... · Restart Scenario enabled` and open that URL.
 The warehouse loads immediately with a **Demo Mode** banner. No login form,
 clipboard step, or bearer token is used. `evals/dist/p405/session.json` contains
 only the non-secret URL and is removed at shutdown.
@@ -33,8 +34,9 @@ only the non-secret URL and is removed at shutdown.
 The gateway binds to loopback and validates the exact Host and request Origin.
 It issues a random, host-only, HttpOnly, SameSite=Strict session cookie with a
 20-minute deadline. HTTP is intentional for loopback; the cookie has no backend
-credentials. Every GraphQL POST requires the cookie, exact Origin, JSON content
-type and a custom header. No cross-origin access is enabled. Cookie names and
+credentials. Every GraphQL and local lifecycle POST requires the cookie, exact Origin, JSON
+content type and a custom CSRF header. GraphQL and restart also require the
+current generation header; lifecycle bodies must be exactly `{}`. No cross-origin access is enabled. Cookie names and
 sessions are unique per run; sessions and backend credentials stay in memory.
 This explicitly enabled local simulation gives visitors the shared demo operator
 identity; it is not suitable for a public or multi-user deployment.
@@ -48,7 +50,7 @@ identity; it is not suitable for a public or multi-user deployment.
    at the pocket exit. This is not a low-battery incident. R3 is healthy/idle.
 3. In **Approval inbox**, inspect `ReassignUnstartedJob`: J1, **R1 â†’ R3**, pending,
    submitted by `proposer`. Job progress must still show J1 assigned to R1.
-   `evals/dist/p405/reasoning.json` contains the exact Go snapshot, snapshot-scoped
+   The current run’s `reasoning.json` below `evals/dist/p405/history/` contains the exact Go snapshot, snapshot-scoped
    references and validated **local-adapter** output; it contains no credentials.
 4. As the human operator, click **Approve** once. A transfer-success receipt must
    say this is **not delivery completion**. Source ownership clears, recipient
@@ -60,22 +62,27 @@ identity; it is not suitable for a public or multi-user deployment.
 
 The requested proposal expiry is 30 minutes; the session closes after 20 minutes. Rejection stays visible without executing;
 create the stop file when finished reviewing its outcome.
-Expired/rejected review cannot be silently retried. Shut down and start a fresh
-session if needed. Do not call an approval mutation from a script and label it
+Expired/rejected proposals cannot be retried. Use **Restart Scenario** to create
+a fresh pending proposal without relaunching PowerShell. Do not call an approval mutation from a script and label it
 human approval.
 
 ## Verify and shut down
 
-After `RECOVERY VERIFIED`, inspect the non-secret evidence:
+Evidence is retained in uniquely named session/run folders under
+`evals/dist/p405/history/`. Each `capture-*.json` contains the generation, runtime
+ID, poison flag, snapshots, matched baseline, and full committed PostgreSQL
+proposal/audit rows. `reasoning.json` retains the exact deterministic adapter
+output per run. Lifecycle files record restart requests and outcomes.
 
 ```powershell
-$e = Get-Content evals/dist/p405/evidence.json -Raw | ConvertFrom-Json
-$e | Select-Object ModelMode, ProposalID, NoExecutionBeforeApproval, OperatorDecisionObserved
-$e.Progress | ForEach-Object { $_ | Select-Object tick, jobs, robots }
-$e.Audit | Format-Table Attempt, Subject, Accepted, Reason
+$latest = Get-ChildItem evals/dist/p405/history -Recurse -Filter 'capture-*.json' |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$e = Get-Content -LiteralPath $latest.FullName -Raw | ConvertFrom-Json
+$e | Select-Object Generation, RuntimeID, Poisoned, Warning
+$e.Evidence | Select-Object ModelMode, ProposalID, NoExecutionBeforeApproval
+$e.Database.audit | Format-Table attempt, operator_subject, accepted, reason
 $infra = Get-Content evals/dist/p405/infrastructure.json -Raw | ConvertFrom-Json
-$sql = 'SELECT attempt,operator_subject,accepted,reason FROM "{0}".fleet_audit ORDER BY id' -f $e.AuditSchema
-docker exec $infra.container psql -U postgres -d $infra.database -c $sql
+docker exec $infra.container psql -U postgres -d $infra.database -c 'SELECT attempt,operator_subject,accepted,reason FROM public.fleet_audit ORDER BY id'
 ```
 
 Expect committed `create/proposer`, `approve/operator`, `execute/operator` records
@@ -100,18 +107,45 @@ Gracefully stop from the second terminal:
 New-Item evals/dist/p405/stop -ItemType File -Force | Out-Null
 ```
 
-The runner closes HTTP, drops its private test schemas, removes the non-secret
-URL file, in-memory sessions/credentials and temporary backend copy, and stops
-only its own container.
-Sanitized reasoning/evidence remain in ignored `evals/dist/p405`. No existing
-Compose service or volume is stopped. Close the browser test tab.
+The runner closes HTTP, captures final evidence, removes the URL file,
+in-memory sessions/credentials and temporary backend copy, then stops only its
+own container. Successful shutdown removes the ephemeral database only after
+capture. Historical evidence files remain; no Compose service or volume is
+stopped. Close the browser test tab.
 
-If the recovery session has already ended, preserve its sanitized evidence before
-starting a new run: `evidence.json`, `reasoning.json` and `infrastructure.json` are
-overwritten by the next run. For an outage-only repeat, start a fresh session,
-open the URL, leave its proposal pending, then create the `stop` file while
-the dashboard stays connected. Its polling must show the same stale warnings and
-disabled decisions. This repeat is not another approved recovery demonstration.
+On any failed/interrupted harness run, the launcher retains its named PostgreSQL
+container and temporary checkout and prints a warning. Reconcile uncertain
+outcomes using the retained database before manually stopping that exact
+container. A failed capture is never a success acknowledgement. Abrupt process
+termination cannot guarantee final capture; stale lock/session files may still
+need operator inspection. Retention is local evidence capture, not a production
+backup or simulator checkpoint.
+
+## Restart Scenario (DEMO-04)
+
+Click **Restart Scenario** after reviewing, approving, rejecting, or leaving the
+proposal pending. The button disables while the controller drains in-flight
+browser operations and trusted progress ticks, captures committed history, and
+constructs the same verified seed-42/tick-42 fixture with a new service, runtime
+ID, lifecycle and proposal. The existing local Mastra proposer and Go validation
+run again; restart never approves or executes a proposed robot action.
+
+The response succeeds only when the replacement is ready and the retired run is
+inaccessible through the browser. Old-generation GraphQL/restart requests fail
+with 409. Old proposal IDs cannot execute in the replacement. Other tabs discover
+the generation through authenticated status polling. Fleet data, inbox and
+receipts are cleared when the generation changes; restart also aborts old UI
+requests and clears receipts immediately. Lost acknowledgements require status
+refresh, never automatic restart or approval retries.
+
+A single local owner serializes lifecycle, requests and ticks outside Mastra and
+public GraphQL. Status/restart accept no seed, configuration, path, robot, command
+or fault parameters. Pool and gateway are session-owned; proposer HTTP servers
+and subprocesses are closed/joined per setup. Committed rows stay in one isolated
+database throughout repeated restarts. Capture/factory/lifecycle-write failure
+blocks the old run; a fresh retry is possible after status refresh. Poison is
+never cleared or reconciled by restart. The gateway’s original 20-minute session
+deadline remains; restart does not extend it.
 
 ## Automated verification, with no human/live-LLM claim
 
@@ -132,7 +166,9 @@ including rejection, expiry, stale state and authorization. CheckOnly validates
 the new demo setup, local Mastra generation, pending proposal, committed create
 audit and zero preapproval execution, then shuts down. A separate automated
 gateway scenario tests approval, rejection, stale/duplicate/expired decisions, R3
-delivery and committed audits. It does not approve the interactive scenario or
+delivery and committed audits. DEMO-04 adds three real replacement runs, stale
+generation/ID rejection, history retention, capture failure, serialized
+decision/tick races, and lifecycle security checks. It does not approve the interactive scenario or
 claim a human or live-LLM demonstration.
 
 A live LLM run remains a separate explicitly authorized step with private model
@@ -140,3 +176,30 @@ configuration/API key, snapshot data sent to that provider, and possible charges
 The existing agent limits it to one model step, at most 2400 output tokens and a
 30-second timeout. These are request bounds, not a dollar-cost guarantee. Do not
 mark live-LLM acceptance passed based on this deterministic adapter.
+
+## DEMO-04 validation (2026-10-17)
+
+All commands used existing locked dependencies; no paid model requests or golden
+fixture changes were made. The cached Go 1.27.1 executable was used on Windows
+with `GOTOOLCHAIN=local`, `GOPROXY=off`, and `GOSUMDB=off`.
+
+| Check | Actual result |
+| --- | --- |
+| Web: `node node_modules/vitest/vitest.mjs run --pool=threads --no-file-parallelism --testTimeout=60000` | `Test Files 7 passed (7)`, `Tests 42 passed (42)`. |
+| Web: `npm run build`; agent: `npm run build` | Exit 0; TypeScript and production bundles built. |
+| Temporary demo harness: `go test -tags fleetops_test ./fleet -run '^(TestDemo.*|TestDashboardHTTPIntegration)$' -count=1 -v -timeout 180s` | All DEMO tests passed, including fresh identity, repeated restart, decision/tick drain, stale controls/IDs, security, persistence failure, captured poison, and approved delivery. An initial SSR build from the repository root failed to resolve its web-relative entry; rebuilding from `web/` succeeded. The first combined test run failed only in dashboard contracts because a later web build had removed their SSR bundle; rebuilding that bundle and rerunning the contracts passed both charging/reassignment cases. |
+| Frontend HTTP contracts after `vite build --ssr scripts/contract-entry.ts --outDir dist/contract` | `TestDashboardHTTPIntegration` PASS; both charging and reassignment against real PostgreSQL. |
+| Cached `golang:1.27.1` image: `go test -p 1 -parallel 1 -race -tags fleetops_test ./db ./fleet ./graphql -run '^(TestDemoController.*\|TestDemoGateway.*\|TestIntegration.*\|TestRuntime.*\|TestBoundary.*\|TestReassignment.*)$' -count=1 -timeout 180s` | Exit 0: db, fleet and graphql all `ok`, including disconnected restart and explicit concurrency workers. An earlier broader selection failed because it included Node-only dashboard tests in the Go image; no race detector finding was reported. |
+| Native backend: `go test ./... -count=1 -timeout 120s` | Exit 1: only `TestGoldenSnapshot` and `TestWarehouseGoldenSnapshot` failed with the documented Windows CRLF/LF byte mismatch. All other package summaries were `ok`; fixtures unchanged. |
+| `go vet ./...`; temporary harness `go vet -tags fleetops_test ./fleet` | Exit 0; no diagnostics. |
+| `pwsh -NoProfile -File evals/phase4/start-demo.ps1 -LocalDemo -Submit -CheckOnly` | Exit 0; `PASS`, fleet `16.003s`. Real PostgreSQL, proposer, restart regressions, evidence capture, and launcher cleanup ran. Session file, lock, temporary checkout and that launcher container were absent afterward. |
+| Real in-app browser | Rejection receipt, mouse restart, keyboard restart, disabled/progress state, fresh tick 42/proposal, receipt clearing, capture-failure error, successful retry after restoring database access, and shutdown stale-data/disabled-control behavior were exercised. Automated UI testing, not human approval acceptance. Approval/execution/delivery were exercised separately by automated Go/PostgreSQL tests. |
+| `git diff --check`; PowerShell parser | Exit 0; parser reported `PowerShell parse: PASS`. |
+
+The temporary browser harness was stopped gracefully after final evidence
+capture. Browser screenshots and per-run history remain under ignored
+`evals/dist/demo04-browser/`; launcher CheckOnly history remains under
+`evals/dist/p405/history/`. No commit, push, merge, branch switch, production
+GraphQL change, simulator algorithm change, dependency addition, or DEMO-05 work
+was performed. The original 20-minute loopback session limit and local evidence
+retention/crash limitations above remain.

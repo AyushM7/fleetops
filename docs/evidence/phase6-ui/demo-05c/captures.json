@@ -1,0 +1,79 @@
+[
+  {
+    "file": "after-1280.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 57797,
+    "sha256": "3a24d60275f48c4f01024913a7645ecb61e09a4329754d3a29929bd30df98ddb"
+  },
+  {
+    "file": "after-1920.jpg",
+    "width": 1905,
+    "height": 1053,
+    "bytes": 83505,
+    "sha256": "751e02476ef087735d419eacf32f4a99644f5acc67007bcbb129f249a857a558"
+  },
+  {
+    "file": "after-approved.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 57336,
+    "sha256": "e34edc6996efff508c392ed70d3562695ae40728343f8b5029f663029f85f590"
+  },
+  {
+    "file": "after-mobile-decision.jpg",
+    "width": 375,
+    "height": 811,
+    "bytes": 33023,
+    "sha256": "3675401ad9f5b1db880f15b508258e486a96b2e67d60ae399c066e820a188f1f"
+  },
+  {
+    "file": "after-mobile-evidence.jpg",
+    "width": 375,
+    "height": 811,
+    "bytes": 42413,
+    "sha256": "c3b42ae49cedea466e1be3e8538afe695c2a5fc318a1f5f1195d8f5466e24281"
+  },
+  {
+    "file": "after-mobile.jpg",
+    "width": 375,
+    "height": 811,
+    "bytes": 30803,
+    "sha256": "54a0081fe747e250983f8efdf9e8da9f13757395af1a5e7b77767303b1cab2d6"
+  },
+  {
+    "file": "after-rejected.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 49561,
+    "sha256": "52555f9a994e36b5c36499cadb5d7b81bd241864994e1bbbe8a25683e5a44e91"
+  },
+  {
+    "file": "after-restart.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 55089,
+    "sha256": "f889c6309610b2ed57f5b7ef2061737f61c48108e78b940bc15ade599801b3be"
+  },
+  {
+    "file": "before-1280.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 68863,
+    "sha256": "6c355df7f276b56d06f98bc22a1983cd2aec10ba755036de0b2e426d2fbc6e22"
+  },
+  {
+    "file": "before-1920.jpg",
+    "width": 1905,
+    "height": 1053,
+    "bytes": 89783,
+    "sha256": "b444d93f59b208d7f848161e6166aa9b327745b9a46abb40ceb1184a10d6c35d"
+  },
+  {
+    "file": "before-mobile.jpg",
+    "width": 375,
+    "height": 811,
+    "bytes": 34478,
+    "sha256": "d56dc0508a7c53ac794faea3c903af7976ed220225e30e3a2fb8f8f39a698353"
+  }
+]
