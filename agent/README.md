@@ -17,7 +17,8 @@ persistence and execution. The read tool retrieves fleet state and incidents tog
 The default offline mode remains deterministic. `--live` explicitly enables the
 configured provider through Mastra's actual `Agent.generate` implementation.
 The host first reads and validates a detached fleet snapshot, then supplies only
-its facts, snapshot references, supported action candidate and explicit demo IDs.
+its facts, snapshot references, supported action candidate, explicit demo IDs,
+and host-validated `reasoningStatements` choices.
 Generation is limited to that snapshot: `activeTools=[]` and `toolChoice=none`;
 there is no mutation tool in the model's tool map. Submission cannot occur while
 an unvalidated response is being generated.
@@ -55,9 +56,22 @@ candidate, tick, and source `traffic_blocked` snapshot reference and declare
 `incident_recovery`. It must match the host's deterministic first Go candidate.
 Invalid output
 is discarded as a whole, without silently rewriting it into a valid proposal.
-Model prose remains untrusted interpretation; schema/fact checks do not prove
-every natural-language assertion correct. It never becomes observed fact or an
-executable command.
+As approved in the P5-02 follow-up, `assessment` and `rationale` must each match
+one whole host-supplied statement for that field/action. `src/statements.ts`
+provides policy/uncertainty explanations and statements grounded in current Go
+job status. Affirmative approval is unavailable because this reasoning input
+has no verified proposal/operator state. Completed-delivery text is available
+only for a matching job with Go status `done`; its tick is observation time,
+not a fabricated completion time. Pending/unknown states, negation, hypothetical
+approval and exact quoted untrusted job IDs have supported forms.
+
+Other prose, arbitrary paraphrases and appended claims reject the entire
+response; the host does not silently rewrite it. Assessment validation also
+runs when no action is proposed. Existing deterministic fixture explanations
+remain in the catalog. The prompt provides the permitted statements, but only
+host validation enforces them. No general natural-language classifier or keyword
+ban is used. This changes accepted explanation prose without changing the
+reasoning schema, tool signatures or actual Go authorization/approval rules.
 
 For either offline or LLM submission, the host reads and validates another live
 snapshot before proposing. Any changed telemetry or tick produces

@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import { fleetSchema, reasoningSchema, type AIReasoning, type AgentResult, type FleetState, type SnapshotReference } from "./contracts.js";
 import { observeFleet } from "./observe.js";
+import { reasoningTextGrounded } from "./statements.js";
 
 export class GroundingError extends Error {
   constructor() { super("AI grounding validation rejected the response or snapshot."); }
@@ -67,6 +68,7 @@ export function validateReasoning(input: unknown, state: FleetState, demo?: { ro
   if (!parsed.success) throw new GroundingError();
   const reasoning = parsed.data;
   validateInterpretations(reasoning, snapshot);
+  if (!reasoningTextGrounded(reasoning, snapshot)) throw new GroundingError();
   const action = reasoning.proposedAction;
   if (!action) return reasoning;
   const supported = observeFleet(snapshot, demo).recommendedAction;

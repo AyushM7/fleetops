@@ -8,6 +8,7 @@
   },
   "scripts": {
     "test": "vitest run",
+    "benchmark": "node scripts/run.mjs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
