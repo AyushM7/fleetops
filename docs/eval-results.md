@@ -1,5 +1,208 @@
 # Evaluation results
 
+## P5-03 — paired Go recovery effectiveness (2026-10-17)
+
+Five controlled experiments ran against the actual Go simulator, using fresh
+baseline/treatment pairs, seed 42 and 200 observation ticks per pair. The mode
+is **isolated direct-command effectiveness with the existing domain proposal
+lifecycle and an explicit trusted test operator**. It is not a fresh end-to-end
+GraphQL/PostgreSQL/human-review demonstration or a real LLM evaluation.
+
+### Measured baseline versus treatment
+
+| Experiment | Shared observation ticks | Baseline | Treatment | Executed intervention |
+| --- | --- | --- | --- | --- |
+| Blocked J1 reassignment | 42–242 | J1 assigned to R1, incomplete/censored; 0 jobs completed | J1 delivered at tick 45; elapsed 3 ticks; 1 job completed | ReassignUnstartedJob J1, R1 → R3 |
+| Blocked J1, no admitted candidate | 42–242 | J1 assigned/incomplete; 0 completed | Identical final state; J1 incomplete; 0 completed | None available at decision snapshot |
+| Offline source holding J1 | 45–245 | J1 assigned/incomplete; 0 completed | Identical final state; J1 incomplete; 0 completed | None supported |
+| Safe routine charging | 1000–1200 | R1 battery 40%; no jobs | R1 battery 91%; no jobs | SetCharging R1/S1 |
+| Healthy no-op control | 0–200 | R1 battery 90%; no jobs | Identical full final state; R1 battery 90%; no jobs | None requested |
+
+Phase 4 recovery was reproduced, not copied into result fields: the Go runner
+detects the first actual `done` state during ordinary ticks. Expected tick 45
+and baseline tick 242 appear only in regression assertions. Incomplete targets
+have null completion and elapsed times and are censored at the horizon, not
+assigned a delivery time of 200 or an infinite delay. Job-free scenarios have
+null target metrics. No percentage speedup is reported against the censored
+baseline. Only the delivered job in the reassignment treatment contributes new
+throughput; already-completed jobs are excluded by the measurement collector.
+
+Five experiment-specific criteria passed. Two requested commands succeeded,
+zero requested interventions failed, three scenarios had no intervention, and
+one scenario improved target-job delivery. This is not five successful recoveries.
+Charging passed a battery criterion only; it did not demonstrate throughput or
+general warehouse efficiency. All five deterministic recommendation outputs
+passed existing scoring and production host grounding against actual Go inputs.
+These five cases do not establish overall agent accuracy.
+
+### Resource effects and controls
+
+Reassignment removed 200 blocked-robot post-tick samples, but final stored
+battery was 13 aggregate percentage-points lower across the fleet. R1 ended at
+90% versus 100% in baseline; additional movement and idle dynamics are not free.
+This is a stored-battery comparison, not a measured kWh/energy-cost model.
+
+Charging added 51 stored battery percentage-points relative to baseline and
+24 charging-robot/occupied-station post-tick samples versus zero in baseline.
+That station occupancy is a potential capacity tradeoff. The experiment has
+no jobs or competing charging demand, so it cannot quantify delay to other
+work. Samples are counted after each tick, excluding the initial snapshot;
+they are not a continuous occupancy duration. All resource deltas for the three
+no-intervention controls were zero and their full final snapshots were equal.
+
+The charging robot reaches 50% through 1000 ordinary idle ticks, not direct
+state editing or a weakened battery guard. Existing default AutoCharge remains
+false. Job-free configuration uses zero initial jobs, MaxJobs=1 and NewJobEvery=10000,
+with R1 starting at S1. It is deliberately a supported charging-isolation case.
+The healthy control uses the same configuration without warmup. The blocked
+cases retain the existing Phase 4 fixture's autonomous dispatch, navigation,
+charging and recovery settings without modification.
+
+### Pairing, safety and scope of approval evidence
+
+- Each pair is constructed independently from the same scenario factory, seed,
+  warmup and trusted setup fault schedule. Full initial snapshots are compared,
+  and their SHA256 hash must match the earlier agent observation before any
+  command. JSON includes both initial snapshots and both final snapshots. The
+  factory's identical construction also reproduces private RNG/navigation state;
+  the public snapshot hash is not presented as a serialization of private state.
+- The no-candidate scenario injects the existing low-battery fault into R3/R4/R5
+  at tick 42. The offline-source scenario injects R1 unresponsive at 42 and
+  advances three ordinary ticks before observation. Both arms receive identical
+  setup, and no faults are injected within any measurement window.
+- Recommendation generation receives only a detached read DTO. The Go detector
+  provides incident truth and PreviewReassignment provides candidates. Expected
+  actions are independently declared by reviewed scenario definitions. Existing
+  TypeScript scoreCase/validateReasoning must accept before the Go treatment run
+  is requested. The agent never receives Driver/Commander or approval options.
+- The trusted harness invokes `proposal.Lifecycle.Create`/`CreateReassignment`,
+  then `Decide` with the explicit test operator, followed by an approved-state,
+  identity/expiry gate and the existing Go `proposal.Preflight` before the real
+  simulator command. Creation and domain approval are separately observed not
+  to mutate simulation. Both command cases report successful validation at
+  creation, approval and execution. The domain clock is fixed and reproducible;
+  it is not an operator-latency experiment.
+- Human approval is required for commands and is represented by a trusted
+  **test-controlled** decision. No independent person clicked Approve here.
+  The runner labels actual human approval and durable audits unmeasured.
+  Lifecycle events are real in-memory domain events; execution status/reasons
+  are separate test evidence. They are not committed production audit rows.
+  Frozen audit rule 7, canonical PostgreSQL rows, real authenticated operator
+  separation, and full transaction/execution integration were not reverified.
+  Production safety/authentication/authorization/audit behavior is unchanged.
+- Proposal creation, test approval, command success and later delivery are
+  separate fields. The recommendation scorer retains `not_measured` lifecycle
+  outcomes; only the separate actual Go experiment fields measure these stages.
+  No-op stages use not_requested/not_applicable, with unperformed mutation
+  checks null rather than fabricated passes. No candidate at the initial
+  decision tick is not a claim that one could never become eligible later.
+
+### Commands and actual verification
+
+One command from repository root:
+
+```powershell
+npm --prefix evals run benchmark --silent -- --recovery
+```
+
+From `evals/`, preserving output and repeating it:
+
+```powershell
+npm run benchmark --silent -- --recovery > dist/p5-03-results.json
+npm run benchmark --silent -- --recovery > dist/p5-03-repeat.json
+```
+
+Both commands exited **0**, with 5/5 criteria met, two successful commands and
+one target-delivery improvement. The full JSON files have matching SHA256 hashes.
+The Go tests also independently repeat every paired experiment and compare
+serialized results. JSON is on stdout; the human comparison is on stderr.
+
+| Check | Actual result | Exit |
+| --- | --- | --- |
+| Full eval suite | `Test Files 5 passed (5)`; `Tests 189 passed (189)` | 0 |
+| Eval typecheck | No diagnostics | 0 |
+| Focused agent suite | `Test Files 5 passed (5)`; `Tests 79 passed (79)` | 0 |
+| Agent typecheck | No diagnostics | 0 |
+| Existing P5-01 benchmark | All 16 expectations retained: 12 decisions, four expected probe rejections | 0 |
+| Existing P5-02 adversarial benchmark | 16/16 output probes rejected; 4/4 input defenses; zero misses | 0 |
+| Tagged recovery/safety/proposal Go tests | All three packages `ok`; recovery 1.185s, safety 1.039s, proposal 0.933s | 0 |
+| Existing targeted simulator recovery/command tests | Simulator `ok` (2.222s) | 0 |
+| Recovery JSON repetition | SHA256 hashes match | 0 |
+| `git diff --check` | No whitespace errors | 0 |
+
+The full evaluation suite retains all 184 previous tests (including all P5-00
+foundation coverage) and adds five orchestration tests. Its doubles stop before
+behavioral measurement and are never reported as simulated performance.
+The tagged Go tests verify all five actual pairs/repeats; rejected decisions;
+unsupported/ineligible requests; pending/expired/forged approvals; censoring and
+pre-window completions; read-only observations; stale/duplicate input; and
+refusal of model-authored approval fields.
+Missing target jobs are invalid experiments, not successful no-op controls or
+merely censored deliveries.
+
+Exact eval commands, from `evals/`:
+
+```powershell
+New-Item -ItemType Directory -Force dist/test-tmp | Out-Null
+$env:TEMP = (Resolve-Path dist/test-tmp).Path
+$env:TMP = $env:TEMP
+node ../agent/node_modules/vitest/vitest.mjs run --no-file-parallelism
+node ../agent/node_modules/typescript/bin/tsc --noEmit
+npm run benchmark --silent > dist/p5-03-dataset-regression.json
+npm run benchmark --silent -- --adversarial > dist/p5-03-adversarial-regression.json
+```
+
+From `agent/`, with the workspace TEMP/TMP setup:
+
+```powershell
+node node_modules/vitest/vitest.mjs run src/agent.test.ts src/reasoning.test.ts src/reassignment.test.ts src/incidents.test.ts src/statements.test.ts --no-file-parallelism
+node node_modules/typescript/bin/tsc --noEmit
+```
+
+The system Go executable is 1.26, while backend/go.mod requires 1.27.1. A
+verified existing cached 1.27.1 executable was used, with downloads disabled.
+The benchmark launcher locates this cache automatically, or honors
+`FLEETOPS_EVAL_GO`. Exact manual Go commands from `backend/` on this machine:
+
+```powershell
+$env:GOTOOLCHAIN = 'local'
+$env:GOPROXY = 'off'
+$env:GOSUMDB = 'off'
+$taskGo = 'C:\Users\Ayush\go\pkg\mod\golang.org\toolchain@v0.0.1-go1.27.1.windows-amd64\bin\go.exe'
+& $taskGo test -tags fleetops_test -count=1 ./evalrecovery ./safety ./proposal
+& $taskGo test -count=1 ./sim -run '^Test(ReassignmentRecoveryScenarioProof|ReassignmentCommandAtomicAndCompletes|ReassignmentRejectsWithoutMutation)$'
+```
+
+Initial startup attempts exited 1 because local Go was too old and toolchain
+checksum verification cannot be used with GOSUMDB disabled; using the already
+cached executable resolved this without downloads. An initial charging setup
+using injection level 50 was rejected by the existing configuration validator
+(injection must be below assignment). That setup was discarded in favor of
+ordinary idle depletion, without changing thresholds or simulator validation.
+An intermediate compile during nullable metric-field updates also exited 1;
+clean final Go tests and benchmark runs passed. Failed startup/build attempts
+produced no accepted performance results. Existing Windows npm shim limitations
+still require the documented Vitest/compiler fallback paths.
+
+### Files and remaining limitations
+
+Added the test-tagged `backend/evalrecovery/{main,scenarios,snapshot,experiment,
+measurement,experiment_test}.go` harness, `evals/src/recovery.ts` and
+`evals/src/recovery.test.ts`. Updated `evals/src/cli.ts`, `evals/README.md` and
+this report. No production simulator, agent, GraphQL, authorization, safety
+rule, tool signature, frontend, or dependency changed.
+
+These results measure deterministic command effectiveness conditional on the
+selected recommendation and test approval. Recommendation correctness is
+checked separately against five real snapshots; actual LLM decision quality is
+unmeasured. One seed, one initial decision, fixed windows, one blocked-job
+layout and job-free charging cannot establish general fleet performance. No
+new persisted end-to-end or real-human approval session was run. Broader workloads,
+competing station demand, rolling policies and statistical confidence remain
+outside scope. P5-04 should separately evaluate explicitly authorized actual
+model choices on these inputs and broaden scenario/seed coverage where supported.
+No P5-04 work, live model calls, commits, pushes, merges or branch changes occurred.
+
 ## P5-02 follow-up — host-validated explanation statements (2026-10-17)
 
 Both formerly accepted false claims are now rejected by the production host

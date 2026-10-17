@@ -1,8 +1,10 @@
-# FleetOps offline evaluations — P5-00/P5-01/P5-02
+# FleetOps evaluations — P5-00 through P5-03
 
-This is an offline contract benchmark, not a measurement of LLM intelligence or
-recovery effectiveness. It has no model, GraphQL client, proposal tool, simulator
-Driver/Commander, credentials, clock, randomness, or network transport.
+The default, foundation and adversarial paths are offline contract benchmarks,
+not measurements of LLM intelligence or recovery effectiveness. They receive no
+simulator Driver/Commander or mutation tools. The explicit `--recovery` path adds
+actual paired Go experiments through a trusted, test-only harness, described below.
+No benchmark calls a live model or paid provider.
 
 ## Run
 
@@ -296,7 +298,100 @@ an approved authorized control passes eligibility without executing a command.
 This test bypasses persistence setup to isolate the gate; it does not verify
 canonical database rows, proposer/operator separation or committed audits.
 
-P5-03 should evaluate any proposed expansion beyond the bounded explanation
-language while keeping scoring and host enforcement distinct, add stronger input-attack coverage, and verify
-the full persisted approval/audit path where practical. Live-model robustness
-remains a separate explicitly authorized measurement. No P5-03 work is included.
+Expansion beyond the bounded explanation language, stronger input attacks and
+the full persisted approval/audit path remain separate work. Live-model robustness
+requires an explicitly authorized measurement. The P5-03 work below concerns
+deterministic recovery effectiveness.
+
+## P5-03 recovery effectiveness
+
+From the repository root, one command runs the actual experiment matrix:
+
+```powershell
+npm --prefix evals run benchmark --silent -- --recovery
+```
+
+JSON is on stdout, a comparison summary on stderr, and exit 0 requires all five
+independently specified experiment criteria to pass. To preserve JSON, create
+`evals/dist/` if needed and redirect stdout there. Ordinary evaluation unit tests
+do not run Go or need Docker. Only this explicit benchmark and tagged Go tests
+execute behavioral scenarios.
+
+`src/recovery.ts` asks `backend/evalrecovery` for actual snapshots built by Go,
+passes detached DTOs to the existing deterministic observer adapter, and uses
+P5-00 scoring plus production host grounding to validate its recommendations.
+Expected action labels come from reviewed Go scenario definitions, not from the
+adapter. Incident truth comes from the actual Go detector. No expected labels,
+Driver/Commander methods or operator-decision options are given to the adapter.
+
+The trusted harness then creates fresh baseline/treatment simulators using the
+same factory, seed, setup fault schedule and observation window. It checks full
+initial snapshot equality and the earlier observation's SHA256 hash before any
+intervention. Initial snapshots, both final snapshots, setup faults, empty
+measurement-window fault schedules, seeds and horizons are included in JSON.
+The same deterministic setup reconstructs private RNG/navigation state; the
+snapshot hash alone is not claimed to serialize those private internals.
+
+The mode is **direct-command effectiveness with an isolated domain lifecycle**,
+not a new end-to-end deployment test. Go `proposal.Lifecycle.Create`/`Decide`
+perform creation/approval preflights. The harness has an explicit trusted
+`--test-operator approve` option outside the adapter payload, verifies approved
+state, expected test-operator identity and expiry, then calls Go Preflight again
+before the actual command. The model cannot supply approval fields. Test
+creation/approval are verified not to mutate the simulator. Command invocation,
+execution success and eventual delivery are distinct results. A trusted reject
+decision, stale observation, unsupported command, invalid target or pending/
+expired/forged approval cannot receive successful-recovery credit.
+
+`domainEvents` are the actual lifecycle's in-memory events; execution status and
+reasons are separate test evidence. They are **not durable production audit rows**.
+Verified human authorization through GraphQL/PostgreSQL, real human review,
+proposer/operator separation in persistence and durable audit rule 7 remain
+unmeasured by these direct experiments. Production enforcement is unchanged.
+
+| Experiment | Setup and criterion |
+| --- | --- |
+| blocked-reassignment | Existing tick-42 Phase 4 fixture; R1/J1 → R3 command must succeed and deliver J1 within the window while baseline remains censored. |
+| blocked-no-candidate | Same fixture, trusted low-battery injections for R3/R4/R5 at tick 42; no candidate at the decision snapshot; no command and equal final states required. |
+| offline-unfinished-job | Same fixture, trusted R1 unresponsive injection at 42 and three ordinary ticks; no supported transfer from offline source; no command and equal final states required. |
+| routine-charging | Existing default configuration, no jobs, R1 starts at S1, 1000 ordinary idle ticks bring it to 50%; charging must succeed and improve its final stored battery over baseline. This is not a throughput criterion. |
+| healthy-control | Same job-free layout starting fully charged at tick 0; no initial action; no command and identical final states required. |
+
+Every pair uses seed 42 and 200 observation ticks. Start ticks differ across
+experiments, but baseline and treatment share the same starting tick within
+each pair. Default charging/assignment thresholds are unchanged; routine
+charging uses normal idle depletion and keeps the existing default AutoCharge
+false. Autonomous dispatch/navigation/charging/recovery stay enabled as in the
+Phase 4 fixture. No simulator algorithm or production fault interface changed.
+There is one recommendation at the initial snapshot, not a rolling controller.
+No candidate at that point is not a claim that none could become eligible later.
+
+Measurements come only from ordinary Go tick outcomes. For initially incomplete
+jobs, the first observed `done` tick defines completion and elapsed ticks from
+the common starting tick. Incomplete targets have null completion/elapsed times
+and are censored at the final horizon. Job-free experiments have null target
+metrics. Already-completed jobs do not add throughput or acquire fabricated
+completion times. Completed-job counts, stored battery, blocked/charging robot
+samples and occupied-station samples are recorded. Samples are counted after
+each tick, excluding the initial snapshot; they are not continuous durations.
+No percentage speedup is computed against a censored baseline.
+
+Two commands succeeding and five criteria passing do not mean five recoveries:
+three are no-action controls, one measures battery, and one measures target
+delivery. P5-00 recommendation scores retain their own `not_measured` execution
+fields; actual lifecycle/execution/delivery evidence is in `experiments`.
+See `docs/eval-results.md` for measured results and resource tradeoffs.
+
+The Go harness is entirely behind `fleetops_test`. No production endpoint,
+authorization, schema or simulator implementation changed. Its Go dependencies
+are existing repository packages and the standard library. The launcher disables
+downloads (`GOTOOLCHAIN=local`, `GOPROXY=off`, `GOSUMDB=off`) and prefers the
+already cached toolchain matching `backend/go.mod`. The current Windows system
+Go is 1.26 but a cached 1.27.1 exists. On another machine, install a sufficient
+Go toolchain beforehand or set `FLEETOPS_EVAL_GO` to its executable. No dependency
+or toolchain is downloaded by the benchmark.
+
+P5-04 should evaluate authorized actual-model choices on these same Go-derived
+inputs, separately from the conditional benefit of an approved command, and
+consider broader seeds, workloads and persisted approval/audit measurements.
+No P5-04 work or real LLM test is included here.
