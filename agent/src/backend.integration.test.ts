@@ -1,7 +1,9 @@
 import { randomBytes } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { Agent } from "@mastra/core/agent";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFleetClient } from "./graphql.js";
-import { runOffline } from "./agent.js";
+import { runLive, runOffline } from "./agent.js";
+import { chargingReasoningFixture } from "./fixtures.js";
 
 // This suite deliberately fails without an isolated, station-ready real backend.
 const endpoint = process.env.FLEETOPS_TEST_GRAPHQL_URL;
@@ -9,6 +11,7 @@ const token = process.env.FLEETOPS_TEST_PROPOSER_TOKEN;
 const viewer = process.env.FLEETOPS_TEST_VIEWER_TOKEN;
 if (!endpoint || !token || !viewer) throw new Error("Run scripts/verify-integration.ps1; isolated backend configuration is required.");
 const api = createFleetClient(endpoint, token);
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 describe("real Go GraphQL + PostgreSQL integration (no model)", () => {
   it("reads real state using authenticated proposer access", async () => {
     const state = await api.readFleet();
@@ -38,6 +41,20 @@ describe("real Go GraphQL + PostgreSQL integration (no model)", () => {
     expect(result.error).toBeTruthy();
     expect(result.auditCommitted).toBe(true);
     expect(result.executionAttempted).toBe(false);
+  });
+  it("grounds a model-double recommendation in real fleet telemetry before a durable demo submission", async () => {
+    const state = await api.readFleet();
+    const reasoning = chargingReasoningFixture(state);
+    reasoning.proposedAction!.purpose = "demonstration";
+    const generate = vi.spyOn(Agent.prototype, "generate").mockResolvedValue({ object: reasoning } as never);
+    vi.stubEnv("OPENAI_API_KEY", "test-only-key");
+    const result = await runLive(api, { enabled: true, model: "openai/test", allowSubmit: true, demo: { robotId: "R1", stationId: "S1" } });
+    expect(result.aiAnalysis.status).toBe("accepted");
+    expect(result.observedFacts.fleet).toEqual(state);
+    expect(result.submissionCheck).toBe("current");
+    expect(result.proposal.status).toBe("pending_approval");
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect((await api.readFleet()).robots.find(r => r.id === "R1")!.status).toBe("idle");
   });
   it("rejects invalid authentication and viewer submission", async () => {
     await expect(createFleetClient(endpoint!, randomBytes(32).toString("hex")).readFleet()).rejects.toThrow("authentication");

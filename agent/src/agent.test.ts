@@ -4,7 +4,7 @@ import { createFleetAgent, runLive, runOffline } from "./agent.js";
 import { createFleetTools } from "./tools.js";
 import { observeFleet } from "./observe.js";
 import { readConfig } from "./config.js";
-import { fleetFixture, pendingFixture } from "./fixtures.js";
+import { fleetFixture, pendingFixture, reasoningFixture } from "./fixtures.js";
 
 const input = { robotId: "R1", stationId: "S1", expiresAt: "2026-10-16T12:01:00Z" };
 function apiFixture(battery = 100) {
@@ -29,10 +29,10 @@ describe("agent boundaries", () => {
     expect(generate).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
-  it("exposes exactly two Mastra tools and cannot enable submission through input", async () => {
+  it("exposes only a read tool to Mastra and cannot enable submission through input", async () => {
     const api = apiFixture();
     const { agent, session } = createFleetAgent(api, "openai/test");
-    expect(Object.keys(await agent.listTools())).toEqual(["readFleetState", "submitSetCharging"]);
+    expect(Object.keys(await agent.listTools())).toEqual(["readFleetState"]);
     expect(await session.tools.readFleetState.execute!({}, {} as never)).toEqual(fleetFixture());
     expect(await session.tools.submitSetCharging.execute!({ ...input, allowSubmit: true } as typeof input, {} as never)).toEqual({ status: "disabled" });
     expect(api.submitCharging).not.toHaveBeenCalled();
@@ -101,24 +101,26 @@ describe("agent boundaries", () => {
     vi.stubEnv("OPENAI_API_KEY", "test-only-private-key");
     vi.stubEnv("FLEETOPS_PROPOSER_TOKEN", "test-only-private-token");
     const analysis = observeFleet(fleetFixture());
-    const generate = vi.spyOn(Agent.prototype, "generate").mockResolvedValue({ object: { ...analysis, proposal: { status: "executed" } } } as never);
+    const generate = vi.spyOn(Agent.prototype, "generate").mockResolvedValue({ object: reasoningFixture(fleetFixture()) } as never);
     const result = await runLive(apiFixture(), { enabled: true, model: "openai/test" });
-    expect(result).toEqual({ ...analysis, proposal: { status: "disabled" } });
+    expect(result.observations).toEqual(analysis.observations);
+    expect(result.proposal).toEqual({ status: "disabled" });
+    expect(result.aiAnalysis.status).toBe("accepted");
     expect(JSON.stringify(generate.mock.calls)).not.toContain("test-only-private");
   });
-  it("preserves proposal status when the model fails after tool execution", async () => {
+  it("cannot submit during reasoning and preserves facts when the model fails", async () => {
     vi.stubEnv("OPENAI_API_KEY", "test-only-key");
     vi.spyOn(Agent.prototype, "generate").mockImplementation(async function (this: ReturnType<typeof createFleetAgent>["agent"]) {
       const tools = await this.listTools();
-      await tools.submitSetCharging.execute!(input, {} as never);
+      expect(Object.keys(tools)).toEqual(["readFleetState"]);
       throw new Error("private-provider-failure");
     });
     const api = apiFixture(50);
     const result = await runLive(api, { enabled: true, model: "openai/test", allowSubmit: true });
-    expect(result.proposal.status).toBe("pending_approval");
-    expect(result.explanation).toContain("Model generation failed");
+    expect(result.proposal.status).toBe("not_requested");
+    expect(result.aiAnalysis.status).toBe("failed");
     expect(JSON.stringify(result)).not.toContain("private-provider");
-    expect(api.submitCharging).toHaveBeenCalledTimes(1);
+    expect(api.submitCharging).not.toHaveBeenCalled();
   });
   it("parses strict user flags and defaults both opt-ins off", () => {
     expect(readConfig({ FLEETOPS_PROPOSER_TOKEN: "private" }, [])).toMatchObject({ live: false, allowSubmit: false });

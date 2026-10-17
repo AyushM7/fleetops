@@ -1,14 +1,69 @@
-# FleetOps P4-01: incident-aware agent
+# FleetOps P4-02: grounded LLM incident reasoning
 
 LLM proposes. Go validates. Human approves. Go executes.
 
 This slice reads the real authenticated `fleetState`, including active incidents,
 and can submit the existing
-`SetChargingInput` through `submitProposal`. The Mastra agent has exactly two
-tools: `readFleetState` and `submitSetCharging`. No approval, rejection, ticking,
+`SetChargingInput` through `submitProposal`. The Mastra agent exposes only the
+read tool `readFleetState`; the host retains `submitSetCharging` after output validation.
+No approval, rejection, ticking,
 Commander, Driver, fault injection, or job-list query is exposed.
 Go remains the authority for incident classification, safety, authorization,
 persistence and execution. The read tool retrieves fleet state and incidents together.
+
+## P4-02 reasoning and snapshot references
+
+The default offline mode remains deterministic. `--live` explicitly enables the
+configured provider through Mastra's actual `Agent.generate` implementation.
+The host first reads and validates a detached fleet snapshot, then supplies only
+its facts, snapshot references, supported action candidate and explicit demo IDs.
+Generation is limited to that snapshot: `activeTools=[]` and `toolChoice=none`;
+there is no mutation tool in the model's tool map. Submission cannot occur while
+an unvalidated response is being generated.
+
+Results distinguish:
+
+- `observedFacts`: host-owned fleet telemetry, Go incident records and references.
+- `aiAnalysis`: separately labeled interpretations and a proposed action, with
+  status `disabled`, `accepted`, `rejected` or `failed`.
+- `recommendedAction`: a validated supported command or null.
+- `submissionCheck` and `proposal`: host-owned freshness and backend submission outcomes.
+
+An incident reference is exactly `{scope:"snapshot", tick, robotId, type}`.
+These are **snapshot-scoped references, NOT stable incident IDs**. They are valid
+only against the exact snapshot supplied to this analysis and **are not valid
+across separate simulator runs**. Equal ticks or keys in two runs do not identify
+the same incident. There is no persisted identity, episode tracking, migration,
+runtime identity check or incident history. Do not store and reuse these references
+as cross-request or cross-run evidence.
+
+Every supplied incident must be interpreted exactly once. Host validation rejects
+invented/missing/duplicate/ambiguous references, another tick, changed severity,
+altered telemetry, unknown fields (including `incidentId`), and unsupported
+commands. Source snapshots with duplicate robot/station/incident keys, missing
+robots or contradictory incident telemetry also fail closed. No TypeScript
+classification or severity algorithm is introduced.
+
+Each incident interpretation contains its exact reference, severity and telemetry,
+an `assessment` explicitly treated as AI interpretation, and
+`recommendedResponse:"operator_attention"`. Optional SetCharging output must copy
+the actual robot/station telemetry and tick, match the host's supported candidate,
+and declare `routine_charging` or an explicitly enabled `demonstration` purpose.
+Current incident types have no supported robot recovery action. Invalid output
+is discarded as a whole, without silently rewriting it into a valid proposal.
+Model prose remains untrusted interpretation; schema/fact checks do not prove
+every natural-language assertion correct. It never becomes observed fact or an
+executable command.
+
+For either offline or LLM submission, the host reads and validates another live
+snapshot before proposing. Any changed telemetry or tick produces
+`submissionCheck:"snapshot_changed"`; a failed fresh read produces `unavailable`.
+Both remove the current recommendation and leave the proposal unsubmitted.
+The original analysis remains explicitly attached to its original snapshot.
+No automatic paid reanalysis occurs. The proposal tool also checks current
+eligibility, and Go remains authoritative for safety and approval-time
+revalidation. The network interval between read and submit cannot be made atomic
+by this client; Go's validation remains required.
 
 ## Current incidents
 
@@ -42,7 +97,8 @@ explicitly requested eligible demonstration on a healthy robot remains available
 and is labeled separately, never presented as incident recovery.
 
 Model output cannot override structured incident classification, severity,
-operator-attention items, proposal status or the host's supported recommendation.
+operator-attention items or proposal status. It may propose null or the supported
+candidate only after passing grounding validation.
 Before an opted-in submission, the tool reads a fresh combined snapshot and
 requires its target to match the host recommendation. This bounds agent proposals;
 Go still validates, authorizes and revalidates at approval time. Missing or
@@ -137,8 +193,7 @@ inspect the existing operator inbox instead.
 ## Optional paid model execution
 
 Live mode sends fleet snapshots to the selected provider and **may incur API
-charges**, including multiple tool-reasoning steps. No live demonstration is
-required for this ticket. Choose a provider/model that supports tool calling and
+charges**. No live demonstration is required for this ticket. Choose a provider/model that supports
 structured output and configure `FLEETOPS_MODEL=provider/model` privately.
 The supported provider key variables are `OPENAI_API_KEY` for `openai`,
 `ANTHROPIC_API_KEY` for `anthropic`, and `GOOGLE_GENERATIVE_AI_API_KEY` for `google`.
@@ -153,11 +208,13 @@ npm start -- --live --demo --submit
 `--live` plus a configured provider key are required before generation. Merely
 setting a key or model does not enable live mode; `--submit` is a separate
 host-controlled opt-in, never a model-controlled argument. Live execution is
-bounded to four steps, 1200 output tokens per step, a 30-second generation timeout,
+bounded to one generation step, 2400 output tokens, a 30-second generation timeout,
 and zero model retries. These bounds do not guarantee a monetary limit; provider
 pricing and input-token usage apply. Framework logging is disabled, and the CLI
 prints sanitized errors. No environment object or private config is sent to the
-model. Only snapshot data, time, explicit demo IDs and public run controls are sent.
+model. Only snapshot facts/references, the supported candidate and explicit demo
+IDs are sent. The provider SDK uses its private API key for transport authentication;
+neither provider keys nor the GraphQL bearer token enter model messages.
 
 Results use `disabled`, `not_requested`, `pending_approval`, `rejected`, or
 `unknown` proposal status. HTTP 200 alone is insufficient: acceptance requires a
@@ -165,8 +222,10 @@ proposal ID, pending state, committed audit and no execution attempt. A committe
 backend denial is `rejected`. Uncertain transport, malformed mutation responses
 or uncommitted outcomes are `unknown`; **never retry automatically**. Each run
 permits at most one submission, including concurrent tool calls. The limit is
-per run, not durable deduplication across processes. A model failure after a tool
-call preserves the host's proposal status and reports fallback snapshot observations.
+per run, not durable deduplication across processes. A model or SDK parsing failure
+returns `aiAnalysis.status=failed`; host grounding rejection returns `rejected`.
+Both preserve observed facts and prevent submission. The CLI exits 1 for these
+statuses, a stale/unavailable submission check, or a rejected/unknown proposal.
 
 ## Verification
 
@@ -180,7 +239,9 @@ git diff --check
 ```
 
 Unit tests use deterministic API and model doubles. They never invoke a real
-provider. The real-backend suite is deliberately excluded from `npm test`;
+provider endpoint. A local in-process provider adapter exercises Mastra's actual
+generation and structured-output parser with no network access. Other deterministic
+model doubles test the application boundary. The real-backend suite is deliberately excluded from `npm test`;
 `npm run test:integration` fails without explicit test endpoint/proposer/viewer
 configuration rather than silently skipping. The harness generates temporary
 random tokens, starts isolated PostgreSQL on a dynamic loopback port, runs the
@@ -192,10 +253,14 @@ The harness also starts a trusted, test-only Go HTTP fixture using the existing
 detector and production GraphQL handler. The compiled TypeScript agent consumes
 six classified incidents, with severity boundaries and nonincident controls, and
 verifies telemetry, determinism, operator attention and zero mutations even with
-submission opted in. This fixture is not part of the server and adds no fault
+submission opted in. P4-02 additionally runs these real Go-classified records
+through Mastra with a local provider adapter, verifies grounded references and
+rejects wrong-tick evidence. A separate model double exercises validated demo
+submission against the real backend. This fixture is not part of the server and adds no fault
 endpoint. The server and database container are removed in `finally`. Run the harness in a
 separate PowerShell process as shown so its temporary environment does not persist.
-No model key is read or used by this integration suite.
+The optional-runner integration test stubs a test-only provider key and replaces
+generation with a local double; it makes no paid model requests.
 Go packages and `t.Parallel` test cases are serialized because they share the
 PostgreSQL migration advisory lock; concurrent runs can exceed its deadline.
 Tests that explicitly start concurrent migration workers still exercise those workers.
@@ -204,7 +269,7 @@ Tests that explicitly start concurrent migration workers still exercise those wo
 
 There is a current-incident read field, but no incident history, job-list query, movement action, autonomous
 recovery, scheduling, durable agent memory, cross-run proposal deduplication or
-provider quality evaluation in P4-01. A robot below the minimum or away from a
+provider quality evaluation in P4-02. A robot below the minimum or away from a
 station cannot be recovered with this action. Real incident handling needs a
 separately authorized API/action contract and later-ticket design, plus a reviewed
-provider configuration and evaluation. This ticket stops at current-state incident awareness.
+provider configuration and evaluation. This ticket stops at grounded optional LLM reasoning.
