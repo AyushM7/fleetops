@@ -15,11 +15,16 @@ export function observeFleet(state: FleetState, demo?: { robotId: string; statio
   if (state.poisoned) potentialIssues.push("Runtime poisoned; manual reconciliation required.");
   const robot = state.robots.find(r => demo ? r.id === demo.robotId : state.activeIncidents.length === 0 && availableStation(state, r) !== undefined);
   const station = robot && availableStation(state, robot, demo !== undefined);
-  const recommendedAction = !state.poisoned && robot && station && (!demo || station.id === demo.stationId)
+  const chargingAction = !state.poisoned && robot && station && (!demo || station.id === demo.stationId)
     ? { action: "SetCharging" as const, robotId: robot.id, stationId: station.id } : null;
+  const candidate = !demo && !state.poisoned ? state.reassignmentCandidates[0] : undefined;
+  const recommendedAction = candidate ? { action: "ReassignUnstartedJob" as const, jobId: candidate.jobId,
+    fromRobotId: candidate.fromRobotId, toRobotId: candidate.toRobotId } : chargingAction;
   const operatorAttention = state.activeIncidents.map(i => ({ robotId: i.robotId, incidentType: i.type,
-    reason: "No supported incident recovery action. SetCharging cannot move, unblock, restore offline robots, or charge below 30%." }));
+    reason: candidate?.fromRobotId === i.robotId && i.type === "traffic_blocked"
+      ? "Go admitted a pre-pickup job reassignment candidate; independent operator approval is required. The obstruction remains."
+      : "No supported incident recovery action. SetCharging cannot move, unblock, restore offline robots, or charge below 30%." }));
   return { observations, potentialIssues, recommendedAction, incidents: state.activeIncidents, operatorAttention,
     explanation: demo ? "Explicit demonstration requested, not a low-battery incident. Go decides eligibility."
-      : "Incidents are current-state classifications from the Go detector; no incident history is retained. SetCharging only charges in place at an eligible station with battery at least 30%. Operator attention is required when no supported recovery action exists. Go validates, a human approves, Go executes." };
+      : "Incidents are current-state classifications from the Go detector; no incident history is retained. ReassignUnstartedJob transfers an eligible blocked source's uncollected job to a Go-admitted idle recipient. It does not remove the obstruction. SetCharging charges in place. Go validates, a human approves, Go executes." };
 }

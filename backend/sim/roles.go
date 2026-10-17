@@ -7,12 +7,14 @@ type Reader interface {
 	PlanRoute(from, to Point) ([]Point, error)
 	AisleOccupant(aisleID int) (string, error)
 	OccupiedAislesOnRoute(route []Point, forRobot string) ([]int, error)
+	PreviewReassignment(jobID, fromRobotID, toRobotID string) (ReassignmentPlan, error)
 }
 
 // Commander exposes commands that require operator validation and approval.
 type Commander interface {
 	Reader
 	SetCharging(robotID, stationID string) error
+	ReassignUnstartedJob(jobID, fromRobotID, toRobotID string) error
 }
 
 // Driver exposes trusted scenario injections, never agent tools.

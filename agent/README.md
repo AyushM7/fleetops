@@ -1,13 +1,14 @@
-# FleetOps P4-02: grounded LLM incident reasoning
+# FleetOps P4-03: operator-approved job recovery
 
 LLM proposes. Go validates. Human approves. Go executes.
 
 This slice reads the real authenticated `fleetState`, including active incidents,
-and can submit the existing
-`SetChargingInput` through `submitProposal`. The Mastra agent exposes only the
-read tool `readFleetState`; the host retains `submitSetCharging` after output validation.
+jobs and Go-admitted reassignment candidates. The host can submit
+`SetChargingInput` through `submitProposal` or `ReassignUnstartedJobInput` through
+`submitReassignment`. The Mastra agent exposes only the
+read tool `readFleetState`; the host retains submission tools after output validation.
 No approval, rejection, ticking,
-Commander, Driver, fault injection, or job-list query is exposed.
+Commander, Driver, or fault injection is exposed to the model.
 Go remains the authority for incident classification, safety, authorization,
 persistence and execution. The read tool retrieves fleet state and incidents together.
 
@@ -49,7 +50,10 @@ an `assessment` explicitly treated as AI interpretation, and
 `recommendedResponse:"operator_attention"`. Optional SetCharging output must copy
 the actual robot/station telemetry and tick, match the host's supported candidate,
 and declare `routine_charging` or an explicitly enabled `demonstration` purpose.
-Current incident types have no supported robot recovery action. Invalid output
+Reassignment output must copy the exact source/recipient telemetry, job, Go
+candidate, tick, and source `traffic_blocked` snapshot reference and declare
+`incident_recovery`. It must match the host's deterministic first Go candidate.
+Invalid output
 is discarded as a whole, without silently rewriting it into a valid proposal.
 Model prose remains untrusted interpretation; schema/fact checks do not prove
 every natural-language assertion correct. It never becomes observed fact or an
@@ -89,9 +93,11 @@ TypeScript validates and consumes these Go results; it contains no incident
 detector or severity thresholds.
 
 Structured results separate `incidents` (with telemetry), `operatorAttention`,
-and `recommendedAction`. The current command cannot recover these incident types:
-it cannot move or unblock robots, restore offline robots, or charge below 30%.
-The report requests operator attention and recommends no recovery command.
+and `recommendedAction`. Go-admitted reassignment can restore progress for an
+uncollected job held by a healthy blocked robot. Without such a candidate, the
+report requests operator attention and recommends no incident recovery command.
+Neither command restores offline robots or removes an obstruction; SetCharging
+cannot navigate to a station or charge a robot below the command minimum.
 Routine charging is recommended only when there are no active incidents. An
 explicitly requested eligible demonstration on a healthy robot remains available
 and is labeled separately, never presented as incident recovery.
@@ -168,7 +174,8 @@ To explicitly permit one proposal in a run:
 npm start -- --submit
 ```
 
-The default heuristic recommends charging only an idle, job-free robot already
+The default heuristic first recommends an available Go reassignment candidate.
+Without one, it recommends charging only an idle, job-free robot already
 at an apparently available station with battery >=30% and <100%. It does not
 route robots. Battery below 30% cannot be a valid `SetCharging` candidate; whether
 it is an incident depends on Go's assigned-job rule. A healthy 100% robot is not
@@ -267,9 +274,12 @@ Tests that explicitly start concurrent migration workers still exercise those wo
 
 ## Before genuine incident response
 
-There is a current-incident read field, but no incident history, job-list query, movement action, autonomous
-recovery, scheduling, durable agent memory, cross-run proposal deduplication or
-provider quality evaluation in P4-02. A robot below the minimum or away from a
-station cannot be recovered with this action. Real incident handling needs a
-separately authorized API/action contract and later-ticket design, plus a reviewed
-provider configuration and evaluation. This ticket stops at grounded optional LLM reasoning.
+P4-03 adds one bounded recovery command. It applies only before pickup, with a
+healthy blocked source, healthy idle recipient, and Go-admitted route and energy
+budget. Both robots need battery >=30%. It cannot restore offline robots, move
+an obstruction, transfer a collected load, or recover below-minimum robots.
+Route feasibility is a current-state estimate, not a future reservation or
+delivery guarantee. Autonomous reassignment, incident history, durable agent
+memory, cross-run deduplication and provider quality evaluation remain outside
+this ticket. The React approval UI awaits P4-04; use GraphQL for reassignment
+review. See [P4-03 workflow](P4-03.md) for the deterministic demonstration.

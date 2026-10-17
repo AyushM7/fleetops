@@ -1,13 +1,18 @@
 import { z } from "zod";
-import { chargingSchema, fleetSchema, mutationSchema, type ChargingInput, type FleetState, type MutationResult } from "./contracts.js";
+import { chargingSchema, reassignmentSchema, fleetSchema, mutationSchema, type ChargingInput, type ReassignmentInput, type FleetState, type MutationResult } from "./contracts.js";
 
 export const fleetQuery = `query FleetState { fleetState {
   tick poisoned robots { id x y battery status jobId waitTicks blocked }
   stations { id x y occupiedBy reservedBy }
   activeIncidents { robotId type severity telemetry { id x y battery status jobId waitTicks blocked } }
+  jobs { id status assignedRobot fromX fromY toX toY }
+  reassignmentCandidates { jobId fromRobotId toRobotId pickupSteps deliverySteps chargingExitSteps requiredBattery }
 } }`;
 export const submitMutation = `mutation SubmitCharging($input: SetChargingInput!) {
   submitProposal(input: $input) { proposalId state execution auditCommitted executionAttempted error }
+}`;
+export const reassignMutation = `mutation SubmitReassignment($input: ReassignUnstartedJobInput!) {
+  submitReassignment(input: $input) { proposalId state execution auditCommitted executionAttempted error }
 }`;
 export class FleetError extends Error {
   constructor(public readonly code: "configuration" | "authentication" | "unavailable" | "malformed" | "graphql") {
@@ -17,6 +22,7 @@ export class FleetError extends Error {
 export interface FleetAPI {
   readFleet(): Promise<FleetState>;
   submitCharging(input: ChargingInput): Promise<MutationResult>;
+  submitReassignment(input: ReassignmentInput): Promise<MutationResult>;
 }
 export function createFleetClient(endpoint: string, token: string, transport: typeof fetch = fetch): FleetAPI {
   let url: URL;
@@ -51,6 +57,11 @@ export function createFleetClient(endpoint: string, token: string, transport: ty
       const parsed = chargingSchema.safeParse(input);
       if (!parsed.success) throw new FleetError("configuration");
       return (await request(submitMutation, { input: parsed.data }, z.object({ submitProposal: mutationSchema }))).submitProposal;
+    },
+    async submitReassignment(input) {
+      const parsed = reassignmentSchema.safeParse(input);
+      if (!parsed.success) throw new FleetError("configuration");
+      return (await request(reassignMutation, { input: parsed.data }, z.object({ submitReassignment: mutationSchema }))).submitReassignment;
     },
   };
 }

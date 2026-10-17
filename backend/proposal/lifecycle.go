@@ -29,15 +29,42 @@ func New(reader sim.Reader, clock Clock) (*Lifecycle, error) {
 func (l *Lifecycle) Create(id string, request safety.SetChargingRequest, expiresAt time.Time) (Result, error) {
 	now := l.clock().UTC()
 	p := Proposal{ID: id, Action: SetCharging, Request: request, CreatedAt: now, ExpiresAt: expiresAt.UTC()}
+	return l.create(p)
+}
+
+func (l *Lifecycle) CreateReassignment(id string, request safety.ReassignUnstartedJobRequest, expiresAt time.Time) (Result, error) {
+	p := Proposal{ID: id, Action: ReassignUnstartedJob, Reassignment: request, CreatedAt: l.clock().UTC(), ExpiresAt: expiresAt.UTC()}
+	return l.create(p)
+}
+
+func (l *Lifecycle) create(p Proposal) (Result, error) {
 	err := l.validateCreation(p)
 	if err == nil {
-		err = safety.PreflightSetCharging(l.reader, request)
+		err = Preflight(l.reader, p)
 	}
 	if err == nil {
 		p.State = Pending
-		l.records[id] = p
+		l.records[p.ID] = p
 	}
-	return result(p, "", AttemptCreate, OperatorIdentity{}, now, err)
+	return result(p, "", AttemptCreate, OperatorIdentity{}, p.CreatedAt, err)
+}
+
+// Preflight dispatches only known immutable proposal types and rejects mixed payloads.
+func Preflight(reader sim.Reader, p Proposal) error {
+	switch p.Action {
+	case SetCharging:
+		if p.Reassignment != (safety.ReassignUnstartedJobRequest{}) {
+			return ErrInvalidAction
+		}
+		return safety.PreflightSetCharging(reader, p.Request)
+	case ReassignUnstartedJob:
+		if p.Request != (safety.SetChargingRequest{}) {
+			return ErrInvalidAction
+		}
+		return safety.PreflightReassignment(reader, p.Reassignment)
+	default:
+		return ErrInvalidAction
+	}
 }
 
 func (l *Lifecycle) validateCreation(p Proposal) error {
@@ -67,7 +94,7 @@ func (l *Lifecycle) Decide(id string, decision Decision, operator OperatorIdenti
 		err = validateDecision(p, decision, operator)
 	}
 	if err == nil && decision == Approve {
-		err = safety.PreflightSetCharging(l.reader, p.Request)
+		err = Preflight(l.reader, p)
 	}
 	if err == nil {
 		p.State = Rejected

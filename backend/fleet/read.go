@@ -23,12 +23,24 @@ type StationView struct {
 	OccupiedBy, ReservedBy string
 }
 type StateView struct {
-	Layout          LayoutView
-	Tick            int
-	Robots          []RobotView
-	Stations        []StationView
-	Poisoned        bool
-	ActiveIncidents []IncidentView
+	Layout                 LayoutView
+	Tick                   int
+	Robots                 []RobotView
+	Stations               []StationView
+	Poisoned               bool
+	ActiveIncidents        []IncidentView
+	Jobs                   []JobView
+	ReassignmentCandidates []ReassignmentCandidateView
+}
+
+type JobView struct {
+	ID, Status, AssignedRobot string
+	FromX, FromY, ToX, ToY    int
+}
+
+type ReassignmentCandidateView struct {
+	JobID, FromRobotID, ToRobotID                                  string
+	PickupSteps, DeliverySteps, ChargingExitSteps, RequiredBattery int
 }
 
 // IncidentView describes a current condition, without persistent episode identity.
@@ -96,6 +108,23 @@ func (s *Service) ReadState(context.Context) (StateView, error) {
 	}
 	view := StateView{Tick: snapshot.Tick, Poisoned: s.poisoned, Robots: []RobotView{}, Stations: []StationView{}}
 	view.ActiveIncidents = incidents
+	view.Jobs = make([]JobView, 0, len(snapshot.Jobs))
+	view.ReassignmentCandidates = []ReassignmentCandidateView{}
+	for _, j := range snapshot.Jobs {
+		view.Jobs = append(view.Jobs, JobView{j.ID, string(j.Status), j.AssignedRobot, j.From.X, j.From.Y, j.To.X, j.To.Y})
+		if s.poisoned || j.Status != sim.JobAssigned {
+			continue
+		}
+		for _, recipient := range snapshot.Robots {
+			if recipient.Status != sim.RobotIdle || recipient.JobID != "" {
+				continue
+			}
+			plan, err := s.commander.PreviewReassignment(j.ID, j.AssignedRobot, recipient.ID)
+			if err == nil {
+				view.ReassignmentCandidates = append(view.ReassignmentCandidates, ReassignmentCandidateView{j.ID, j.AssignedRobot, recipient.ID, plan.PickupSteps, plan.DeliverySteps, plan.ChargingExitSteps, plan.RequiredBattery})
+			}
+		}
+	}
 	view.Layout = s.layout
 	view.Layout.Cells = append([]CellView{}, s.layout.Cells...)
 	for _, r := range snapshot.Robots {

@@ -46,18 +46,31 @@ type ComplexityRoot struct {
 	}
 
 	FleetState struct {
-		ActiveIncidents func(childComplexity int) int
-		Layout          func(childComplexity int) int
-		Poisoned        func(childComplexity int) int
-		Robots          func(childComplexity int) int
-		Stations        func(childComplexity int) int
-		Tick            func(childComplexity int) int
+		ActiveIncidents        func(childComplexity int) int
+		Jobs                   func(childComplexity int) int
+		Layout                 func(childComplexity int) int
+		Poisoned               func(childComplexity int) int
+		ReassignmentCandidates func(childComplexity int) int
+		Robots                 func(childComplexity int) int
+		Stations               func(childComplexity int) int
+		Tick                   func(childComplexity int) int
+	}
+
+	Job struct {
+		AssignedRobot func(childComplexity int) int
+		FromX         func(childComplexity int) int
+		FromY         func(childComplexity int) int
+		ID            func(childComplexity int) int
+		Status        func(childComplexity int) int
+		ToX           func(childComplexity int) int
+		ToY           func(childComplexity int) int
 	}
 
 	Mutation struct {
-		ApproveProposal func(childComplexity int, id string) int
-		RejectProposal  func(childComplexity int, id string) int
-		SubmitProposal  func(childComplexity int, input model.SetChargingInput) int
+		ApproveProposal    func(childComplexity int, id string) int
+		RejectProposal     func(childComplexity int, id string) int
+		SubmitProposal     func(childComplexity int, input model.SetChargingInput) int
+		SubmitReassignment func(childComplexity int, input model.ReassignUnstartedJobInput) int
 	}
 
 	MutationResult struct {
@@ -75,17 +88,30 @@ type ComplexityRoot struct {
 		CurrentRuntime func(childComplexity int) int
 		Execution      func(childComplexity int) int
 		ExpiresAt      func(childComplexity int) int
+		FromRobotID    func(childComplexity int) int
 		ID             func(childComplexity int) int
+		JobID          func(childComplexity int) int
 		RobotID        func(childComplexity int) int
 		State          func(childComplexity int) int
 		StationID      func(childComplexity int) int
 		SubmittedBy    func(childComplexity int) int
+		ToRobotID      func(childComplexity int) int
 	}
 
 	Query struct {
 		FleetState       func(childComplexity int) int
 		PendingProposals func(childComplexity int) int
 		Proposal         func(childComplexity int, id string) int
+	}
+
+	ReassignmentCandidate struct {
+		ChargingExitSteps func(childComplexity int) int
+		DeliverySteps     func(childComplexity int) int
+		FromRobotID       func(childComplexity int) int
+		JobID             func(childComplexity int) int
+		PickupSteps       func(childComplexity int) int
+		RequiredBattery   func(childComplexity int) int
+		ToRobotID         func(childComplexity int) int
 	}
 
 	Robot struct {
@@ -126,6 +152,7 @@ type ComplexityRoot struct {
 
 type MutationResolver interface {
 	SubmitProposal(ctx context.Context, input model.SetChargingInput) (*model.MutationResult, error)
+	SubmitReassignment(ctx context.Context, input model.ReassignUnstartedJobInput) (*model.MutationResult, error)
 	ApproveProposal(ctx context.Context, id string) (*model.MutationResult, error)
 	RejectProposal(ctx context.Context, id string) (*model.MutationResult, error)
 }
@@ -184,6 +211,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FleetState.ActiveIncidents(childComplexity), true
+	case "FleetState.jobs":
+		if e.ComplexityRoot.FleetState.Jobs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FleetState.Jobs(childComplexity), true
 	case "FleetState.layout":
 		if e.ComplexityRoot.FleetState.Layout == nil {
 			break
@@ -196,6 +229,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FleetState.Poisoned(childComplexity), true
+	case "FleetState.reassignmentCandidates":
+		if e.ComplexityRoot.FleetState.ReassignmentCandidates == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FleetState.ReassignmentCandidates(childComplexity), true
 	case "FleetState.robots":
 		if e.ComplexityRoot.FleetState.Robots == nil {
 			break
@@ -214,6 +253,49 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FleetState.Tick(childComplexity), true
+
+	case "Job.assignedRobot":
+		if e.ComplexityRoot.Job.AssignedRobot == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Job.AssignedRobot(childComplexity), true
+	case "Job.fromX":
+		if e.ComplexityRoot.Job.FromX == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Job.FromX(childComplexity), true
+	case "Job.fromY":
+		if e.ComplexityRoot.Job.FromY == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Job.FromY(childComplexity), true
+	case "Job.id":
+		if e.ComplexityRoot.Job.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Job.ID(childComplexity), true
+	case "Job.status":
+		if e.ComplexityRoot.Job.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Job.Status(childComplexity), true
+	case "Job.toX":
+		if e.ComplexityRoot.Job.ToX == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Job.ToX(childComplexity), true
+	case "Job.toY":
+		if e.ComplexityRoot.Job.ToY == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Job.ToY(childComplexity), true
 
 	case "Mutation.approveProposal":
 		if e.ComplexityRoot.Mutation.ApproveProposal == nil {
@@ -248,6 +330,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SubmitProposal(childComplexity, args["input"].(model.SetChargingInput)), true
+	case "Mutation.submitReassignment":
+		if e.ComplexityRoot.Mutation.SubmitReassignment == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_submitReassignment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SubmitReassignment(childComplexity, args["input"].(model.ReassignUnstartedJobInput)), true
 
 	case "MutationResult.auditCommitted":
 		if e.ComplexityRoot.MutationResult.AuditCommitted == nil {
@@ -316,12 +409,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Proposal.ExpiresAt(childComplexity), true
+	case "Proposal.fromRobotId":
+		if e.ComplexityRoot.Proposal.FromRobotID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Proposal.FromRobotID(childComplexity), true
 	case "Proposal.id":
 		if e.ComplexityRoot.Proposal.ID == nil {
 			break
 		}
 
 		return e.ComplexityRoot.Proposal.ID(childComplexity), true
+	case "Proposal.jobId":
+		if e.ComplexityRoot.Proposal.JobID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Proposal.JobID(childComplexity), true
 	case "Proposal.robotId":
 		if e.ComplexityRoot.Proposal.RobotID == nil {
 			break
@@ -346,6 +451,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Proposal.SubmittedBy(childComplexity), true
+	case "Proposal.toRobotId":
+		if e.ComplexityRoot.Proposal.ToRobotID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Proposal.ToRobotID(childComplexity), true
 
 	case "Query.fleetState":
 		if e.ComplexityRoot.Query.FleetState == nil {
@@ -371,6 +482,49 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Proposal(childComplexity, args["id"].(string)), true
+
+	case "ReassignmentCandidate.chargingExitSteps":
+		if e.ComplexityRoot.ReassignmentCandidate.ChargingExitSteps == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReassignmentCandidate.ChargingExitSteps(childComplexity), true
+	case "ReassignmentCandidate.deliverySteps":
+		if e.ComplexityRoot.ReassignmentCandidate.DeliverySteps == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReassignmentCandidate.DeliverySteps(childComplexity), true
+	case "ReassignmentCandidate.fromRobotId":
+		if e.ComplexityRoot.ReassignmentCandidate.FromRobotID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReassignmentCandidate.FromRobotID(childComplexity), true
+	case "ReassignmentCandidate.jobId":
+		if e.ComplexityRoot.ReassignmentCandidate.JobID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReassignmentCandidate.JobID(childComplexity), true
+	case "ReassignmentCandidate.pickupSteps":
+		if e.ComplexityRoot.ReassignmentCandidate.PickupSteps == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReassignmentCandidate.PickupSteps(childComplexity), true
+	case "ReassignmentCandidate.requiredBattery":
+		if e.ComplexityRoot.ReassignmentCandidate.RequiredBattery == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReassignmentCandidate.RequiredBattery(childComplexity), true
+	case "ReassignmentCandidate.toRobotId":
+		if e.ComplexityRoot.ReassignmentCandidate.ToRobotID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReassignmentCandidate.ToRobotID(childComplexity), true
 
 	case "Robot.battery":
 		if e.ComplexityRoot.Robot.Battery == nil {
@@ -498,6 +652,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	opCtx := graphql.GetOperationContext(ctx)
 	ec := newExecutionContext(opCtx, e, make(chan graphql.DeferredResult))
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
+		ec.unmarshalInputReassignUnstartedJobInput,
 		ec.unmarshalInputSetChargingInput,
 	)
 	first := true
@@ -621,8 +776,32 @@ func (ec *executionContext) childFields_FleetState(ctx context.Context, field gr
 		return ec.fieldContext_FleetState_poisoned(ctx, field)
 	case "activeIncidents":
 		return ec.fieldContext_FleetState_activeIncidents(ctx, field)
+	case "jobs":
+		return ec.fieldContext_FleetState_jobs(ctx, field)
+	case "reassignmentCandidates":
+		return ec.fieldContext_FleetState_reassignmentCandidates(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type FleetState", field.Name)
+}
+
+func (ec *executionContext) childFields_Job(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_Job_id(ctx, field)
+	case "status":
+		return ec.fieldContext_Job_status(ctx, field)
+	case "assignedRobot":
+		return ec.fieldContext_Job_assignedRobot(ctx, field)
+	case "fromX":
+		return ec.fieldContext_Job_fromX(ctx, field)
+	case "fromY":
+		return ec.fieldContext_Job_fromY(ctx, field)
+	case "toX":
+		return ec.fieldContext_Job_toX(ctx, field)
+	case "toY":
+		return ec.fieldContext_Job_toY(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Job", field.Name)
 }
 
 func (ec *executionContext) childFields_MutationResult(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -653,6 +832,12 @@ func (ec *executionContext) childFields_Proposal(ctx context.Context, field grap
 		return ec.fieldContext_Proposal_robotId(ctx, field)
 	case "stationId":
 		return ec.fieldContext_Proposal_stationId(ctx, field)
+	case "jobId":
+		return ec.fieldContext_Proposal_jobId(ctx, field)
+	case "fromRobotId":
+		return ec.fieldContext_Proposal_fromRobotId(ctx, field)
+	case "toRobotId":
+		return ec.fieldContext_Proposal_toRobotId(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Proposal_createdAt(ctx, field)
 	case "expiresAt":
@@ -667,6 +852,26 @@ func (ec *executionContext) childFields_Proposal(ctx context.Context, field grap
 		return ec.fieldContext_Proposal_currentRuntime(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Proposal", field.Name)
+}
+
+func (ec *executionContext) childFields_ReassignmentCandidate(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "jobId":
+		return ec.fieldContext_ReassignmentCandidate_jobId(ctx, field)
+	case "fromRobotId":
+		return ec.fieldContext_ReassignmentCandidate_fromRobotId(ctx, field)
+	case "toRobotId":
+		return ec.fieldContext_ReassignmentCandidate_toRobotId(ctx, field)
+	case "pickupSteps":
+		return ec.fieldContext_ReassignmentCandidate_pickupSteps(ctx, field)
+	case "deliverySteps":
+		return ec.fieldContext_ReassignmentCandidate_deliverySteps(ctx, field)
+	case "chargingExitSteps":
+		return ec.fieldContext_ReassignmentCandidate_chargingExitSteps(ctx, field)
+	case "requiredBattery":
+		return ec.fieldContext_ReassignmentCandidate_requiredBattery(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ReassignmentCandidate", field.Name)
 }
 
 func (ec *executionContext) childFields_Robot(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -881,6 +1086,20 @@ func (ec *executionContext) field_Mutation_submitProposal_args(ctx context.Conte
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (model.SetChargingInput, error) {
 			return ec.unmarshalNSetChargingInput2githubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐSetChargingInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_submitReassignment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (model.ReassignUnstartedJobInput, error) {
+			return ec.unmarshalNReassignUnstartedJobInput2githubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐReassignUnstartedJobInput(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -1252,6 +1471,231 @@ func (ec *executionContext) fieldContext_FleetState_activeIncidents(_ context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _FleetState_jobs(ctx context.Context, field graphql.CollectedField, obj *model.FleetState) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FleetState_jobs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Jobs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.Job) graphql.Marshaler {
+			return ec.marshalNJob2ᚕᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐJobᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FleetState_jobs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FleetState",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Job(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FleetState_reassignmentCandidates(ctx context.Context, field graphql.CollectedField, obj *model.FleetState) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FleetState_reassignmentCandidates(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReassignmentCandidates, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.ReassignmentCandidate) graphql.Marshaler {
+			return ec.marshalNReassignmentCandidate2ᚕᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐReassignmentCandidateᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FleetState_reassignmentCandidates(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FleetState",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ReassignmentCandidate(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Job_id(ctx context.Context, field graphql.CollectedField, obj *model.Job) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Job_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Job_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Job", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _Job_status(ctx context.Context, field graphql.CollectedField, obj *model.Job) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Job_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Job_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Job", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Job_assignedRobot(ctx context.Context, field graphql.CollectedField, obj *model.Job) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Job_assignedRobot(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AssignedRobot, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Job_assignedRobot(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Job", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Job_fromX(ctx context.Context, field graphql.CollectedField, obj *model.Job) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Job_fromX(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FromX, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Job_fromX(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Job", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Job_fromY(ctx context.Context, field graphql.CollectedField, obj *model.Job) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Job_fromY(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FromY, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Job_fromY(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Job", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Job_toX(ctx context.Context, field graphql.CollectedField, obj *model.Job) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Job_toX(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ToX, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Job_toX(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Job", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _Job_toY(ctx context.Context, field graphql.CollectedField, obj *model.Job) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Job_toY(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ToY, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Job_toY(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Job", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
 func (ec *executionContext) _Mutation_submitProposal(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1290,6 +1734,50 @@ func (ec *executionContext) fieldContext_Mutation_submitProposal(ctx context.Con
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_submitProposal_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_submitReassignment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_submitReassignment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SubmitReassignment(ctx, fc.Args["input"].(model.ReassignUnstartedJobInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.MutationResult) graphql.Marshaler {
+			return ec.marshalNMutationResult2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐMutationResult(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_submitReassignment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_MutationResult(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_submitReassignment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -1614,6 +2102,75 @@ func (ec *executionContext) fieldContext_Proposal_stationId(_ context.Context, f
 	return graphql.NewScalarFieldContext("Proposal", field, false, false, errors.New("field of type ID does not have child fields"))
 }
 
+func (ec *executionContext) _Proposal_jobId(ctx context.Context, field graphql.CollectedField, obj *model.Proposal) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Proposal_jobId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.JobID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Proposal_jobId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Proposal", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _Proposal_fromRobotId(ctx context.Context, field graphql.CollectedField, obj *model.Proposal) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Proposal_fromRobotId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FromRobotID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Proposal_fromRobotId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Proposal", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _Proposal_toRobotId(ctx context.Context, field graphql.CollectedField, obj *model.Proposal) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Proposal_toRobotId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ToRobotID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Proposal_toRobotId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Proposal", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
 func (ec *executionContext) _Proposal_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Proposal) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1934,6 +2491,167 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _ReassignmentCandidate_jobId(ctx context.Context, field graphql.CollectedField, obj *model.ReassignmentCandidate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReassignmentCandidate_jobId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.JobID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReassignmentCandidate_jobId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReassignmentCandidate", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ReassignmentCandidate_fromRobotId(ctx context.Context, field graphql.CollectedField, obj *model.ReassignmentCandidate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReassignmentCandidate_fromRobotId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FromRobotID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReassignmentCandidate_fromRobotId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReassignmentCandidate", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ReassignmentCandidate_toRobotId(ctx context.Context, field graphql.CollectedField, obj *model.ReassignmentCandidate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReassignmentCandidate_toRobotId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ToRobotID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReassignmentCandidate_toRobotId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReassignmentCandidate", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ReassignmentCandidate_pickupSteps(ctx context.Context, field graphql.CollectedField, obj *model.ReassignmentCandidate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReassignmentCandidate_pickupSteps(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PickupSteps, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReassignmentCandidate_pickupSteps(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReassignmentCandidate", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ReassignmentCandidate_deliverySteps(ctx context.Context, field graphql.CollectedField, obj *model.ReassignmentCandidate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReassignmentCandidate_deliverySteps(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DeliverySteps, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReassignmentCandidate_deliverySteps(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReassignmentCandidate", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ReassignmentCandidate_chargingExitSteps(ctx context.Context, field graphql.CollectedField, obj *model.ReassignmentCandidate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReassignmentCandidate_chargingExitSteps(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ChargingExitSteps, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReassignmentCandidate_chargingExitSteps(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReassignmentCandidate", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ReassignmentCandidate_requiredBattery(ctx context.Context, field graphql.CollectedField, obj *model.ReassignmentCandidate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReassignmentCandidate_requiredBattery(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RequiredBattery, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReassignmentCandidate_requiredBattery(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReassignmentCandidate", field, false, false, errors.New("field of type Int does not have child fields"))
 }
 
 func (ec *executionContext) _Robot_id(ctx context.Context, field graphql.CollectedField, obj *model.Robot) (ret graphql.Marshaler) {
@@ -3441,6 +4159,57 @@ func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputReassignUnstartedJobInput(ctx context.Context, obj any) (model.ReassignUnstartedJobInput, error) {
+	var it model.ReassignUnstartedJobInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"jobId", "fromRobotId", "toRobotId", "expiresAt"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "jobId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("jobId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.JobID = data
+		case "fromRobotId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("fromRobotId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.FromRobotID = data
+		case "toRobotId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("toRobotId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ToRobotID = data
+		case "expiresAt":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expiresAt"))
+			data, err := ec.unmarshalNTime2timeᚐTime(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpiresAt = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputSetChargingInput(ctx context.Context, obj any) (model.SetChargingInput, error) {
 	var it model.SetChargingInput
 	if obj == nil {
@@ -3588,6 +4357,84 @@ func (ec *executionContext) _FleetState(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "jobs":
+			out.Values[i] = ec._FleetState_jobs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reassignmentCandidates":
+			out.Values[i] = ec._FleetState_reassignmentCandidates(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var jobImplementors = []string{"Job"}
+
+func (ec *executionContext) _Job(ctx context.Context, sel ast.SelectionSet, obj *model.Job) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, jobImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Job")
+		case "id":
+			out.Values[i] = ec._Job_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._Job_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assignedRobot":
+			out.Values[i] = ec._Job_assignedRobot(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "fromX":
+			out.Values[i] = ec._Job_fromX(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "fromY":
+			out.Values[i] = ec._Job_fromY(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "toX":
+			out.Values[i] = ec._Job_toX(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "toY":
+			out.Values[i] = ec._Job_toY(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -3632,6 +4479,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "submitProposal":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_submitProposal(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "submitReassignment":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_submitReassignment(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -3763,6 +4617,21 @@ func (ec *executionContext) _Proposal(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "stationId":
 			out.Values[i] = ec._Proposal_stationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "jobId":
+			out.Values[i] = ec._Proposal_jobId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "fromRobotId":
+			out.Values[i] = ec._Proposal_fromRobotId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "toRobotId":
+			out.Values[i] = ec._Proposal_toRobotId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -3916,6 +4785,74 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			})
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var reassignmentCandidateImplementors = []string{"ReassignmentCandidate"}
+
+func (ec *executionContext) _ReassignmentCandidate(ctx context.Context, sel ast.SelectionSet, obj *model.ReassignmentCandidate) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, reassignmentCandidateImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ReassignmentCandidate")
+		case "jobId":
+			out.Values[i] = ec._ReassignmentCandidate_jobId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "fromRobotId":
+			out.Values[i] = ec._ReassignmentCandidate_fromRobotId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "toRobotId":
+			out.Values[i] = ec._ReassignmentCandidate_toRobotId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pickupSteps":
+			out.Values[i] = ec._ReassignmentCandidate_pickupSteps(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deliverySteps":
+			out.Values[i] = ec._ReassignmentCandidate_deliverySteps(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "chargingExitSteps":
+			out.Values[i] = ec._ReassignmentCandidate_chargingExitSteps(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "requiredBattery":
+			out.Values[i] = ec._ReassignmentCandidate_requiredBattery(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -4641,6 +5578,32 @@ func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.Selecti
 	return res
 }
 
+func (ec *executionContext) marshalNJob2ᚕᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐJobᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Job) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNJob2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐJob(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNJob2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐJob(ctx context.Context, sel ast.SelectionSet, v *model.Job) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Job(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNMutationResult2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐMutationResult(ctx context.Context, sel ast.SelectionSet, v *model.MutationResult) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -4675,6 +5638,37 @@ func (ec *executionContext) marshalNProposal2ᚖgithubᚗcomᚋAyushM7ᚋfleetop
 		return graphql.Null
 	}
 	return ec._Proposal(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNReassignUnstartedJobInput2githubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐReassignUnstartedJobInput(ctx context.Context, v any) (model.ReassignUnstartedJobInput, error) {
+	res, err := ec.unmarshalInputReassignUnstartedJobInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNReassignmentCandidate2ᚕᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐReassignmentCandidateᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ReassignmentCandidate) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNReassignmentCandidate2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐReassignmentCandidate(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNReassignmentCandidate2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐReassignmentCandidate(ctx context.Context, sel ast.SelectionSet, v *model.ReassignmentCandidate) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ReassignmentCandidate(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNRobot2ᚕᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐRobotᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Robot) graphql.Marshaler {

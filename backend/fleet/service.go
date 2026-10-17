@@ -1,4 +1,4 @@
-// Package fleet provides the serialized charging proposal-to-execution workflow.
+// Package fleet provides the serialized proposal-to-execution workflow.
 package fleet
 
 import (
@@ -23,7 +23,7 @@ var (
 	ErrSelfApproval     = errors.New("submitter cannot approve their own proposal")
 	ErrPersistence      = errors.New("fleet persistence failed")
 	ErrPoisoned         = errors.New("fleet runtime poisoned; manual reconciliation required")
-	ErrExecution        = errors.New("charging execution failed")
+	ErrExecution        = errors.New("command execution failed")
 	ErrForeignRuntime   = errors.New("proposal belongs to another simulator runtime")
 	ErrProposalMismatch = errors.New("stored proposal differs from the canonical runtime record")
 )
@@ -119,6 +119,14 @@ func (s *Service) Tick() error {
 }
 
 func (s *Service) Submit(ctx context.Context, request safety.SetChargingRequest, expiresAt time.Time) (Result, error) {
+	return s.submit(ctx, proposal.Proposal{Action: proposal.SetCharging, Request: request, ExpiresAt: expiresAt.UTC()})
+}
+
+func (s *Service) SubmitReassignment(ctx context.Context, request safety.ReassignUnstartedJobRequest, expiresAt time.Time) (Result, error) {
+	return s.submit(ctx, proposal.Proposal{Action: proposal.ReassignUnstartedJob, Reassignment: request, ExpiresAt: expiresAt.UTC()})
+}
+
+func (s *Service) submit(ctx context.Context, p proposal.Proposal) (Result, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	defer s.poisonOnPanic()
@@ -127,18 +135,23 @@ func (s *Service) Submit(ctx context.Context, request safety.SetChargingRequest,
 		return Result{}, err
 	}
 	s.at = s.clock().UTC()
+	p.ID, p.CreatedAt = id, s.at
 	var candidate proposal.Result
 	var denied error
 	principal, authenticated := auth.FromContext(ctx)
 	err = s.transact(ctx, func(tx *db.Tx) error {
 		if authenticated && principal.Role != auth.Proposer && principal.Role != auth.Operator {
 			denied = ErrUnauthorized
-			candidate = deniedResult(proposal.Proposal{ID: id, Action: proposal.SetCharging, Request: request, CreatedAt: s.at, ExpiresAt: expiresAt.UTC()}, proposal.AttemptCreate, proposal.OperatorIdentity{Subject: principal.Subject}, s.at, denied)
+			candidate = deniedResult(p, proposal.AttemptCreate, proposal.OperatorIdentity{Subject: principal.Subject}, s.at, denied)
 		} else if s.poisoned {
 			denied = ErrPoisoned
-			candidate = deniedResult(proposal.Proposal{ID: id, Action: proposal.SetCharging, Request: request, CreatedAt: s.at, ExpiresAt: expiresAt.UTC()}, proposal.AttemptCreate, proposal.OperatorIdentity{}, s.at, denied)
+			candidate = deniedResult(p, proposal.AttemptCreate, proposal.OperatorIdentity{}, s.at, denied)
 		} else {
-			candidate, denied = s.lifecycle.Create(id, request, expiresAt)
+			if p.Action == proposal.ReassignUnstartedJob {
+				candidate, denied = s.lifecycle.CreateReassignment(id, p.Reassignment, p.ExpiresAt)
+			} else {
+				candidate, denied = s.lifecycle.Create(id, p.Request, p.ExpiresAt)
+			}
 		}
 		if authenticated {
 			candidate.Event.Operator.Subject = principal.Subject

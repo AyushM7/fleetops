@@ -21,7 +21,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(
 describe("consumption of Go-classified incidents", () => {
   it.each(["low_battery", "robot_unresponsive", "traffic_blocked"] as const)("requires operator attention for %s without a proposal even after opt-in", async type => {
     const state = incidentFleet(type, "high");
-    const api = { readFleet: vi.fn().mockResolvedValue(state), submitCharging: vi.fn().mockResolvedValue(pendingFixture) };
+    const api = { readFleet: vi.fn().mockResolvedValue(state), submitReassignment: vi.fn().mockResolvedValue(pendingFixture), submitCharging: vi.fn().mockResolvedValue(pendingFixture) };
     const first = await runOffline(api, { allowSubmit: true });
     expect(await runOffline(api, { allowSubmit: true })).toEqual(first);
     expect(first.incidents).toEqual(state.activeIncidents);
@@ -44,7 +44,7 @@ describe("consumption of Go-classified incidents", () => {
     expect(observeFleet(state).recommendedAction).toBeNull();
   });
   it("blocks a model tool's unsupported target and keeps submission disabled by default", async () => {
-    const api = { readFleet: vi.fn().mockResolvedValue(incidentFleet("low_battery", "high")), submitCharging: vi.fn() };
+    const api = { readFleet: vi.fn().mockResolvedValue(incidentFleet("low_battery", "high")), submitReassignment: vi.fn().mockResolvedValue(pendingFixture), submitCharging: vi.fn() };
     const session = createFleetTools(api, true);
     expect((await session.submit({ robotId: "R1", stationId: "S1", expiresAt: "2026-10-16T12:01:00Z" })).status).toBe("not_requested");
     expect(api.submitCharging).not.toHaveBeenCalled();
@@ -55,7 +55,7 @@ describe("consumption of Go-classified incidents", () => {
     vi.stubGlobal("fetch", vi.fn(() => { throw new Error("No network permitted"); }));
     vi.stubEnv("OPENAI_API_KEY", "test-only-key");
     const state = incidentFleet("low_battery", "high");
-    const api = { readFleet: vi.fn().mockResolvedValue(state), submitCharging: vi.fn() };
+    const api = { readFleet: vi.fn().mockResolvedValue(state), submitReassignment: vi.fn().mockResolvedValue(pendingFixture), submitCharging: vi.fn() };
     const generate = vi.spyOn(Agent.prototype, "generate").mockResolvedValue({ object: {
       observations: ["Snapshot reviewed."], potentialIssues: ["invented"],
       recommendedAction: { action: "SetCharging", robotId: "R1", stationId: "S1" }, explanation: "Operator attention required.",

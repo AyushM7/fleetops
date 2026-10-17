@@ -13,7 +13,7 @@ function incidentSnapshot(): FleetState {
   return state;
 }
 function apiFixture(state = incidentSnapshot()) {
-  return { readFleet: vi.fn().mockImplementation(async () => structuredClone(state)), submitCharging: vi.fn().mockResolvedValue(pendingFixture) };
+  return { readFleet: vi.fn().mockImplementation(async () => structuredClone(state)), submitReassignment: vi.fn().mockResolvedValue(pendingFixture), submitCharging: vi.fn().mockResolvedValue(pendingFixture) };
 }
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(() => { throw new Error("No network permitted"); }));

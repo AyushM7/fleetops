@@ -19,6 +19,7 @@ const (
 type Action string
 
 const SetCharging Action = "set_charging"
+const ReassignUnstartedJob Action = "reassign_unstarted_job"
 
 type Decision string
 
@@ -47,14 +48,15 @@ type OperatorIdentity struct {
 // Proposal is a detached view. Editing it cannot alter the canonical record,
 // parameters, expiry, or decision held by Lifecycle.
 type Proposal struct {
-	ID        string
-	Action    Action
-	Request   safety.SetChargingRequest
-	CreatedAt time.Time
-	ExpiresAt time.Time
-	State     State
-	Operator  OperatorIdentity
-	DecidedAt time.Time
+	ID           string
+	Action       Action
+	Request      safety.SetChargingRequest
+	Reassignment safety.ReassignUnstartedJobRequest
+	CreatedAt    time.Time
+	ExpiresAt    time.Time
+	State        State
+	Operator     OperatorIdentity
+	DecidedAt    time.Time
 }
 
 // DecisionEvent describes one attempt, including denied attempts. Proposal holds
@@ -77,6 +79,7 @@ type Result struct {
 }
 
 var (
+	ErrInvalidAction       = errors.New("unsupported or mixed proposal action")
 	ErrInvalidDependencies = errors.New("reader and clock are required")
 	ErrInvalidID           = errors.New("proposal ID must be nonempty without surrounding whitespace or control characters")
 	ErrDuplicateID         = errors.New("proposal ID already exists")

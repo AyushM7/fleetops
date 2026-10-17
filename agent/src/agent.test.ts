@@ -8,7 +8,7 @@ import { fleetFixture, pendingFixture, reasoningFixture } from "./fixtures.js";
 
 const input = { robotId: "R1", stationId: "S1", expiresAt: "2026-10-16T12:01:00Z" };
 function apiFixture(battery = 100) {
-  return { readFleet: vi.fn().mockResolvedValue(fleetFixture(battery)), submitCharging: vi.fn().mockResolvedValue(pendingFixture) };
+  return { readFleet: vi.fn().mockResolvedValue(fleetFixture(battery)), submitReassignment: vi.fn().mockResolvedValue(pendingFixture), submitCharging: vi.fn().mockResolvedValue(pendingFixture) };
 }
 beforeEach(() => { vi.stubGlobal("fetch", vi.fn(() => { throw new Error("Unexpected network"); })); });
 afterEach(() => {

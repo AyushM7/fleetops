@@ -34,6 +34,12 @@ code: it must not include transaction-control statements or DDL that cannot run
 in a transaction. The initial embedded migration documents the history table.
 Migration 002 adds the minimal `fleet_proposals` and `fleet_audit` tables used by
 the charging workflow in `backend/fleet`.
+Migration 004 replaces only `fleet_proposals_payload_check` with the two-action
+allowlist (`set_charging`, `reassign_unstarted_job`). Existing proposal/audit JSON,
+execution history, state consistency and the migration ledger are preserved.
+The new request is stored in the immutable proposal's `Reassignment` value;
+historical SetCharging `Request` payloads remain readable without rewriting.
+There is no job-state or incident persistence migration.
 
 pgx is pinned to **v5.11.0**, verified against the
 [official stable release](https://github.com/jackc/pgx/releases/tag/v5.11.0).

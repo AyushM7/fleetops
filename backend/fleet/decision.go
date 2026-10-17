@@ -6,7 +6,6 @@ import (
 
 	"github.com/AyushM7/fleetops/backend/db"
 	"github.com/AyushM7/fleetops/backend/proposal"
-	"github.com/AyushM7/fleetops/backend/safety"
 	"github.com/AyushM7/fleetops/backend/sim"
 )
 
@@ -71,7 +70,7 @@ func (s *Service) execute(tx *db.Tx, result Result, operator proposal.OperatorId
 	denied := s.executionGate(tx.Context(), result.Proposal, operator)
 	if denied == nil {
 		result.ExecutionAttempted = true
-		if err := s.commander.SetCharging(result.Proposal.Request.RobotID, result.Proposal.Request.StationID); err != nil {
+		if err := s.executeCommand(result.Proposal); err != nil {
 			result.Execution, denied = Failed, ErrExecution
 		} else {
 			result.Execution = Succeeded
@@ -100,7 +99,7 @@ func (s *Service) executionGate(ctx context.Context, p proposal.Proposal, operat
 	if !s.authorize(ctx, operator) {
 		return ErrUnauthorized
 	}
-	if err := safety.PreflightSetCharging(struct{ sim.Reader }{Reader: s.commander}, p.Request); err != nil {
+	if err := proposal.Preflight(struct{ sim.Reader }{Reader: s.commander}, p); err != nil {
 		return err
 	}
 	now := s.clock().UTC()
@@ -119,4 +118,16 @@ func (s *Service) executionGate(ctx context.Context, p proposal.Proposal, operat
 func deniedResult(p proposal.Proposal, attempt proposal.Attempt, operator proposal.OperatorIdentity, at time.Time, reason error) proposal.Result {
 	event := proposal.DecisionEvent{Attempt: attempt, At: at, Operator: operator, Before: p.State, Proposal: p, Reason: reason.Error()}
 	return proposal.Result{Proposal: p, Event: event}
+}
+
+func (s *Service) executeCommand(p proposal.Proposal) error {
+	switch p.Action {
+	case proposal.SetCharging:
+		return s.commander.SetCharging(p.Request.RobotID, p.Request.StationID)
+	case proposal.ReassignUnstartedJob:
+		r := p.Reassignment
+		return s.commander.ReassignUnstartedJob(r.JobID, r.FromRobotID, r.ToRobotID)
+	default:
+		return proposal.ErrInvalidAction
+	}
 }

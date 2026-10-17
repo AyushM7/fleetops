@@ -41,7 +41,9 @@ try {
         go build -o "$agentRoot/dist/p400-server.exe" ./cmd/server
         Assert-Exit 'Build Go backend'
         # Serialize packages and t.Parallel tests sharing the migration lock; explicit concurrency tests still run their workers.
-        docker run --rm --network "container:$container" --volume "${repoRoot}/backend:/workspace:ro" --workdir /workspace --env 'FLEETOPS_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/fleetops_p400?sslmode=disable' --env FLEETOPS_REQUIRE_DB=1 golang:1.27.1 go test -p 1 -parallel 1 -race ./incident/... ./db/... ./fleet/... ./graphql/... ./cmd/server/... -count=1
+        # Git's Windows checkout uses CRLF for the byte-compared JSON goldens.
+        # Normalize only an ephemeral container copy; repository fixtures stay untouched.
+        docker run --rm --network "container:$container" --volume "${repoRoot}/backend:/workspace:ro" --workdir /workspace --env 'FLEETOPS_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/fleetops_p400?sslmode=disable' --env FLEETOPS_REQUIRE_DB=1 golang:1.27.1 sh -c 'cp -a /workspace /tmp/fleetops-test && cd /tmp/fleetops-test && sed -i "s/\r$//" sim/testdata/golden_*.json && go test -p 1 -parallel 1 -race -tags fleetops_test ./... -count=1'
         Assert-Exit 'Go integration tests'
     } finally { Pop-Location }
     $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
@@ -64,7 +66,12 @@ try {
     } finally { Pop-Location }
     $env:FLEETOPS_AGENT_CONTRACT_CHECK = '1'
     Push-Location "$repoRoot/backend"
-    try { go test ./graphql/... -run '^TestAgentIncidentHTTPClient$' -count=1 -v; Assert-Exit 'Agent Go incident HTTP contract check' } finally { Pop-Location }
+    try {
+        go test ./graphql/... -run '^TestAgentIncidentHTTPClient$' -count=1 -v
+        Assert-Exit 'Agent Go incident HTTP contract check'
+        go test -tags fleetops_test ./fleet/... -run '^TestIntegrationGraphQLReassignmentRecovery$' -count=1 -v
+        Assert-Exit 'Agent Go reassignment approval workflow check'
+    } finally { Pop-Location }
 } finally {
     if ($serverProcess -and !$serverProcess.HasExited) { Stop-Process -Id $serverProcess.Id }
     if ($started) { docker stop $container | Out-Null }

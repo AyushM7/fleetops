@@ -20,10 +20,13 @@ export async function submitReviewedAction(api: FleetAPI, snapshot: FleetState, 
       return current;
     },
     submitCharging: input => api.submitCharging(input),
+    submitReassignment: input => api.submitReassignment(input),
   }, options.allowSubmit === true, options.demo);
   if (action && options.allowSubmit) {
-    await session.submit({ robotId: action.robotId, stationId: action.stationId,
-      expiresAt: new Date((options.now?.() ?? new Date()).getTime() + 60_000).toISOString() });
+    const expiresAt = new Date((options.now?.() ?? new Date()).getTime() + 60_000).toISOString();
+    await session.submit(action.action === "SetCharging"
+      ? { robotId: action.robotId, stationId: action.stationId, expiresAt }
+      : { jobId: action.jobId, fromRobotId: action.fromRobotId, toRobotId: action.toRobotId, expiresAt });
   }
   return { proposal: session.status(), submissionCheck };
 }

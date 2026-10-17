@@ -16,7 +16,8 @@ export function validateSnapshot(input: unknown): FleetState {
   if (!parsed.success) throw new GroundingError();
   const state = parsed.data;
   if (new Set(state.robots.map(r => r.id)).size !== state.robots.length ||
-      new Set(state.stations.map(s => s.id)).size !== state.stations.length) throw new GroundingError();
+      new Set(state.stations.map(s => s.id)).size !== state.stations.length ||
+      new Set(state.jobs.map(j => j.id)).size !== state.jobs.length) throw new GroundingError();
   const references = new Set<string>();
   for (const incident of state.activeIncidents) {
     const key = JSON.stringify(snapshotReference(state, incident));
@@ -24,7 +25,24 @@ export function validateSnapshot(input: unknown): FleetState {
     if (references.has(key) || !robot || !sameFacts(robot, incident.telemetry)) throw new GroundingError();
     references.add(key);
   }
+  validateCandidates(state);
   return state;
+}
+function validateCandidates(state: FleetState): void {
+  const seen = new Set<string>();
+  for (const candidate of state.reassignmentCandidates) {
+    const key = JSON.stringify([candidate.jobId, candidate.fromRobotId, candidate.toRobotId]);
+    const source = state.robots.find(r => r.id === candidate.fromRobotId);
+    const recipient = state.robots.find(r => r.id === candidate.toRobotId);
+    const job = state.jobs.find(j => j.id === candidate.jobId);
+    if (seen.has(key) || !source || !recipient || source.id === recipient.id || !job ||
+        source.status !== "moving" || source.battery < 30 || !source.blocked || source.jobId !== job.id ||
+        !state.activeIncidents.some(i => i.robotId === source.id && i.type === "traffic_blocked") ||
+        job.status !== "assigned" || job.assignedRobot !== source.id || (source.x === job.fromX && source.y === job.fromY) ||
+        recipient.status !== "idle" || recipient.jobId !== "" || recipient.battery < Math.max(30, candidate.requiredBattery) ||
+        state.robots.some(r => r.id !== source.id && r.jobId === job.id)) throw new GroundingError();
+    seen.add(key);
+  }
 }
 export function observedFacts(state: FleetState): AgentResult["observedFacts"] {
   return { referenceScope: "snapshot",
@@ -52,7 +70,17 @@ export function validateReasoning(input: unknown, state: FleetState, demo?: { ro
   const action = reasoning.proposedAction;
   if (!action) return reasoning;
   const supported = observeFleet(snapshot, demo).recommendedAction;
-  if (!supported || action.robotId !== supported.robotId || action.stationId !== supported.stationId ||
+  if (!supported || action.action !== supported.action || action.evidence.tick !== snapshot.tick) throw new GroundingError();
+  if (action.action === "ReassignUnstartedJob") {
+    if (supported.action !== action.action || action.jobId !== supported.jobId || action.fromRobotId !== supported.fromRobotId || action.toRobotId !== supported.toRobotId ||
+        !sameFacts(action.evidence.source, snapshot.robots.find(r => r.id === action.fromRobotId)) ||
+        !sameFacts(action.evidence.recipient, snapshot.robots.find(r => r.id === action.toRobotId)) ||
+        !sameFacts(action.evidence.job, snapshot.jobs.find(j => j.id === action.jobId)) ||
+        !sameFacts(action.evidence.candidate, snapshot.reassignmentCandidates.find(c => c.jobId === action.jobId && c.fromRobotId === action.fromRobotId && c.toRobotId === action.toRobotId)) ||
+        !snapshot.activeIncidents.some(i => i.type === "traffic_blocked" && i.robotId === action.fromRobotId && sameFacts(snapshotReference(snapshot, i), action.evidence.reference))) throw new GroundingError();
+    return reasoning;
+  }
+  if (supported.action !== "SetCharging" || action.robotId !== supported.robotId || action.stationId !== supported.stationId ||
       action.purpose !== (demo ? "demonstration" : "routine_charging") || action.evidence.tick !== snapshot.tick ||
       !sameFacts(action.evidence.robot, snapshot.robots.find(r => r.id === action.robotId)) ||
       !sameFacts(action.evidence.station, snapshot.stations.find(s => s.id === action.stationId))) throw new GroundingError();
