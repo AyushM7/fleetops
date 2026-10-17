@@ -1,3 +1,5 @@
+import { authentication } from "./demo";
+
 export interface Proposal {
   id: string; action: "set_charging" | "reassign_unstarted_job"; robotId: string; stationId: string;
   jobId: string; fromRobotId: string; toRobotId: string;
@@ -30,8 +32,8 @@ async function request(token: string, query: string, variables: Record<string, u
   if (signal.aborted) controller.abort();
   const timeout = setTimeout(cancel, 8000);
   try {
-    const response = await fetch("/graphql", { method: "POST", credentials: "omit", cache: "no-store", redirect: "error", signal: controller.signal,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ query, variables }) });
+    const response = await fetch("/graphql", { method: "POST", ...authentication(token), cache: "no-store", redirect: "error", signal: controller.signal,
+      body: JSON.stringify({ query, variables }) });
     if (response.status === 401 || response.status === 403) throw new ProposalError("authentication");
     if (!response.ok) return unavailable();
     const body: unknown = await response.json();

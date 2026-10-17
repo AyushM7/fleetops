@@ -29,6 +29,7 @@ type demoAudit struct {
 }
 type demoEvidence struct {
 	ModelMode                 string
+	Decision                  string
 	ProposalID                string
 	AuditSchema               string
 	NoExecutionBeforeApproval bool
@@ -145,19 +146,35 @@ func TestPhase4AcceptanceDemo(t *testing.T) {
 	if err := json.Unmarshal([]byte(tokenJSON), &tokens); err != nil {
 		t.Fatal(err)
 	}
+	backendHandler := graphql.NewHandler(dashboardFixture{Service: main, layout: layout}, a)
 	mux := http.NewServeMux()
-	mux.Handle("/graphql", graphql.NewHandler(dashboardFixture{Service: main, layout: layout}, a))
-	mux.Handle("/", http.FileServer(http.Dir(filepath.Join(root, "web", "dist"))))
+	mux.Handle("/graphql", backendHandler)
+
 	server := httptest.NewServer(mux)
 	defer server.Close()
-	privateFile := filepath.Join(runDir, "session.private.json")
-	saveDemoJSON(t, privateFile, map[string]string{"url": server.URL, "operatorToken": tokens["operator"], "viewerToken": tokens["viewer"]})
+	if os.Getenv("FLEETOPS_LOCAL_DEMO") != "1" {
+		t.Fatal("explicit -LocalDemo is required")
+	}
+	gateway, err := newDemoGateway(backendHandler, tokens["operator"], filepath.Join(root, "web", "dist"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	browser := httptest.NewUnstartedServer(gateway)
+	gateway.origin = "http://" + browser.Listener.Addr().String()
+	browser.Config.ReadHeaderTimeout = 5 * time.Second
+	browser.Config.IdleTimeout = 30 * time.Second
+	browser.Config.MaxHeaderBytes = 16384
+	browser.Start()
+	defer browser.Close()
+	defer gateway.close()
+	privateFile := filepath.Join(runDir, "session.json")
+	saveDemoJSON(t, privateFile, map[string]string{"url": browser.URL})
 	defer os.Remove(privateFile)
 	cmd := exec.Command("node", filepath.Join(root, "agent", "scripts", "phase4-demo-reasoning.mjs"), "--submit")
 	cmd.Env = append(os.Environ(), "FLEETOPS_P405_URL="+server.URL+"/graphql", "FLEETOPS_P405_PROPOSER_TOKEN="+tokens["proposer"], "FLEETOPS_P405_REASONING_FILE="+filepath.Join(runDir, "reasoning.json"))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("local Mastra test adapter failed: %v\n%s", err, output)
+		t.Fatalf("local Mastra test adapter failed: %v", err)
 	}
 	var submitted struct {
 		ProposalID               string
@@ -183,11 +200,14 @@ func TestPhase4AcceptanceDemo(t *testing.T) {
 		t.Log("PASS: real Go incident, identical blocked baseline, local Mastra adapter, opted-in pending proposal, committed create audit, no execution; human approval NOT tested")
 		return
 	}
-	fmt.Printf("READY: %s · proposal %s · deterministic local adapter, NOT live LLM\n", server.URL, submitted.ProposalID)
+	fmt.Printf("READY: %s · proposal %s · deterministic local adapter, NOT live LLM\n", browser.URL, submitted.ProposalID)
 	deadline := time.Now().Add(20 * time.Minute)
 	for time.Now().Before(deadline) {
 		if _, err := os.Stat(filepath.Join(runDir, "stop")); err == nil {
 			return
+		}
+		if _, err := os.Stat(filepath.Join(runDir, "outage")); err == nil {
+			browser.Close()
 		}
 		row, err := main.ReadProposal(context.Background(), submitted.ProposalID)
 		if err != nil {
@@ -195,10 +215,17 @@ func TestPhase4AcceptanceDemo(t *testing.T) {
 		}
 		if row != nil && row.Proposal.State == proposal.Approved && row.Execution == fleet.Succeeded {
 			evidence.OperatorDecisionObserved = true
+			evidence.Decision = "approved"
 			break
 		}
 		if row != nil && (row.Proposal.State == proposal.Rejected || row.Proposal.State == proposal.Expired) {
-			t.Fatal("human review rejected or expired; recovery not demonstrated")
+			evidence.Decision = string(row.Proposal.State)
+			evidence.OperatorDecisionObserved = row.Proposal.State == proposal.Rejected
+			evidence.Audit = demoAudits(t, pool, submitted.ProposalID)
+			saveDemoJSON(t, evidencePath, evidence)
+			fmt.Println("REVIEW CLOSED: rejected or expired; no recovery execution. Create stop file to shut down.")
+			waitDemoStop(runDir, deadline, browser.Close)
+			return
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
@@ -235,12 +262,16 @@ func TestPhase4AcceptanceDemo(t *testing.T) {
 	}
 	saveDemoJSON(t, evidencePath, evidence)
 	fmt.Println("RECOVERY VERIFIED: R3 delivered J1; baseline remains assigned/blocked at tick 242; committed create/approve/execute audits found. Create stop file to shut down.")
+	waitDemoStop(runDir, deadline, browser.Close)
+}
+
+func waitDemoStop(runDir string, deadline time.Time, closeServer func()) {
 	for time.Now().Before(deadline) {
 		if _, err := os.Stat(filepath.Join(runDir, "stop")); err == nil {
 			return
 		}
 		if _, err := os.Stat(filepath.Join(runDir, "outage")); err == nil {
-			server.Close()
+			closeServer()
 		}
 		time.Sleep(250 * time.Millisecond)
 	}

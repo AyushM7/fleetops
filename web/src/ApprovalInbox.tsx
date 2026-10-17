@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from "react";
 import { decideProposal, fetchProposal, pollPending, ProposalError, type Decision, type DecisionResult, type InboxFeed, type InboxPolling, type Proposal } from "./proposals";
+import { isLocalDemo } from "./demo";
 
 export interface Receipt {
   id: string; decision: Decision; result: DecisionResult | null;
@@ -51,7 +52,7 @@ export function InboxView({ feed, busy, receipt, runtimeAvailable, decide, refre
     {feed.phase === "ready" && feed.proposals.length === 0 && <p className="inbox-message">No pending proposals in this runtime.</p>}
     {feed.phase !== "forbidden" && feed.proposals.length > 0 && <ul className="proposal-list">{feed.proposals.map(p => <li className="proposal-card" key={p.id} data-proposal-id={p.id}>
       <div className="proposal-summary"><div>{p.action === "reassign_unstarted_job" ? <><h3>Job {p.jobId}: {p.fromRobotId} <span>→ {p.toRobotId}</span></h3><p>Requested action: <strong>ReassignUnstartedJob</strong></p><p>Transfer an uncollected job to another robot. Approval does not complete delivery.</p></> : <><h3>{p.robotId} <span>→ {p.stationId}</span></h3><p>Requested action: <strong>SetCharging</strong></p><p>Start charging at the robot’s current station.</p></>}</div><span className="status">{p.state}</span></div>
-      <code>{p.id}</code><p className="rationale">No rationale recorded</p>
+      <code>{p.id}</code><p className="rationale">{isLocalDemo() ? "AI recommendation · Deterministic local adapter. Review the requested action and incident telemetry before deciding." : "No rationale recorded"}</p>
       <p className="proposal-meta">Submitted by {p.submittedBy || "Not recorded"} · Expires {new Date(p.expiresAt).toLocaleString()}</p>
       {Date.parse(p.expiresAt) <= Date.now() && <p className="decision-error">Expiration time has passed. Go will recheck expiration before deciding.</p>}
       <div className="proposal-actions"><button className="approve-button" disabled={!allowed || !p.currentRuntime || p.state !== "pending" || Date.parse(p.expiresAt) <= Date.now()} onClick={() => decide(p, "approve")}>{busy === p.id ? "Processing…" : "Approve"}</button><button className="reject-button" disabled={!allowed || !p.currentRuntime || p.state !== "pending" || Date.parse(p.expiresAt) <= Date.now()} onClick={() => decide(p, "reject")}>Reject</button><span>Go revalidates before execution</span></div>

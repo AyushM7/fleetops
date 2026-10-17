@@ -3,6 +3,7 @@ import { pollFleet, type Feed, type FleetSnapshot, type Robot } from "./fleet";
 import ApprovalInbox from "./ApprovalInbox";
 import { Operations } from "./Operations";
 import "./styles.css";
+import { isLocalDemo } from "./demo";
 
 const emptyFeed: Feed = { phase: "loading", snapshot: null, updatedAt: null };
 const label = (status: string) => status.charAt(0).toUpperCase() + status.slice(1);
@@ -60,7 +61,8 @@ export function Dashboard({ feed }: { feed: Feed }): JSX.Element {
 }
 
 export default function App(): JSX.Element {
-  const [token, setToken] = useState("");
+  const [demo] = useState(isLocalDemo);
+  const [token, setToken] = useState(() => isLocalDemo() ? "local-demo-session" : "");
   const [draft, setDraft] = useState("");
   const [authError, setAuthError] = useState(false);
   const [feed, setFeed] = useState<Feed>(emptyFeed);
@@ -75,9 +77,9 @@ export default function App(): JSX.Element {
   const disconnect = () => { setToken(""); setDraft(""); setFeed(emptyFeed); setAuthError(false); };
   return <div className="app-shell">
     <header className="topbar"><a className="brand" href="/" aria-label="FleetOps home"><span className="brand-mark">F</span>FleetOps<span className="brand-divider" /> <span className="brand-context">Warehouse operations</span></a>
-      {token && <div className="connection"><span className={`connection-badge ${feed.phase === "live" ? "connected" : ""}`}><i />{feed.phase === "live" ? "Connected" : feed.phase === "loading" ? "Connecting" : "Disconnected"}</span><a className="inbox-link" href="#approval-inbox">Approvals</a><button className="quiet-button" onClick={disconnect}>Disconnect</button></div>}
+      {token && <div className="connection"><span className={`connection-badge ${feed.phase === "live" ? "connected" : ""}`}><i />{feed.phase === "live" ? "Connected" : feed.phase === "loading" ? "Connecting" : "Disconnected"}</span><a className="inbox-link" href="#approval-inbox">Approvals</a>{!demo && <button className="quiet-button" onClick={disconnect}>Disconnect</button>}</div>}
     </header>
-    <main>{!token ? <section className="login-panel"><p className="eyebrow">LIVE WAREHOUSE</p><h1>Your fleet, in view.</h1><p>Connect to the running simulator with your bearer token.</p>
+    <main>{demo && <div className="notice" role="status">Demo Mode · Local simulation · Deterministic AI recommendation · Approval is always your choice.</div>}{demo && !token ? <div className="notice notice-error" role="alert">Demo session ended. Reload the local demo URL while the runner is active.</div> : !token ? <section className="login-panel"><p className="eyebrow">LIVE WAREHOUSE</p><h1>Your fleet, in view.</h1><p>Connect to the running simulator with your bearer token.</p>
       <form onSubmit={connect}><label htmlFor="viewer-token">Bearer token</label><input id="viewer-token" type="password" autoComplete="off" spellCheck={false} value={draft} onChange={event => setDraft(event.target.value)} placeholder="Paste a viewer or operator token" required /><button className="primary-button" type="submit">Connect to fleet <span aria-hidden="true">→</span></button></form>
       {authError && <p className="auth-error" role="alert">Authentication failed. Check your token and connect again.</p>}
       <p className="privacy-note">Viewer credentials monitor the fleet; operator credentials enable the approval inbox. Your token stays in memory for this tab and is cleared on disconnect or refresh.</p></section> : <><Dashboard feed={feed} /><ApprovalInbox token={token} runtimeAvailable={feed.phase === "live" && feed.snapshot?.poisoned === false} onUnauthorized={onUnauthorized} onDecision={onDecision} /></>}</main>
