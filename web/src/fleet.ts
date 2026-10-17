@@ -1,3 +1,5 @@
+import { authentication } from "./demo";
+
 export type RobotStatus = "idle" | "moving" | "charging" | "faulted" | "offline";
 export type CellKind = "free" | "wall" | "aisle" | "station";
 export interface Robot { id: string; x: number; y: number; battery: number; status: RobotStatus; jobId: string; waitTicks: number; blocked: boolean }
@@ -68,8 +70,8 @@ function validateOperationalData(value: Record<string, unknown>, width: number, 
 
 export async function fetchFleet(token: string, signal: AbortSignal, request: typeof fetch = fetch): Promise<FleetSnapshot> {
   const response = await request("/graphql", {
-    method: "POST", credentials: "omit", cache: "no-store", redirect: "error", signal,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ query: fleetQuery }),
+    method: "POST", ...authentication(token), cache: "no-store", redirect: "error", signal,
+    body: JSON.stringify({ query: fleetQuery }),
   });
   if (response.status === 401 || response.status === 403) throw new FleetError("authentication");
   if (!response.ok) throw new FleetError("unavailable");
