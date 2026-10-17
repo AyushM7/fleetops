@@ -5,6 +5,7 @@ package fleet_test
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -86,7 +87,7 @@ func (g *demoGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "demo session ended", 401)
 		return
 	}
-	if r.URL.Path == "/graphql" {
+	if r.URL.Path == "/graphql" || r.URL.Path == "/demo/status" || r.URL.Path == "/demo/restart" {
 		g.graphql(w, r)
 		return
 	}
@@ -143,6 +144,13 @@ func (g *demoGateway) graphql(w http.ResponseWriter, r *http.Request) {
 	if !valid || operator == "" {
 		http.Error(w, "demo session required", 401)
 		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/demo/") {
+		body, err := io.ReadAll(io.LimitReader(r.Body, 3))
+		if err != nil || string(body) != "{}" || r.URL.RawQuery != "" {
+			http.Error(w, "fixed demo operation requires an empty object", 400)
+			return
+		}
 	}
 	forward := r.Clone(r.Context())
 	forward.Header = r.Header.Clone()

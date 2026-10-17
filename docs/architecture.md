@@ -1,6 +1,20 @@
 # Architecture
 
-Phase 2 adds deterministic navigation and job assignment to the Go simulator. Later phases add operator command execution, APIs, and application integration; local PostgreSQL remains separate from simulator state.
+FleetOps combines a deterministic Go simulator, Go safety/proposal lifecycle, PostgreSQL workflow persistence, authenticated GraphQL, TypeScript/Mastra reasoning and a React operator review interface. Phases 0–5 and the DEMO-01 local gateway are implemented; richer Phase 6 dashboard features and Phase 7 deployment remain future work.
+
+## Current service and approval boundary
+
+**LLM proposes. Go validates. Human approves. Go executes.**
+
+[`fleet.Service`](../backend/fleet/service.go) owns the simulator and serializes snapshots, ticks, submissions and decisions with one mutex. Detached state is exposed through [GraphQL](../backend/graphql/resolver.go). The [agent tools](../agent/src/tools.ts) can read and submit a bounded proposal, but cannot approve, execute or inject faults. The host checks snapshot grounding and supported actions; Go independently controls operational admission.
+
+An independent authenticated operator reviews canonical pending proposals. [`decision.go`](../backend/fleet/decision.go) checks runtime ownership, identity, expiry and preflight again before executing `SetCharging` or `ReassignUnstartedJob`. Proposal creation does not execute. Transfer success is distinct from delivery. [`storage.go`](../backend/fleet/storage.go) persists proposals and domain audit attempts, not running simulator state. SQL uncertainty poisons the runtime because simulator memory cannot roll back with a database transaction.
+
+The [local demo](phase4-demo.md) uses a separate loopback gateway and deterministic reasoning adapter. Normal-server automatic ticking is optional and disabled by default; the demo scripts its own tick progression. There are no runtime dashboard lifecycle controls or playback APIs. See [Phase 5 evaluation](phase5-evaluation-report.md) and [known limitations](known-limitations.md) for evidence boundaries.
+
+## Phase 2 closeout evidence
+
+The following closeout records historical Phase 2 acceptance, not a fresh whole-repository test result. DEMO-02's later native Windows run reported golden-file CRLF mismatches and no soak failure; see its [verification record](demo-inventory.md#10-tests-ci-and-inspection-verification). Neither observation silently resolves the historical limitation below.
 
 Phase 2 feature implementation is complete, but Phase 2 is not fully accepted. The restored stable baseline passes S1 5/5, S2 10/10 (including the scoped historical exception), S3 4/5, and S4 10/10. S3/seed99 retains a genuine108-tick healthy-traffic wait exceeding WaitCap40; the acceptance test remains enabled. The rejected one-cell navigation lookahead was removed after regressing S1. No further simulator correction is part of closeout.
 
@@ -20,7 +34,7 @@ Autonomous charging processes eligible idle, jobless robots by battery ascending
 
 With AutoCharge enabled, ReserveBattery is the single assignment-admission contingency and must be in [5,25]. Subsequent job routes budget remaining pickup/delivery and charging exit with a floor of one battery unit, spending that contingency rather than adding it again. Relocation replacements also budget their exit; charging replacements retain one on arrival. Post-assignment exit estimates keep parked obstacles en route but ignore occupancy/reservation at the destination station, as approved for Step 1; assignment still requires a currently free station. Pickup movement is charged exactly once before planning delivery. The existing exact-zero charging-arrival safety net remains unchanged for pre-existing trips. Unaffordable replacement routes preserve the previous route, job, and reservation; waiting consumes no battery. Future legs and exits use parked-obstacle estimates and do not reserve or guarantee future station availability. AutoCharge=false retains legacy job-route behavior.
 
-Initial pickup/delivery routes avoid offline, faulted, and charging robots and their aisles. Replanning avoids all other robots and occupied aisles, exempting the planning robot's own cell and aisle. A blocked step stays stationary without battery drain, increments waitTicks once, and replans at each ReplanAfter multiple. Successful replanning replaces the route for the next tick without resetting waiting; failed replanning retains the old route. BlockedAfter sets blocked. Movement or transition to a non-moving status clears waiting. There is no automatic deadlock resolution or traffic-generated fault history.
+Initial pickup/delivery routes avoid offline, faulted, and charging robots and their aisles. Replanning avoids all other robots and occupied aisles, exempting the planning robot's own cell and aisle. A blocked step stays stationary without battery drain, increments waitTicks once, and replans at each ReplanAfter multiple. Successful replanning replaces the route for the next tick without resetting waiting; failed replanning retains the old route. BlockedAfter sets blocked. Movement or transition to a non-moving status clears waiting. Recovery-enabled configurations add the bounded retreat and idle-blocker clearing policies described below; these do not guarantee resolution of every traffic delay. Traffic blockage does not create fault-history records.
 
 | Call class | Operations | Boundary |
 | --- | --- | --- |
@@ -28,13 +42,13 @@ Initial pickup/delivery routes avoid offline, faulted, and charging robots and t
 | READ | `Snapshot`, `CellAt` | Snapshot owns deep copies; grid lookup is read-only |
 | READ | `PlanRoute`, `AisleOccupant`, `OccupiedAislesOnRoute` | Static A* routing and physical aisle occupancy; no state mutation |
 | DRIVER | `InjectLowBattery`, `InjectUnresponsive`, `InjectAisleConflict` | Trusted tests, evaluations, and scenario triggers only; never exposed to the agent |
-| COMMAND | `SetCharging` | Future operator execution requires validation and approval |
+| COMMAND | `SetCharging`, `ReassignUnstartedJob` | Operator execution requires Go validation and independent approval |
 
-`Reader` exposes the READ operations. `Commander` embeds Reader and adds SetCharging; `Driver` embeds Reader and adds the three trusted injectors. Compile-time checks enforce Sim conformance. The exported-method guard requires every exported Sim method to match one of these role interfaces, except Tick; import and randomness restrictions remain enforced.
+`Reader` exposes observations and previews. `Commander` embeds Reader and adds SetCharging and ReassignUnstartedJob; `Driver` embeds Reader and adds the three trusted injectors. These Go capabilities are not agent tools. Compile-time checks enforce Sim conformance. The exported-method guard requires every exported Sim method to match one of these role interfaces, except Tick; import and randomness restrictions remain enforced.
 
 Snapshots include robot waitTicks/blocked, station reservedBy, and an ordered aisles array with zero-based IDs. Moving without a job requires enabled AutoCharge and a valid station reservation (I6); reservations must belong to charging travelers, be unique per robot, and never coexist with occupancy (I16). Aisle occupancy derives from current robot positions within the configured Y range and selects the lowest numeric robot ID if inconsistent input contains multiple occupants. Tick refreshes stored aisle records after movement; Snapshot and occupancy READs recompute without mutating state. PlanRoute adapts Config to routing.Grid, permits station endpoints, excludes station transit, and ignores robots. Route occupancy results contain distinct ascending aisle IDs whose selected occupant differs from the caller. Other traffic invariants enforce wall avoidance (I2), unique cells (I12), exclusive aisles (I13), waiting consistency (I14), and physical occupancy snapshots (I15).
 
-Background dispatch must not become a bypass around future safety validation. Phase 3 owns the validator, executor, operator approval, auditing, and reassignment under the frozen safety rules. Sim is not goroutine-safe; Phase 3 will serialize access. Agent access will use a later GraphQL API, never direct simulator imports.
+Background dispatch remains simulator dynamics, separate from operator commands under the frozen safety rules. The implemented fleet service serializes access to the non-goroutine-safe Sim. Agent access uses authenticated GraphQL, never direct simulator imports.
 
 Unresponsive countdowns run before other robot behavior, even while faulted. Expiry makes the robot offline, overriding faulted without another movement, drain, or charging step. Offline robots retain their jobs and occupied stations, while interrupted charge trips release reservations. Status transitions, scheduling, and autonomous charging create no fault records; successful trusted injections do.
 

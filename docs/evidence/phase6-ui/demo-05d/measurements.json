@@ -1,0 +1,212 @@
+[
+  {
+    "label": "after-1920",
+    "boxes": {
+      ".approve-button": {
+        "bottom": 646.7999877929688,
+        "height": 48,
+        "left": 1309.862548828125,
+        "right": 1582.3250427246094,
+        "top": 598.7999877929688,
+        "width": 272.4624938964844,
+        "x": 1309.862548828125,
+        "y": 598.7999877929688
+      },
+      ".cell": {
+        "bottom": 288.19273376464844,
+        "height": 100.7955322265625,
+        "left": 254.42820739746097,
+        "right": 355.22373962402344,
+        "top": 187.3972015380859,
+        "width": 100.7955322265625,
+        "x": 254.42820739746097,
+        "y": 187.3972015380859
+      },
+      ".operator-context": {
+        "bottom": 1080,
+        "height": 1016,
+        "left": 1269.862548828125,
+        "right": 1904.800048828125,
+        "top": 64,
+        "width": 634.9375,
+        "x": 1269.862548828125,
+        "y": 64
+      },
+      ".reject-button": {
+        "bottom": 646.7999877929688,
+        "height": 48,
+        "left": 1592.3250732421875,
+        "right": 1864.8000793457031,
+        "top": 598.7999877929688,
+        "width": 272.4750061035156,
+        "x": 1592.3250732421875,
+        "y": 598.7999877929688
+      },
+      ".warehouse-panel": {
+        "bottom": 1080,
+        "height": 1016,
+        "left": 0,
+        "right": 1269.862548828125,
+        "top": 64,
+        "width": 1269.862548828125,
+        "x": 0,
+        "y": 64
+      }
+    },
+    "client": 1905,
+    "scroll": 1905,
+    "styles": {
+      ".approve-button": {
+        "background": "rgb(232, 233, 235)",
+        "color": "rgb(23, 24, 27)",
+        "fill": "rgb(0, 0, 0)",
+        "stroke": "none"
+      },
+      ".cell-station": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(245, 245, 245)",
+        "fill": "rgb(57, 58, 63)",
+        "stroke": "rgb(196, 197, 202)"
+      },
+      ".cell-wall": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(245, 245, 245)",
+        "fill": "rgb(102, 103, 108)",
+        "stroke": "rgb(121, 122, 128)"
+      },
+      ".dashboard": {
+        "background": "rgb(11, 12, 14)",
+        "color": "rgb(245, 245, 245)",
+        "fill": "rgb(0, 0, 0)",
+        "stroke": "none"
+      },
+      ".operator-context": {
+        "background": "rgb(20, 21, 24)",
+        "color": "rgb(245, 245, 245)",
+        "fill": "rgb(0, 0, 0)",
+        "stroke": "none"
+      },
+      ".reject-button": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(232, 233, 235)",
+        "fill": "rgb(0, 0, 0)",
+        "stroke": "none"
+      },
+      ".robot-moving .robot-body": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(245, 245, 245)",
+        "fill": "rgb(86, 87, 93)",
+        "stroke": "rgb(239, 189, 104)"
+      }
+    },
+    "viewport": [
+      1920,
+      1080
+    ]
+  },
+  {
+    "label": "after-1280",
+    "boxes": {
+      ".approve-button": {
+        "bottom": 607.7875366210938,
+        "height": 48,
+        "left": 871.2000122070312,
+        "right": 1049.000015258789,
+        "top": 559.7875366210938,
+        "width": 177.8000030517578,
+        "x": 871.2000122070312,
+        "y": 559.7875366210938
+      },
+      ".cell": {
+        "bottom": 222.6464958190918,
+        "height": 60.45937728881836,
+        "left": 193.3658447265625,
+        "right": 253.8252220153809,
+        "top": 162.18711853027344,
+        "width": 60.45937728881836,
+        "x": 193.3658447265625,
+        "y": 162.18711853027344
+      },
+      ".operator-context": {
+        "bottom": 868.1875,
+        "height": 804.1875,
+        "left": 843.2000122070312,
+        "right": 1264.8000183105469,
+        "top": 64,
+        "width": 421.6000061035156,
+        "x": 843.2000122070312,
+        "y": 64
+      },
+      ".reject-button": {
+        "bottom": 607.7875366210938,
+        "height": 48,
+        "left": 1059,
+        "right": 1236.8000030517578,
+        "top": 559.7875366210938,
+        "width": 177.8000030517578,
+        "x": 1059,
+        "y": 559.7875366210938
+      },
+      ".warehouse-panel": {
+        "bottom": 720,
+        "height": 656,
+        "left": 0,
+        "right": 843.2000122070312,
+        "top": 64,
+        "width": 843.2000122070312,
+        "x": 0,
+        "y": 64
+      }
+    },
+    "client": 1265,
+    "scroll": 1265,
+    "styles": {
+      ".approve-button": {
+        "background": "rgb(232, 233, 235)",
+        "color": "rgb(23, 24, 27)",
+        "fill": "rgb(0, 0, 0)",
+        "stroke": "none"
+      },
+      ".cell-station": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(245, 245, 245)",
+        "fill": "rgb(57, 58, 63)",
+        "stroke": "rgb(196, 197, 202)"
+      },
+      ".cell-wall": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(245, 245, 245)",
+        "fill": "rgb(102, 103, 108)",
+        "stroke": "rgb(121, 122, 128)"
+      },
+      ".dashboard": {
+        "background": "rgb(11, 12, 14)",
+        "color": "rgb(245, 245, 245)",
+        "fill": "rgb(0, 0, 0)",
+        "stroke": "none"
+      },
+      ".operator-context": {
+        "background": "rgb(20, 21, 24)",
+        "color": "rgb(245, 245, 245)",
+        "fill": "rgb(0, 0, 0)",
+        "stroke": "none"
+      },
+      ".reject-button": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(232, 233, 235)",
+        "fill": "rgb(0, 0, 0)",
+        "stroke": "none"
+      },
+      ".robot-moving .robot-body": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(245, 245, 245)",
+        "fill": "rgb(86, 87, 93)",
+        "stroke": "rgb(239, 189, 104)"
+      }
+    },
+    "viewport": [
+      1280,
+      720
+    ]
+  }
+]

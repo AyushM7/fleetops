@@ -1,0 +1,89 @@
+{
+  "captureMethod": "Direct in-app browser viewport screenshots; original JPEG bytes, no image processing or compositing.",
+  "images": [
+    {
+      "file": "01-before-desktop.jpg",
+      "width": 1425,
+      "height": 990,
+      "bytes": 71560,
+      "sha256": "6b29cb3c12c9811817bb6d97682a63d44bac332c5dc8bbca401a7dc5b02ebfdc"
+    },
+    {
+      "file": "02-before-approval.jpg",
+      "width": 1425,
+      "height": 990,
+      "bytes": 76228,
+      "sha256": "6af3d2744b2e307099614e1c6faac135aa58a34affea44fad56ec0d4cb5fc907"
+    },
+    {
+      "file": "03-after-desktop.jpg",
+      "width": 1425,
+      "height": 990,
+      "bytes": 77895,
+      "sha256": "a7b1cd367280e1b52006b9fefb522e2f17f332ecdad3672264c9b2ceeda920f8"
+    },
+    {
+      "file": "04-after-robot-selected.jpg",
+      "width": 1425,
+      "height": 990,
+      "bytes": 77104,
+      "sha256": "253ef009c5132d999ddab9b8ce7bcde39625b00cfcfa5b31b2b0f13b409ec2e3"
+    },
+    {
+      "file": "05-after-incidents.jpg",
+      "width": 1425,
+      "height": 990,
+      "bytes": 74541,
+      "sha256": "f3b60d57714ab5d7b1ab7c5b89703e74745ac0de57ec5a30351099bd8f5b11e5"
+    },
+    {
+      "file": "06-after-pending-approval.jpg",
+      "width": 1425,
+      "height": 990,
+      "bytes": 72929,
+      "sha256": "ab231c2ed9619bf36fe25ce8a89db4eb5732e31a6957eba91fd7dfb05d7da188"
+    },
+    {
+      "file": "07-after-approved-receipt.jpg",
+      "width": 1425,
+      "height": 990,
+      "bytes": 69926,
+      "sha256": "fe292b74fe2dc95abee4de6f44a614f5b40f98c615f72107b9b23656247ca094"
+    },
+    {
+      "file": "08-after-rejected-receipt.jpg",
+      "width": 1425,
+      "height": 990,
+      "bytes": 58514,
+      "sha256": "70b307eafc3e231c72fd6149ae15ccc5758948cee02c69c8472d0b0ab4d9dc71"
+    },
+    {
+      "file": "09-after-restart-fresh.jpg",
+      "width": 1425,
+      "height": 990,
+      "bytes": 78119,
+      "sha256": "20b1f9db6b8ab7d15f737e58bab858f72759511559f7719c0c3c3b80c92789e8"
+    },
+    {
+      "file": "10-after-tablet.jpg",
+      "width": 805,
+      "height": 1041,
+      "bytes": 50809,
+      "sha256": "39af39c22009c6003e93b6a3856298de7506903a0ed9c5cc90ba512ddb2512d5"
+    },
+    {
+      "file": "11-after-mobile.jpg",
+      "width": 375,
+      "height": 811,
+      "bytes": 38156,
+      "sha256": "a5742a805a761df54548a26bd88837992e7635da2a6f53a95af93e0640d2f61b"
+    },
+    {
+      "file": "12-after-uncertain-receipt.jpg",
+      "width": 1425,
+      "height": 990,
+      "bytes": 72558,
+      "sha256": "e24c4b3cd4d3ef287d2cdc75d883c7cd498ecd523698320d5605343d7f829be0"
+    }
+  ]
+}

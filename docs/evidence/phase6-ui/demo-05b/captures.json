@@ -1,0 +1,65 @@
+[
+  {
+    "file": "after-1280.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 61398,
+    "sha256": "8ff8c75fa22fdc6c64b997436545cdf7ede2e0dff225d630f4fba45795a2f683"
+  },
+  {
+    "file": "after-1920.jpg",
+    "width": 1905,
+    "height": 1072,
+    "bytes": 74335,
+    "sha256": "b5b3667586ee86a6d238c5e9858b406808b4bb3ff6ac384b5b35286db5e72094"
+  },
+  {
+    "file": "after-approved.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 49701,
+    "sha256": "e9c20ba07d6b43bb8561a8efe3b29c8ca51dd07089b444223011bc354f34e9bc"
+  },
+  {
+    "file": "after-mobile.jpg",
+    "width": 375,
+    "height": 811,
+    "bytes": 30497,
+    "sha256": "03cf7861ca0cacf5b8fe5c0be38a27e30b5bb81b6c74b7de38f23d90257d98aa"
+  },
+  {
+    "file": "after-rejected.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 49433,
+    "sha256": "c0b1af1f6f04afc9360e59e1c0f1070dcc05b6061a322922c09ad07ea6f6a18e"
+  },
+  {
+    "file": "after-restart.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 61642,
+    "sha256": "e4c755b73c5491ea815ea689cc03e5c84bb743a59eda15b98834a826fbbbdd0c"
+  },
+  {
+    "file": "after-stale.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 65838,
+    "sha256": "a90e36d613618347b27105a013c57e64042406adda1b56e39ab4b89d36f6204e"
+  },
+  {
+    "file": "after-tablet.jpg",
+    "width": 805,
+    "height": 1158,
+    "bytes": 55543,
+    "sha256": "416a921d22d006fce3e4faa59fff532e230fbeee1be0ae8434a788e88eace49c"
+  },
+  {
+    "file": "before-1280.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 48288,
+    "sha256": "18a0ccfa5c09bd908884cfcb96700091237c439628d487012625877a2a04ed72"
+  }
+]

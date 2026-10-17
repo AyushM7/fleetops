@@ -14,11 +14,12 @@ describe("local demo", () => {
     expect(authentication("normal-token")).toEqual({ credentials: "omit", headers: { "Content-Type": "application/json", Authorization: "Bearer normal-token" } });
     expect(renderToString(<App />)).toContain('type="password"');
   });
-  it("opens directly to the warehouse with an explicit simulation banner", () => {
+  it("opens directly to the warehouse with an explicit simulation disclosure", () => {
     enableDemo();
     const html = renderToString(<App />);
-    expect(html).toContain("Demo Mode");
-    expect(html).toContain("Warehouse overview");
+    expect(html).toContain("Local demo");
+    expect(html).toContain("No live LLM");
+    expect(html).toContain("Loading the warehouse");
     expect(html).toContain("Approval inbox");
     expect(html).not.toContain('type="password"');
     expect(html).not.toContain("Bearer token");

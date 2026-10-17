@@ -1,0 +1,30 @@
+[
+  {
+    "file": "after-1280.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 59770,
+    "sha256": "f711f23302b88ec4531413447d1fdb4fabca856bf2fe8f5390c6854fd6fefc75"
+  },
+  {
+    "file": "after-1920.jpg",
+    "width": 1905,
+    "height": 1053,
+    "bytes": 85349,
+    "sha256": "27eef4ab71be2b15498c97b514376f6f2f697e78f826ef095d89966ce8d301f0"
+  },
+  {
+    "file": "before-1280.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 57797,
+    "sha256": "3a24d60275f48c4f01024913a7645ecb61e09a4329754d3a29929bd30df98ddb"
+  },
+  {
+    "file": "before-1920.jpg",
+    "width": 1905,
+    "height": 1053,
+    "bytes": 83505,
+    "sha256": "751e02476ef087735d419eacf32f4a99644f5acc67007bcbb129f249a857a558"
+  }
+]
