@@ -1,5 +1,15 @@
 # Charging vertical slice
 
+P4-03 adds `SubmitReassignment(ctx, safety.ReassignUnstartedJobRequest, expiresAt)`
+and the `reassign_unstarted_job` action through the same serialized lifecycle.
+All three preflight gates dispatch on the immutable action, and only the final
+approved execution gate may call Commander. Success records the atomic job
+transfer, not delivery. Failed/uncertain persistence still poisons the runtime.
+Jobs and Go-admitted candidates are returned by `ReadState`; neither read exposes
+simulator capabilities. Apply migration 004 first. The charging-specific original
+slice is described below; [P4-03](../../agent/P4-03.md) documents recovery and
+the GraphQL operator demonstration.
+
 `fleet.New(simConfig, seed, pool, clock, authorizer)` creates and exclusively owns
 a simulator. Run `pool.Migrate(ctx)` first. `Submit` accepts only a typed
 `safety.SetChargingRequest` and expiration; the service generates the proposal ID.
@@ -76,6 +86,6 @@ and unauthorized requests, final-gate revalidation, failed command execution,
 and PostgreSQL triggers that fail writes or deferred COMMIT after mutation.
 Failure tests assert poisoning and the absence of a false durable-audit claim.
 
-No SendToCharge, ReassignJob, simulator-tick expiration, GraphQL, incident
-persistence or UI is implemented. Frozen safety rules and Phase 2 behavior remain
-unchanged, including the enabled S3/seed99 soak failure.
+No SendToCharge, automatic reassignment, simulator-tick expiration or incident
+persistence is added. Frozen safety rules and ordinary simulator behavior remain
+unchanged. The existing React UI is not extended for reassignment in P4-03.

@@ -6,12 +6,32 @@ import (
 	"time"
 )
 
+type ActiveIncident struct {
+	RobotID   string `json:"robotId"`
+	Type      string `json:"type"`
+	Severity  string `json:"severity"`
+	Telemetry *Robot `json:"telemetry"`
+}
+
 type FleetState struct {
-	Layout   *WarehouseLayout `json:"layout"`
-	Tick     int              `json:"tick"`
-	Robots   []*Robot         `json:"robots"`
-	Stations []*Station       `json:"stations"`
-	Poisoned bool             `json:"poisoned"`
+	Layout                 *WarehouseLayout         `json:"layout"`
+	Tick                   int                      `json:"tick"`
+	Robots                 []*Robot                 `json:"robots"`
+	Stations               []*Station               `json:"stations"`
+	Poisoned               bool                     `json:"poisoned"`
+	ActiveIncidents        []*ActiveIncident        `json:"activeIncidents"`
+	Jobs                   []*Job                   `json:"jobs"`
+	ReassignmentCandidates []*ReassignmentCandidate `json:"reassignmentCandidates"`
+}
+
+type Job struct {
+	ID            string `json:"id"`
+	Status        string `json:"status"`
+	AssignedRobot string `json:"assignedRobot"`
+	FromX         int    `json:"fromX"`
+	FromY         int    `json:"fromY"`
+	ToX           int    `json:"toX"`
+	ToY           int    `json:"toY"`
 }
 
 type Mutation struct {
@@ -31,6 +51,9 @@ type Proposal struct {
 	Action         string    `json:"action"`
 	RobotID        string    `json:"robotId"`
 	StationID      string    `json:"stationId"`
+	JobID          string    `json:"jobId"`
+	FromRobotID    string    `json:"fromRobotId"`
+	ToRobotID      string    `json:"toRobotId"`
 	CreatedAt      time.Time `json:"createdAt"`
 	ExpiresAt      time.Time `json:"expiresAt"`
 	State          string    `json:"state"`
@@ -40,6 +63,23 @@ type Proposal struct {
 }
 
 type Query struct {
+}
+
+type ReassignUnstartedJobInput struct {
+	JobID       string    `json:"jobId"`
+	FromRobotID string    `json:"fromRobotId"`
+	ToRobotID   string    `json:"toRobotId"`
+	ExpiresAt   time.Time `json:"expiresAt"`
+}
+
+type ReassignmentCandidate struct {
+	JobID             string `json:"jobId"`
+	FromRobotID       string `json:"fromRobotId"`
+	ToRobotID         string `json:"toRobotId"`
+	PickupSteps       int    `json:"pickupSteps"`
+	DeliverySteps     int    `json:"deliverySteps"`
+	ChargingExitSteps int    `json:"chargingExitSteps"`
+	RequiredBattery   int    `json:"requiredBattery"`
 }
 
 type Robot struct {

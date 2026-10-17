@@ -1,5 +1,61 @@
 # Live warehouse dashboard
 
+## P4-04 incidents and job reassignment
+
+The dashboard uses the existing P4-03 API. No backend schema, simulator, safety,
+database or lifecycle changes are needed. The fleet query now includes current
+Go-detected `activeIncidents` and runtime `jobs` alongside positions and layout.
+Incidents show robot, type, severity, battery, status, coordinates, job, wait ticks
+and blocked flag. They are observations from a snapshot, not incident history or
+permission to execute a command. Missing or contradictory incident data fails
+closed into the existing stale/unavailable state.
+
+The approval inbox supports both `set_charging` and `reassign_unstarted_job`.
+Reassignment cards show the job, source, recipient, pending status, submitter and
+expiration. Authorized operators use the existing Approve/Reject mutations;
+viewer and proposer inbox access remains denied by Go while monitoring works.
+Prior-runtime, expired, busy and stale/unavailable decisions are disabled. Go
+still validates eligibility, expiry, independent approval and execution.
+
+After a decision, the app refreshes fleet, inbox and stored proposal status. The
+last decision receipt retains its action details after it leaves the pending
+list, with execution/audit flags and sanitized errors. Transfer success is
+explicitly distinguished from delivery. The Job progress table and map job labels
+show current ownership and recipient movement; only Go's `done` job status is
+labeled Delivered. Rejection, expiry, stale preflight, duplicate decisions,
+failed execution and unconfirmed persistence never imply delivery. Lost responses
+are not retried automatically. Failed status refreshes visibly mark retained
+status as stale.
+
+There are no proposal submission, tick, execution or fault-injection controls in
+React. Tokens retain the existing tab-memory-only handling. No provider keys,
+model calls or dependencies are added. The inbox remains bounded to 50 current
+pending proposals and the last decision receipt in this session; it is not a
+persisted activity-history view.
+
+Run the existing frontend tests, checks and build, then the new isolated real
+backend integration from the repository root using Node 24.21.0 and PowerShell 7:
+
+```powershell
+npm --prefix web test
+npm --prefix web run typecheck
+npm --prefix web run build
+pwsh -NoProfile -ExecutionPolicy Bypass -File web/scripts/verify-integration.ps1
+```
+
+The integration harness requires Docker, PostgreSQL 18.6 and the existing Go
+toolchain. It bundles the actual frontend client and React views, uses a temporary
+backend copy and the existing `fleetops_test` fixture, and runs both charging and
+reassignment through real authenticated Go GraphQL and PostgreSQL. Trusted test
+process messages advance the simulation; no tick/injection HTTP endpoint is
+added. It checks independent operator permissions, rejection, stale/duplicate/
+expired decisions, live pickup/delivery and the displayed states. Its private
+schemas, container and temporary backend copy are removed afterward. Run the
+harness in a separate PowerShell process so its test environment does not persist.
+
+See [P4-04 implementation report](P4-04-REPORT.md) for results and the changed-file
+inventory. The existing local connection instructions follow.
+
 Use Node **24.21.0** and Go **1.27.1**. The dashboard is the existing React,
 TypeScript, and Vite app with no additional dependencies.
 

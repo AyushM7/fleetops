@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/AyushM7/fleetops/backend/db"
+	"github.com/AyushM7/fleetops/backend/incident"
 	"github.com/AyushM7/fleetops/backend/proposal"
 	"github.com/AyushM7/fleetops/backend/sim"
 )
@@ -22,11 +23,53 @@ type StationView struct {
 	OccupiedBy, ReservedBy string
 }
 type StateView struct {
-	Layout   LayoutView
-	Tick     int
-	Robots   []RobotView
-	Stations []StationView
-	Poisoned bool
+	Layout                 LayoutView
+	Tick                   int
+	Robots                 []RobotView
+	Stations               []StationView
+	Poisoned               bool
+	ActiveIncidents        []IncidentView
+	Jobs                   []JobView
+	ReassignmentCandidates []ReassignmentCandidateView
+}
+
+type JobView struct {
+	ID, Status, AssignedRobot string
+	FromX, FromY, ToX, ToY    int
+}
+
+type ReassignmentCandidateView struct {
+	JobID, FromRobotID, ToRobotID                                  string
+	PickupSteps, DeliverySteps, ChargingExitSteps, RequiredBattery int
+}
+
+// IncidentView describes a current condition, without persistent episode identity.
+type IncidentView struct {
+	RobotID   string
+	Type      string
+	Severity  string
+	Telemetry RobotView
+}
+
+func robotView(r sim.RobotState) RobotView {
+	return RobotView{r.ID, r.X, r.Y, r.Battery, string(r.Status), r.JobID, r.WaitTicks, r.Blocked}
+}
+
+func currentIncidents(snapshot sim.State) ([]IncidentView, error) {
+	// No history is retained: IDs allocated by Reconcile are deliberately not exposed.
+	conditions, _, err := incident.Reconcile(nil, snapshot, 0)
+	if err != nil {
+		return nil, err
+	}
+	robots := make(map[string]RobotView, len(snapshot.Robots))
+	for _, r := range snapshot.Robots {
+		robots[r.ID] = robotView(r)
+	}
+	views := make([]IncidentView, 0, len(conditions))
+	for _, condition := range conditions {
+		views = append(views, IncidentView{RobotID: condition.RobotID, Type: string(condition.Type), Severity: string(condition.Severity), Telemetry: robots[condition.RobotID]})
+	}
+	return views, nil
 }
 
 type CellView struct {
@@ -59,11 +102,33 @@ func (s *Service) ReadState(context.Context) (StateView, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	snapshot := s.commander.Snapshot()
+	incidents, err := currentIncidents(snapshot)
+	if err != nil {
+		return StateView{}, err
+	}
 	view := StateView{Tick: snapshot.Tick, Poisoned: s.poisoned, Robots: []RobotView{}, Stations: []StationView{}}
+	view.ActiveIncidents = incidents
+	view.Jobs = make([]JobView, 0, len(snapshot.Jobs))
+	view.ReassignmentCandidates = []ReassignmentCandidateView{}
+	for _, j := range snapshot.Jobs {
+		view.Jobs = append(view.Jobs, JobView{j.ID, string(j.Status), j.AssignedRobot, j.From.X, j.From.Y, j.To.X, j.To.Y})
+		if s.poisoned || j.Status != sim.JobAssigned {
+			continue
+		}
+		for _, recipient := range snapshot.Robots {
+			if recipient.Status != sim.RobotIdle || recipient.JobID != "" {
+				continue
+			}
+			plan, err := s.commander.PreviewReassignment(j.ID, j.AssignedRobot, recipient.ID)
+			if err == nil {
+				view.ReassignmentCandidates = append(view.ReassignmentCandidates, ReassignmentCandidateView{j.ID, j.AssignedRobot, recipient.ID, plan.PickupSteps, plan.DeliverySteps, plan.ChargingExitSteps, plan.RequiredBattery})
+			}
+		}
+	}
 	view.Layout = s.layout
 	view.Layout.Cells = append([]CellView{}, s.layout.Cells...)
 	for _, r := range snapshot.Robots {
-		view.Robots = append(view.Robots, RobotView{r.ID, r.X, r.Y, r.Battery, string(r.Status), r.JobID, r.WaitTicks, r.Blocked})
+		view.Robots = append(view.Robots, robotView(r))
 	}
 	for _, r := range snapshot.Stations {
 		view.Stations = append(view.Stations, StationView{r.ID, r.X, r.Y, r.OccupiedBy, r.ReservedBy})

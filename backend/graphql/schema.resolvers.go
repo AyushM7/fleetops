@@ -22,6 +22,12 @@ func (r *mutationResolver) SubmitProposal(ctx context.Context, input model.SetCh
 	return mutationResult(result, err), nil
 }
 
+// SubmitReassignment is the resolver for the submitReassignment field.
+func (r *mutationResolver) SubmitReassignment(ctx context.Context, input model.ReassignUnstartedJobInput) (*model.MutationResult, error) {
+	result, err := r.Service.SubmitReassignment(ctx, safety.ReassignUnstartedJobRequest{JobID: input.JobID, FromRobotID: input.FromRobotID, ToRobotID: input.ToRobotID}, input.ExpiresAt)
+	return mutationResult(result, err), nil
+}
+
 // ApproveProposal is the resolver for the approveProposal field.
 func (r *mutationResolver) ApproveProposal(ctx context.Context, id string) (*model.MutationResult, error) {
 	return r.decide(ctx, id, proposal.Approve)
@@ -48,6 +54,20 @@ func (r *queryResolver) FleetState(ctx context.Context) (*model.FleetState, erro
 	}
 	for _, v := range state.Stations {
 		view.Stations = append(view.Stations, &model.Station{ID: v.ID, X: v.X, Y: v.Y, OccupiedBy: v.OccupiedBy, ReservedBy: v.ReservedBy})
+	}
+	view.ActiveIncidents = make([]*model.ActiveIncident, 0, len(state.ActiveIncidents))
+	view.Jobs = make([]*model.Job, 0, len(state.Jobs))
+	for _, j := range state.Jobs {
+		view.Jobs = append(view.Jobs, &model.Job{ID: j.ID, Status: j.Status, AssignedRobot: j.AssignedRobot, FromX: j.FromX, FromY: j.FromY, ToX: j.ToX, ToY: j.ToY})
+	}
+	view.ReassignmentCandidates = make([]*model.ReassignmentCandidate, 0, len(state.ReassignmentCandidates))
+	for _, c := range state.ReassignmentCandidates {
+		view.ReassignmentCandidates = append(view.ReassignmentCandidates, &model.ReassignmentCandidate{JobID: c.JobID, FromRobotID: c.FromRobotID, ToRobotID: c.ToRobotID, PickupSteps: c.PickupSteps, DeliverySteps: c.DeliverySteps, ChargingExitSteps: c.ChargingExitSteps, RequiredBattery: c.RequiredBattery})
+	}
+	for _, v := range state.ActiveIncidents {
+		r := v.Telemetry
+		view.ActiveIncidents = append(view.ActiveIncidents, &model.ActiveIncident{RobotID: v.RobotID, Type: v.Type, Severity: v.Severity,
+			Telemetry: &model.Robot{ID: r.ID, X: r.X, Y: r.Y, Battery: r.Battery, Status: r.Status, JobID: r.JobID, WaitTicks: r.WaitTicks, Blocked: r.Blocked}})
 	}
 	return view, nil
 }

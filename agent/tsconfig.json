@@ -1,6 +1,9 @@
 {
   "compilerOptions": {
     "strict": true,
+    "rootDir": "src",
+    "skipLibCheck": true,
+    "types": ["node"],
     "noEmit": true,
     "target": "ES2022",
     "module": "NodeNext",

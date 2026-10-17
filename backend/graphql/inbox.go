@@ -7,5 +7,5 @@ import (
 
 func proposalModel(row *fleet.ProposalView) *model.Proposal {
 	p := row.Proposal
-	return &model.Proposal{ID: p.ID, Action: string(p.Action), RobotID: p.Request.RobotID, StationID: p.Request.StationID, CreatedAt: p.CreatedAt, ExpiresAt: p.ExpiresAt, State: string(p.State), Execution: string(row.Execution), SubmittedBy: row.SubmittedBy, CurrentRuntime: row.CurrentRuntime}
+	return &model.Proposal{ID: p.ID, Action: string(p.Action), RobotID: p.Request.RobotID, StationID: p.Request.StationID, JobID: p.Reassignment.JobID, FromRobotID: p.Reassignment.FromRobotID, ToRobotID: p.Reassignment.ToRobotID, CreatedAt: p.CreatedAt, ExpiresAt: p.ExpiresAt, State: string(p.State), Execution: string(row.Execution), SubmittedBy: row.SubmittedBy, CurrentRuntime: row.CurrentRuntime}
 }

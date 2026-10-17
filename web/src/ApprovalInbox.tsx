@@ -3,7 +3,21 @@ import { decideProposal, fetchProposal, pollPending, ProposalError, type Decisio
 
 export interface Receipt {
   id: string; decision: Decision; result: DecisionResult | null;
+  proposal: Proposal;
   latest: Proposal | null; refreshing: boolean; refreshFailed: boolean;
+}
+
+function executionMessage(receipt: Receipt): string {
+  const { result, proposal } = receipt;
+  if (!result?.auditCommitted || result.execution === "unknown") return "Execution cannot be confirmed. Refresh the stored status and reconcile the outcome.";
+  if (result.execution === "succeeded") {
+    const outcome = proposal.action === "reassign_unstarted_job"
+      ? `Job ${proposal.jobId} transferred from ${proposal.fromRobotId} to ${proposal.toRobotId}. This confirms the transfer, not delivery completion. Follow Job progress for current pickup and delivery status.`
+      : `Charging started for ${proposal.robotId} at ${proposal.stationId}.`;
+    return result.executionAttempted ? outcome : `Previously recorded execution: ${outcome} This decision did not execute a command.`;
+  }
+  if (result.execution === "failed") return "The command failed. Review the stored status and current fleet before taking further action.";
+  return result.state === "approved" ? "Approval was recorded, but execution did not occur. Review the error and stored status." : "No command was executed by this decision.";
 }
 interface InboxViewProps {
   feed: InboxFeed; busy: string | null; receipt: Receipt | null; runtimeAvailable: boolean;
@@ -13,11 +27,14 @@ interface InboxViewProps {
 function DecisionReceipt({ receipt, refreshStatus, busy }: { receipt: Receipt; refreshStatus: () => void; busy: boolean }): JSX.Element {
   const result = receipt.result;
   return <div className="decision-receipt" role="status" aria-label="Decision result">
-    <div className="receipt-heading"><h3>{!result || !result.auditCommitted ? "Decision outcome unknown" : result.error ? "Decision declined" : "Decision recorded"}</h3><code>{receipt.id}</code></div>
+    <div className="receipt-heading"><h3>{!result || !result.auditCommitted || result.execution === "unknown" ? "Decision outcome unknown" : result.error ? "Decision declined" : "Decision recorded"}</h3><code>{receipt.id}</code></div>
+    <p>{receipt.proposal.action === "reassign_unstarted_job" ? `Job ${receipt.proposal.jobId} · ${receipt.proposal.fromRobotId} → ${receipt.proposal.toRobotId}` : `SetCharging · ${receipt.proposal.robotId} → ${receipt.proposal.stationId}`}</p>
+    <p className="execution-summary">{executionMessage(receipt)}</p>
     {result?.error && <p className="decision-error">{result.error}</p>}
     {(!result || !result.auditCommitted) && <p className="decision-error">A committed audit is not confirmed. Do not assume execution failed or retry automatically. Refresh the status and reconcile the outcome.</p>}
     {result && <dl className="receipt-values"><div><dt>Response state</dt><dd>{result.state || "Not returned"}</dd></div><div><dt>Execution outcome</dt><dd>{result.execution}</dd></div><div><dt>Audit committed</dt><dd>{result.auditCommitted ? "Yes" : "Not confirmed"}</dd></div><div><dt>Execution attempted this call</dt><dd>{result.executionAttempted ? "Yes" : "No"}</dd></div></dl>}
-    {receipt.refreshing ? <p>Refreshing proposal status…</p> : receipt.latest ? <p>Latest stored status: <strong>{receipt.latest.state}</strong> · execution <strong>{receipt.latest.execution}</strong>{!receipt.latest.currentRuntime && " · Prior runtime; cannot execute"}</p> : <p>{receipt.refreshFailed ? "Could not refresh the stored status. It may be stale." : "Proposal not found in persisted records."}</p>}
+    {receipt.refreshing ? <p>Refreshing proposal status…</p> : receipt.latest ? <p>{receipt.refreshFailed ? "Last received stored status" : "Latest stored status"}: <strong>{receipt.latest.state}</strong> · execution <strong>{receipt.latest.execution}</strong>{!receipt.latest.currentRuntime && " · Prior runtime; cannot execute"}</p> : !receipt.refreshFailed && <p>Proposal not found in persisted records.</p>}
+    {receipt.refreshFailed && <p className="decision-error">Could not refresh the stored status. It may be stale.</p>}
     {result?.error === "request denied" && <p>Go declined the request. The proposal may be stale; review the refreshed status and current fleet state.</p>}
     <button className="secondary-button" disabled={busy || receipt.refreshing} onClick={refreshStatus}>Refresh stored status</button>
     {result && <details><summary>Server response</summary><pre>{JSON.stringify(result, null, 2)}</pre></details>}
@@ -33,11 +50,11 @@ export function InboxView({ feed, busy, receipt, runtimeAvailable, decide, refre
     {feed.phase === "unavailable" && <p className="inbox-message decision-error" role="alert">Approval inbox unavailable. Retrying… Displayed proposals may be stale; decisions are disabled.</p>}
     {feed.phase === "ready" && feed.proposals.length === 0 && <p className="inbox-message">No pending proposals in this runtime.</p>}
     {feed.phase !== "forbidden" && feed.proposals.length > 0 && <ul className="proposal-list">{feed.proposals.map(p => <li className="proposal-card" key={p.id} data-proposal-id={p.id}>
-      <div className="proposal-summary"><div><h3>{p.robotId} <span>→ {p.stationId}</span></h3><p>Requested action: <strong>SetCharging</strong></p></div><span className="status">{p.state}</span></div>
+      <div className="proposal-summary"><div>{p.action === "reassign_unstarted_job" ? <><h3>Job {p.jobId}: {p.fromRobotId} <span>→ {p.toRobotId}</span></h3><p>Requested action: <strong>ReassignUnstartedJob</strong></p><p>Transfer an uncollected job to another robot. Approval does not complete delivery.</p></> : <><h3>{p.robotId} <span>→ {p.stationId}</span></h3><p>Requested action: <strong>SetCharging</strong></p><p>Start charging at the robot’s current station.</p></>}</div><span className="status">{p.state}</span></div>
       <code>{p.id}</code><p className="rationale">No rationale recorded</p>
       <p className="proposal-meta">Submitted by {p.submittedBy || "Not recorded"} · Expires {new Date(p.expiresAt).toLocaleString()}</p>
       {Date.parse(p.expiresAt) <= Date.now() && <p className="decision-error">Expiration time has passed. Go will recheck expiration before deciding.</p>}
-      <div className="proposal-actions"><button className="approve-button" disabled={!allowed || !p.currentRuntime || p.state !== "pending"} onClick={() => decide(p, "approve")}>{busy === p.id ? "Processing…" : "Approve"}</button><button className="reject-button" disabled={!allowed || !p.currentRuntime || p.state !== "pending"} onClick={() => decide(p, "reject")}>Reject</button><span>Go revalidates before execution</span></div>
+      <div className="proposal-actions"><button className="approve-button" disabled={!allowed || !p.currentRuntime || p.state !== "pending" || Date.parse(p.expiresAt) <= Date.now()} onClick={() => decide(p, "approve")}>{busy === p.id ? "Processing…" : "Approve"}</button><button className="reject-button" disabled={!allowed || !p.currentRuntime || p.state !== "pending" || Date.parse(p.expiresAt) <= Date.now()} onClick={() => decide(p, "reject")}>Reject</button><span>Go revalidates before execution</span></div>
     </li>)}</ul>}
     {feed.proposals.length === 50 && <p className="inbox-message">The 50-result limit has been reached. Resolve proposals and refresh to see additional pending requests.</p>}
     {receipt && <DecisionReceipt receipt={receipt} refreshStatus={refreshStatus} busy={busy !== null} />}
@@ -66,7 +83,7 @@ export default function ApprovalInbox({ token, runtimeAvailable, onUnauthorized,
     }
   };
   const decide = async (proposal: Proposal, decision: Decision) => {
-    if (inFlight.current || feed.phase !== "ready" || !runtimeAvailable) return;
+    if (inFlight.current || feed.phase !== "ready" || !runtimeAvailable || !proposal.currentRuntime || proposal.state !== "pending" || Date.parse(proposal.expiresAt) <= Date.now()) return;
     inFlight.current = true; setBusy(proposal.id);
     active.current?.abort(); const controller = new AbortController(); active.current = controller;
     let result: DecisionResult | null = null;
@@ -77,7 +94,7 @@ export default function ApprovalInbox({ token, runtimeAvailable, onUnauthorized,
       if (error instanceof ProposalError && error.kind === "authentication") { authenticationLost = true; onUnauthorized(); return; }
     } finally {
       if (!controller.signal.aborted && !authenticationLost) {
-        setReceipt({ id: proposal.id, decision, result, latest: null, refreshing: true, refreshFailed: false });
+        setReceipt({ id: proposal.id, proposal, decision, result, latest: null, refreshing: true, refreshFailed: false });
         if (result) poller.current?.settled(result);
         onDecision(); poller.current?.refresh();
         await readStatus(proposal.id, controller);

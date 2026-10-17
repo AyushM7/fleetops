@@ -30,6 +30,9 @@ func (*readOnlyFixture) ReadPendingProposals(context.Context) ([]fleet.ProposalV
 func (*readOnlyFixture) Submit(context.Context, safety.SetChargingRequest, time.Time) (fleet.Result, error) {
 	panic("unexpected mutation")
 }
+func (*readOnlyFixture) SubmitReassignment(context.Context, safety.ReassignUnstartedJobRequest, time.Time) (fleet.Result, error) {
+	panic("unexpected mutation")
+}
 func (*readOnlyFixture) Decide(context.Context, string, proposal.Decision, proposal.OperatorIdentity) (fleet.Result, error) {
 	panic("unexpected mutation")
 }
@@ -71,7 +74,7 @@ func TestHTTPBoundaryAndLimits(t *testing.T) {
 		t.Fatal("unsafe request reached service", fixture.calls)
 	}
 	schema := NewExecutableSchema(Config{Resolvers: &Resolver{Service: fixture}}).Schema()
-	if len(schema.Mutation.Fields) != 3 || schema.Mutation.Fields.ForName("submitProposal") == nil || schema.Mutation.Fields.ForName("approveProposal") == nil || schema.Mutation.Fields.ForName("rejectProposal") == nil {
+	if len(schema.Mutation.Fields) != 4 || schema.Mutation.Fields.ForName("submitReassignment") == nil || schema.Mutation.Fields.ForName("submitProposal") == nil || schema.Mutation.Fields.ForName("approveProposal") == nil || schema.Mutation.Fields.ForName("rejectProposal") == nil {
 		t.Fatal("mutation surface changed")
 	}
 	readFields := 0

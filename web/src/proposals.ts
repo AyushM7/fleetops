@@ -1,5 +1,6 @@
 export interface Proposal {
-  id: string; action: "set_charging"; robotId: string; stationId: string;
+  id: string; action: "set_charging" | "reassign_unstarted_job"; robotId: string; stationId: string;
+  jobId: string; fromRobotId: string; toRobotId: string;
   state: "pending" | "approved" | "rejected" | "expired";
   execution: "none" | "succeeded" | "failed" | "unknown";
   submittedBy: string; currentRuntime: boolean; createdAt: string; expiresAt: string;
@@ -17,7 +18,7 @@ export interface InboxPolling { refresh: () => void; stop: () => void; settled: 
 export class ProposalError extends Error {
   constructor(public readonly kind: "authentication" | "forbidden" | "unavailable") { super(kind); }
 }
-const fields = "id action robotId stationId state execution submittedBy currentRuntime createdAt expiresAt";
+const fields = "id action robotId stationId jobId fromRobotId toRobotId state execution submittedBy currentRuntime createdAt expiresAt";
 export const pendingQuery = `{pendingProposals{${fields}}}`;
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
 const unavailable = (): never => { throw new ProposalError("unavailable"); };
@@ -45,8 +46,10 @@ async function request(token: string, query: string, variables: Record<string, u
 }
 
 export function parseProposal(value: unknown): Proposal {
-  if (!record(value) || value.action !== "set_charging" || typeof value.currentRuntime !== "boolean") return unavailable();
-  for (const field of ["id", "robotId", "stationId", "submittedBy", "createdAt", "expiresAt"]) if (typeof value[field] !== "string") return unavailable();
+  if (!record(value) || !["set_charging", "reassign_unstarted_job"].includes(value.action as string) || typeof value.currentRuntime !== "boolean") return unavailable();
+  for (const field of ["id", "robotId", "stationId", "jobId", "fromRobotId", "toRobotId", "submittedBy", "createdAt", "expiresAt"]) if (typeof value[field] !== "string") return unavailable();
+  if (value.action === "set_charging" ? !value.robotId || !value.stationId || value.jobId || value.fromRobotId || value.toRobotId
+    : !value.jobId || !value.fromRobotId || !value.toRobotId || value.fromRobotId === value.toRobotId || value.robotId || value.stationId) return unavailable();
   if (!value.id || !Number.isFinite(Date.parse(value.createdAt as string)) || !Number.isFinite(Date.parse(value.expiresAt as string))) return unavailable();
   if (!["pending", "approved", "rejected", "expired"].includes(value.state as string) || !["none", "succeeded", "failed", "unknown"].includes(value.execution as string)) return unavailable();
   return value as unknown as Proposal;
@@ -62,13 +65,18 @@ export async function fetchPending(token: string, signal: AbortSignal): Promise<
 }
 export async function fetchProposal(token: string, id: string, signal: AbortSignal): Promise<Proposal | null> {
   const data = await request(token, `query($id:ID!){proposal(id:$id){${fields}}}`, { id }, signal);
-  return data.proposal === null ? null : parseProposal(data.proposal);
+  if (data.proposal === null) return null;
+  const proposal = parseProposal(data.proposal);
+  if (proposal.id !== id) return unavailable();
+  return proposal;
 }
 export async function decideProposal(token: string, id: string, decision: Decision, signal: AbortSignal): Promise<DecisionResult> {
   const operation = decision === "approve" ? "approveProposal" : "rejectProposal";
   const data = await request(token, `mutation($id:ID!){${operation}(id:$id){proposalId state execution auditCommitted executionAttempted error}}`, { id }, signal);
   const result = data[operation];
   if (!record(result) || result.proposalId !== id || typeof result.state !== "string" || typeof result.execution !== "string" || typeof result.auditCommitted !== "boolean" || typeof result.executionAttempted !== "boolean" || (result.error !== null && typeof result.error !== "string")) return unavailable();
+  if (!["", "pending", "approved", "rejected", "expired"].includes(result.state) || !["none", "succeeded", "failed", "unknown"].includes(result.execution)) return unavailable();
+  if (result.execution === "succeeded" && !["approved", "expired"].includes(result.state)) return unavailable();
   return result as unknown as DecisionResult;
 }
 

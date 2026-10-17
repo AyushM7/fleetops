@@ -12,6 +12,7 @@ import (
 // Service exposes workflow operations and detached reads, never simulator capabilities.
 type Service interface {
 	Submit(context.Context, safety.SetChargingRequest, time.Time) (fleet.Result, error)
+	SubmitReassignment(context.Context, safety.ReassignUnstartedJobRequest, time.Time) (fleet.Result, error)
 	Decide(context.Context, string, proposal.Decision, proposal.OperatorIdentity) (fleet.Result, error)
 	ReadState(context.Context) (fleet.StateView, error)
 	ReadProposal(context.Context, string) (*fleet.ProposalView, error)

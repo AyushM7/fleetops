@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type JSX } from "react";
 import { pollFleet, type Feed, type FleetSnapshot, type Robot } from "./fleet";
 import ApprovalInbox from "./ApprovalInbox";
+import { Operations } from "./Operations";
 import "./styles.css";
 
 const emptyFeed: Feed = { phase: "loading", snapshot: null, updatedAt: null };
@@ -18,6 +19,7 @@ export function Warehouse({ fleet }: { fleet: FleetSnapshot }): JSX.Element {
       <title>{`${r.id}: ${r.status}${r.blocked ? ", traffic blocked" : ""}, battery ${r.battery}%, job ${r.jobId || "none"}, position (${r.x},${r.y})`}</title>
       <rect x={-14} y={-12} width={28} height={25} rx={7} />
       <text textAnchor="middle" y={4}>{r.id}</text>
+      {r.jobId && <text textAnchor="middle" y={22} className="robot-job">{r.jobId}</text>}
       {r.blocked && <text x={15} y={-12} className="blocked-mark">!</text>}
     </g>)}
   </svg></div>;
@@ -52,6 +54,7 @@ export function Dashboard({ feed }: { feed: Feed }): JSX.Element {
       </section>
       <aside className="fleet-panel" aria-label="Robot fleet"><div className="panel-heading"><h2>Robots</h2><span>{fleet.robots.length} in fleet</span></div><ul className="robot-list">{fleet.robots.map(r => <RobotCard key={r.id} robot={r} />)}</ul></aside>
     </div>}
+    {fleet && <Operations fleet={fleet} stale={feed.phase !== "live"} />}
     <footer>{feed.updatedAt ? `Last received ${feed.updatedAt.toLocaleTimeString()}` : "Waiting for the first snapshot"}<span>Fleet monitoring</span></footer>
   </>;
 }

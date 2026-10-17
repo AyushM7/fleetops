@@ -4,7 +4,7 @@ import App, { Dashboard } from "./App";
 import type { Feed, FleetSnapshot } from "./fleet";
 
 const snapshot: FleetSnapshot = {
-  tick: 43, poisoned: false,
+  tick: 43, poisoned: false, activeIncidents: [], jobs: [],
   layout: { width: 4, height: 4, cells: Array.from({ length: 16 }, (_, i) => ({ x: i % 4, y: Math.floor(i / 4), kind: i === 0 ? "station" : i === 4 ? "wall" : i % 4 === 1 ? "aisle" : "free" })) },
   stations: [{ id: "S1", x: 0, y: 0, occupiedBy: "", reservedBy: "" }],
   robots: [{ id: "R1", x: 2, y: 2, status: "moving", battery: 28, jobId: "J8", blocked: true, waitTicks: 41 },

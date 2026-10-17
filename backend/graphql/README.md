@@ -1,8 +1,52 @@
 # Charging GraphQL API (P3-05)
 
+## P4-03 job recovery
+
+`fleetState.jobs` and `fleetState.reassignmentCandidates` are detached read-only
+data from the same locked live snapshot as incidents and telemetry. Go computes
+candidate admission; this does not reserve routes or guarantee delivery.
+`submitReassignment(input: ReassignUnstartedJobInput!)` accepts `jobId`,
+`fromRobotId`, `toRobotId` and `expiresAt`, using the same proposer/operator roles,
+independent operator approval and audit lifecycle as SetCharging. Proposal reads
+add `jobId`, `fromRobotId` and `toRobotId`; irrelevant action-specific ID fields
+are empty strings. Existing SetCharging fields and mutation remain compatible.
+See [P4-03 workflow and verification](../../agent/P4-03.md) for queries, safety
+preconditions and the test-only complete operator-approval demonstration.
+The React dashboard is unchanged and awaits P4-04.
+
+## P4-01 current incidents
+
+The additive `fleetState.activeIncidents` field is read-only and uses the existing
+authentication boundary (viewer, proposer or operator). It returns `robotId`,
+`type`, `severity` and `telemetry` (the affected `Robot` fields). The fleet service
+calls the existing Go incident detector under its lock using the same snapshot as
+the surrounding fleet state. No simulator operations or database writes occur.
+
+```graphql
+query {
+  fleetState {
+    tick
+    activeIncidents {
+      robotId type severity
+      telemetry { id x y battery status jobId waitTicks blocked }
+    }
+  }
+}
+```
+
+These are current conditions only: `low_battery` requires battery <30% and an
+assigned job (high below 15%); `robot_unresponsive` requires offline status (high);
+`traffic_blocked` requires the blocked flag (high above 40 wait ticks, medium
+otherwise). Normal waiting is not an incident. The detector's allocated episode
+IDs are not exposed because this integration retains no history across reads.
+Results are deterministic and ordered by numeric robot ID, then incident type.
+An empty list means no active conditions; detector failures produce the existing
+sanitized query error, not a misleading empty list. Existing mutations, approval,
+safety and execution rules are unchanged.
+
 The server exposes `/graphql` as authenticated JSON POST and keeps `/healthz`.
 The adapter depends on fleet service interfaces and detached read DTOs. The only
-mutations are `submitProposal`, `approveProposal`, and `rejectProposal`.
+mutations are `submitProposal`, `submitReassignment`, `approveProposal`, and `rejectProposal`.
 
 ## Run
 
