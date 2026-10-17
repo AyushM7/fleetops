@@ -266,3 +266,10 @@ footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+.simulation-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 20px; background: #141518; color: #F5F5F5; }
+.simulation-controls button { min-height: 36px; width: auto; margin-top: 0; padding: 6px 14px; font-size: 12px; }
+.simulation-controls label { display: flex; align-items: center; gap: 6px; color: #B9BBC1; font-size: 12px; }
+.simulation-controls select { background: #202124; color: #F5F5F5; border: 1px solid #66676C; border-radius: 4px; min-height: 36px; padding: 4px; }
+.simulation-controls select:focus-visible { outline: 2px solid #E8E9EB; outline-offset: 2px; }
+.simulation-state { font-size: 12px; margin-right: auto; }
+.simulation-help { flex-basis: 100%; font-size: 12px; color: #B9BBC1; }

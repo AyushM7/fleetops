@@ -211,7 +211,7 @@ func TestDemoControllerGatewaySecurity(t *testing.T) {
 	page := httptest.NewRecorder()
 	g.ServeHTTP(page, bootstrap)
 	cookie := page.Result().Cookies()[0]
-	for _, path := range []string{"/demo/status", "/demo/restart"} {
+	for _, path := range []string{"/demo/status", "/demo/restart", "/demo/play", "/demo/pause", "/demo/step", "/demo/speed/0.5", "/demo/speed/1", "/demo/speed/2"} {
 		for name, change := range map[string]func(*http.Request){
 			"origin":              func(r *http.Request) { r.Header.Set("Origin", "https://attacker.example") },
 			"missing origin":      func(r *http.Request) { r.Header.Del("Origin") },
