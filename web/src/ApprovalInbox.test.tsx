@@ -2,7 +2,7 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { InboxView, type Receipt } from "./ApprovalInbox";
 import type { InboxFeed, Proposal } from "./proposals";
-const proposal: Proposal = { id: "P-example", action: "set_charging", robotId: "R1", stationId: "S1", state: "pending", execution: "none", currentRuntime: true, submittedBy: "proposer", createdAt: "2026-10-16T12:00:00Z", expiresAt: "2030-10-16T12:00:00Z" };
+const proposal: Proposal = { id: "P-example", action: "set_charging", robotId: "R1", stationId: "S1", jobId: "", fromRobotId: "", toRobotId: "", state: "pending", execution: "none", currentRuntime: true, submittedBy: "proposer", createdAt: "2026-10-16T12:00:00Z", expiresAt: "2030-10-16T12:00:00Z" };
 const ready: InboxFeed = { phase: "ready", proposals: [proposal], updatedAt: new Date() };
 function render(feed: InboxFeed = ready, receipt: Receipt | null = null, busy: string | null = null, runtimeAvailable = true) {
   return renderToString(<InboxView feed={feed} receipt={receipt} busy={busy} runtimeAvailable={runtimeAvailable} decide={vi.fn()} refresh={vi.fn()} refreshStatus={vi.fn()} />).replace(/<!--.*?-->/g, "");
@@ -24,12 +24,12 @@ describe("operator inbox", () => {
   });
   it("displays real duplicate and expiration denials with historical execution flags", () => {
     for (const error of ["proposal already decided", "proposal expired", "proposal belongs to a prior runtime", "self approval forbidden", "request denied"]) {
-      const receipt: Receipt = { id: proposal.id, decision: "approve", result: { proposalId: proposal.id, state: "approved", execution: "succeeded", auditCommitted: true, executionAttempted: false, error }, latest: { ...proposal, state: "approved", execution: "succeeded" }, refreshing: false, refreshFailed: false };
+      const receipt: Receipt = { id: proposal.id, proposal, decision: "approve", result: { proposalId: proposal.id, state: "approved", execution: "succeeded", auditCommitted: true, executionAttempted: false, error }, latest: { ...proposal, state: "approved", execution: "succeeded" }, refreshing: false, refreshFailed: false };
       const html = render(ready, receipt); expect(html).toContain(error); expect(html).toContain("Decision declined"); expect(html).toContain("Latest stored status"); expect(html).toContain("Execution attempted this call</dt><dd>No");
     }
   });
   it("does not claim durable success for missing or uncommitted responses", () => {
-    const receipt: Receipt = { id: proposal.id, decision: "approve", result: null, latest: null, refreshing: false, refreshFailed: true };
+    const receipt: Receipt = { id: proposal.id, proposal, decision: "approve", result: null, latest: null, refreshing: false, refreshFailed: true };
     expect(render(ready, receipt)).toContain("Decision outcome unknown"); expect(render(ready, receipt)).toContain("Do not assume execution failed or retry automatically");
     receipt.result = { proposalId: proposal.id, state: "", execution: "unknown", auditCommitted: false, executionAttempted: true, error: "workflow unavailable" };
     expect(render(ready, receipt)).toContain("Decision outcome unknown");

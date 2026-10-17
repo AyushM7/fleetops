@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { decideProposal, fetchPending, fetchProposal, pollPending, type DecisionResult, type InboxFeed, type Proposal } from "./proposals";
-const proposal = (): Proposal => ({ id: "P-test", action: "set_charging", robotId: "R1", stationId: "S1", state: "pending", execution: "none", submittedBy: "proposer", currentRuntime: true, createdAt: "2026-10-16T12:00:00Z", expiresAt: "2030-10-16T12:00:00Z" });
+const proposal = (): Proposal => ({ id: "P-test", action: "set_charging", robotId: "R1", stationId: "S1", jobId: "", fromRobotId: "", toRobotId: "", state: "pending", execution: "none", submittedBy: "proposer", currentRuntime: true, createdAt: "2026-10-16T12:00:00Z", expiresAt: "2030-10-16T12:00:00Z" });
 const response = (pending = [proposal()]) => new Response(JSON.stringify({ data: { pendingProposals: pending } }));
 const signal = () => new AbortController().signal;
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });

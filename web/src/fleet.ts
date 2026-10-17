@@ -3,9 +3,11 @@ export type CellKind = "free" | "wall" | "aisle" | "station";
 export interface Robot { id: string; x: number; y: number; battery: number; status: RobotStatus; jobId: string; waitTicks: number; blocked: boolean }
 export interface Station { id: string; x: number; y: number; occupiedBy: string; reservedBy: string }
 export interface Layout { width: number; height: number; cells: { x: number; y: number; kind: CellKind }[] }
-export interface FleetSnapshot { tick: number; poisoned: boolean; robots: Robot[]; stations: Station[]; layout: Layout }
+export interface Incident { robotId: string; type: "low_battery" | "robot_unresponsive" | "traffic_blocked"; severity: "medium" | "high"; telemetry: Robot }
+export interface Job { id: string; status: "pending" | "assigned" | "in_progress" | "done"; assignedRobot: string; fromX: number; fromY: number; toX: number; toY: number }
+export interface FleetSnapshot { tick: number; poisoned: boolean; robots: Robot[]; stations: Station[]; layout: Layout; activeIncidents: Incident[]; jobs: Job[] }
 export type Feed = { phase: "loading" | "live" | "unavailable"; snapshot: FleetSnapshot | null; updatedAt: Date | null };
-export const fleetQuery = `{ fleetState { tick poisoned layout { width height cells { x y kind } } robots { id x y battery status jobId waitTicks blocked } stations { id x y occupiedBy reservedBy } } }`;
+export const fleetQuery = `{ fleetState { tick poisoned layout { width height cells { x y kind } } robots { id x y battery status jobId waitTicks blocked } stations { id x y occupiedBy reservedBy } activeIncidents { robotId type severity telemetry { id x y battery status jobId waitTicks blocked } } jobs { id status assignedRobot fromX fromY toX toY } } }`;
 
 export class FleetError extends Error {
   constructor(public readonly kind: "authentication" | "unavailable") { super(kind); }
@@ -34,7 +36,34 @@ export function parseSnapshot(value: unknown): FleetSnapshot {
   for (const s of value.stations) {
     if (!record(s) || !point(s) || !text(s.id) || !text(s.occupiedBy) || !text(s.reservedBy)) return fail();
   }
+  validateOperationalData(value, width, height);
   return value as unknown as FleetSnapshot;
+}
+
+function validateOperationalData(value: Record<string, unknown>, width: number, height: number): void {
+  const fail = (): never => { throw new FleetError("unavailable"); };
+  const robots = value.robots as Robot[];
+  const stations = value.stations as Station[];
+  if (new Set(robots.map(r => r.id)).size !== robots.length || new Set(stations.map(s => s.id)).size !== stations.length ||
+      !Array.isArray(value.activeIncidents) || !Array.isArray(value.jobs)) return fail();
+  const references = new Set<string>();
+  for (const incident of value.activeIncidents) {
+    if (!record(incident) || !["low_battery", "robot_unresponsive", "traffic_blocked"].includes(incident.type as string) ||
+        !["medium", "high"].includes(incident.severity as string) || !record(incident.telemetry)) return fail();
+    const robot = robots.find(r => r.id === incident.robotId);
+    const key = `${incident.robotId}:${incident.type}`;
+    if (!robot || references.has(key) || Object.keys(robot).some(field => robot[field as keyof Robot] !== (incident.telemetry as Record<string, unknown>)[field])) return fail();
+    references.add(key);
+  }
+  const jobIDs = new Set<string>();
+  for (const job of value.jobs) {
+    if (!record(job) || !text(job.id) || !job.id || jobIDs.has(job.id) || !text(job.assignedRobot) ||
+        !["pending", "assigned", "in_progress", "done"].includes(job.status as string)) return fail();
+    for (const [key, limit] of [["fromX", width], ["toX", width], ["fromY", height], ["toY", height]] as const) {
+      if (!integer(job[key]) || job[key] < 0 || job[key] >= limit) return fail();
+    }
+    jobIDs.add(job.id);
+  }
 }
 
 export async function fetchFleet(token: string, signal: AbortSignal, request: typeof fetch = fetch): Promise<FleetSnapshot> {

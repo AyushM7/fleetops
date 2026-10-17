@@ -40,6 +40,7 @@ h2 { font-size: 15px; font-weight: 650; }
 .robot-offline rect { stroke-dasharray: 3 2; }
 .robot-blocked rect { stroke: #d68d1e; stroke-width: 4; }
 .robot text.blocked-mark { fill: #a96300; font-size: 17px; }
+.robot text.robot-job { fill: #214e40; font-size: 8px; paint-order: stroke; stroke: white; stroke-width: 2px; }
 .legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 15px 24px 12px; }
 .legend span { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #62746b; }
 .key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; }
@@ -98,3 +99,18 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .inbox-link { color: #426454; text-decoration: none; font-size: 11px; font-weight: 600; }
 #approval-inbox { scroll-margin-top: 20px; }
 @media(max-width:480px) { .topbar { flex-wrap: wrap; padding-top: 14px; padding-bottom: 14px; }.connection { margin-left: auto; } }
+
+.operations { display: grid; gap: 24px; margin-top: 24px; }
+.operations-panel { background: white; border: 1px solid #dfe5dd; border-radius: 12px; overflow: hidden; }
+.operations .panel-heading p { margin-top: 7px; color: #687d71; font-size: 12px; line-height: 1.6; }
+.incident-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+.incident-card { padding: 20px 24px; border-top: 1px solid #e7ece7; }
+.incident-card h3 { font-size: 14px; margin: 0; }
+.incident-card p { margin-top: 10px; font-size: 12px; line-height: 1.6; }
+.incident-help { color: #687d71; }
+.severity { padding: 4px 7px; font-size: 11px; border-radius: 4px; white-space: nowrap; }
+.severity-high { color: #922f2f; background: #faeeee; }.severity-medium { color: #855b13; background: #fbf1df; }
+.jobs-scroll { overflow-x: auto; }.jobs-table { border-collapse: collapse; width: 100%; text-align: left; font-size: 12px; }
+.jobs-table th, .jobs-table td { padding: 15px 24px; border-top: 1px solid #e7ece7; line-height: 1.6; }
+.jobs-table thead { background: #f5f7f3; }.jobs-table small { display: block; color: #687d71; }
+.proposal-summary p + p { margin-top: 8px; line-height: 1.6; }.execution-summary { line-height: 1.7; }

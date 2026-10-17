@@ -3,7 +3,7 @@ import { fetchFleet, FleetError, parseSnapshot, pollFleet, type Feed, type Fleet
 
 // Protocol fixtures are used only in tests; the application has no simulated feed.
 export function fixture(): FleetSnapshot {
-  return { tick: 7, poisoned: false, layout: { width: 4, height: 4, cells: Array.from({ length: 16 }, (_, i) => ({ x: i % 4, y: Math.floor(i / 4), kind: i === 0 ? "station" : i % 4 === 1 ? "aisle" : "free" })) },
+  return { tick: 7, poisoned: false, activeIncidents: [], jobs: [], layout: { width: 4, height: 4, cells: Array.from({ length: 16 }, (_, i) => ({ x: i % 4, y: Math.floor(i / 4), kind: i === 0 ? "station" : i % 4 === 1 ? "aisle" : "free" })) },
     robots: [{ id: "R1", x: 0, y: 0, battery: 70, status: "idle", jobId: "", blocked: false, waitTicks: 0 }],
     stations: [{ id: "S1", x: 0, y: 0, occupiedBy: "", reservedBy: "" }] };
 }
