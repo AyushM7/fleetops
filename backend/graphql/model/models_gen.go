@@ -6,12 +6,20 @@ import (
 	"time"
 )
 
+type ActiveIncident struct {
+	RobotID   string `json:"robotId"`
+	Type      string `json:"type"`
+	Severity  string `json:"severity"`
+	Telemetry *Robot `json:"telemetry"`
+}
+
 type FleetState struct {
-	Layout   *WarehouseLayout `json:"layout"`
-	Tick     int              `json:"tick"`
-	Robots   []*Robot         `json:"robots"`
-	Stations []*Station       `json:"stations"`
-	Poisoned bool             `json:"poisoned"`
+	Layout          *WarehouseLayout  `json:"layout"`
+	Tick            int               `json:"tick"`
+	Robots          []*Robot          `json:"robots"`
+	Stations        []*Station        `json:"stations"`
+	Poisoned        bool              `json:"poisoned"`
+	ActiveIncidents []*ActiveIncident `json:"activeIncidents"`
 }
 
 type Mutation struct {

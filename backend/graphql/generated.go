@@ -38,12 +38,20 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
+	ActiveIncident struct {
+		RobotID   func(childComplexity int) int
+		Severity  func(childComplexity int) int
+		Telemetry func(childComplexity int) int
+		Type      func(childComplexity int) int
+	}
+
 	FleetState struct {
-		Layout   func(childComplexity int) int
-		Poisoned func(childComplexity int) int
-		Robots   func(childComplexity int) int
-		Stations func(childComplexity int) int
-		Tick     func(childComplexity int) int
+		ActiveIncidents func(childComplexity int) int
+		Layout          func(childComplexity int) int
+		Poisoned        func(childComplexity int) int
+		Robots          func(childComplexity int) int
+		Stations        func(childComplexity int) int
+		Tick            func(childComplexity int) int
 	}
 
 	Mutation struct {
@@ -145,6 +153,37 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	_ = ec
 	switch typeName + "." + field {
 
+	case "ActiveIncident.robotId":
+		if e.ComplexityRoot.ActiveIncident.RobotID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ActiveIncident.RobotID(childComplexity), true
+	case "ActiveIncident.severity":
+		if e.ComplexityRoot.ActiveIncident.Severity == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ActiveIncident.Severity(childComplexity), true
+	case "ActiveIncident.telemetry":
+		if e.ComplexityRoot.ActiveIncident.Telemetry == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ActiveIncident.Telemetry(childComplexity), true
+	case "ActiveIncident.type":
+		if e.ComplexityRoot.ActiveIncident.Type == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ActiveIncident.Type(childComplexity), true
+
+	case "FleetState.activeIncidents":
+		if e.ComplexityRoot.FleetState.ActiveIncidents == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FleetState.ActiveIncidents(childComplexity), true
 	case "FleetState.layout":
 		if e.ComplexityRoot.FleetState.Layout == nil {
 			break
@@ -554,6 +593,20 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // Each function is generated once per unique object type, deduplicating the
 // switch statements that were previously inlined in every fieldContext_* function.
 
+func (ec *executionContext) childFields_ActiveIncident(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "robotId":
+		return ec.fieldContext_ActiveIncident_robotId(ctx, field)
+	case "type":
+		return ec.fieldContext_ActiveIncident_type(ctx, field)
+	case "severity":
+		return ec.fieldContext_ActiveIncident_severity(ctx, field)
+	case "telemetry":
+		return ec.fieldContext_ActiveIncident_telemetry(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ActiveIncident", field.Name)
+}
+
 func (ec *executionContext) childFields_FleetState(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "layout":
@@ -566,6 +619,8 @@ func (ec *executionContext) childFields_FleetState(ctx context.Context, field gr
 		return ec.fieldContext_FleetState_stations(ctx, field)
 	case "poisoned":
 		return ec.fieldContext_FleetState_poisoned(ctx, field)
+	case "activeIncidents":
+		return ec.fieldContext_FleetState_activeIncidents(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type FleetState", field.Name)
 }
@@ -922,6 +977,107 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 
 // region    **************************** field.gotpl *****************************
 
+func (ec *executionContext) _ActiveIncident_robotId(ctx context.Context, field graphql.CollectedField, obj *model.ActiveIncident) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ActiveIncident_robotId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RobotID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ActiveIncident_robotId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ActiveIncident", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _ActiveIncident_type(ctx context.Context, field graphql.CollectedField, obj *model.ActiveIncident) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ActiveIncident_type(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Type, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ActiveIncident_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ActiveIncident", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ActiveIncident_severity(ctx context.Context, field graphql.CollectedField, obj *model.ActiveIncident) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ActiveIncident_severity(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Severity, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ActiveIncident_severity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ActiveIncident", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _ActiveIncident_telemetry(ctx context.Context, field graphql.CollectedField, obj *model.ActiveIncident) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ActiveIncident_telemetry(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Telemetry, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Robot) graphql.Marshaler {
+			return ec.marshalNRobot2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐRobot(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ActiveIncident_telemetry(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ActiveIncident",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Robot(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _FleetState_layout(ctx context.Context, field graphql.CollectedField, obj *model.FleetState) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1062,6 +1218,38 @@ func (ec *executionContext) _FleetState_poisoned(ctx context.Context, field grap
 }
 func (ec *executionContext) fieldContext_FleetState_poisoned(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("FleetState", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _FleetState_activeIncidents(ctx context.Context, field graphql.CollectedField, obj *model.FleetState) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FleetState_activeIncidents(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ActiveIncidents, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.ActiveIncident) graphql.Marshaler {
+			return ec.marshalNActiveIncident2ᚕᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐActiveIncidentᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FleetState_activeIncidents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FleetState",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ActiveIncident(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Mutation_submitProposal(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -3305,6 +3493,59 @@ func (ec *executionContext) unmarshalInputSetChargingInput(ctx context.Context, 
 
 // region    **************************** object.gotpl ****************************
 
+var activeIncidentImplementors = []string{"ActiveIncident"}
+
+func (ec *executionContext) _ActiveIncident(ctx context.Context, sel ast.SelectionSet, obj *model.ActiveIncident) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, activeIncidentImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ActiveIncident")
+		case "robotId":
+			out.Values[i] = ec._ActiveIncident_robotId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "type":
+			out.Values[i] = ec._ActiveIncident_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "severity":
+			out.Values[i] = ec._ActiveIncident_severity(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "telemetry":
+			out.Values[i] = ec._ActiveIncident_telemetry(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var fleetStateImplementors = []string{"FleetState"}
 
 func (ec *executionContext) _FleetState(ctx context.Context, sel ast.SelectionSet, obj *model.FleetState) graphql.Marshaler {
@@ -3339,6 +3580,11 @@ func (ec *executionContext) _FleetState(ctx context.Context, sel ast.SelectionSe
 			}
 		case "poisoned":
 			out.Values[i] = ec._FleetState_poisoned(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "activeIncidents":
+			out.Values[i] = ec._FleetState_activeIncidents(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -4310,6 +4556,32 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 // endregion **************************** object.gotpl ****************************
 
 // region    ***************************** type.gotpl *****************************
+
+func (ec *executionContext) marshalNActiveIncident2ᚕᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐActiveIncidentᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ActiveIncident) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNActiveIncident2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐActiveIncident(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNActiveIncident2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐActiveIncident(ctx context.Context, sel ast.SelectionSet, v *model.ActiveIncident) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ActiveIncident(ctx, sel, v)
+}
 
 func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v any) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)

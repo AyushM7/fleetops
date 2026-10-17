@@ -17,7 +17,8 @@ type Robot { id: ID!, x: Int!, y: Int!, battery: Int!, status: String!, jobId: S
 type Station { id: ID!, x: Int!, y: Int!, occupiedBy: String!, reservedBy: String! }
 type WarehouseCell { x: Int!, y: Int!, kind: String! }
 type WarehouseLayout { width: Int!, height: Int!, cells: [WarehouseCell!]! }
-type FleetState { layout: WarehouseLayout!, tick: Int!, robots: [Robot!]!, stations: [Station!]!, poisoned: Boolean! }
+type ActiveIncident { robotId: ID!, type: String!, severity: String!, telemetry: Robot! }
+type FleetState { layout: WarehouseLayout!, tick: Int!, robots: [Robot!]!, stations: [Station!]!, poisoned: Boolean!, activeIncidents: [ActiveIncident!]! }
 type Proposal {
   id: ID!
   action: String!

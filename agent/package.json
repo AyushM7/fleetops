@@ -7,11 +7,19 @@
     "node": "24.21.0"
   },
   "scripts": {
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "test": "vitest run --exclude src/backend.integration.test.ts",
+    "test:integration": "vitest run src/backend.integration.test.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node --env-file-if-exists=.env dist/cli.js"
   },
   "devDependencies": {
+    "@types/node": "24.19.2",
     "typescript": "7.0.2",
     "vitest": "5.0.2"
+  },
+  "dependencies": {
+    "@mastra/core": "1.75.0",
+    "zod": "4.6.7"
   }
 }

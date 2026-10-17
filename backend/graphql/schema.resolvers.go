@@ -49,6 +49,12 @@ func (r *queryResolver) FleetState(ctx context.Context) (*model.FleetState, erro
 	for _, v := range state.Stations {
 		view.Stations = append(view.Stations, &model.Station{ID: v.ID, X: v.X, Y: v.Y, OccupiedBy: v.OccupiedBy, ReservedBy: v.ReservedBy})
 	}
+	view.ActiveIncidents = make([]*model.ActiveIncident, 0, len(state.ActiveIncidents))
+	for _, v := range state.ActiveIncidents {
+		r := v.Telemetry
+		view.ActiveIncidents = append(view.ActiveIncidents, &model.ActiveIncident{RobotID: v.RobotID, Type: v.Type, Severity: v.Severity,
+			Telemetry: &model.Robot{ID: r.ID, X: r.X, Y: r.Y, Battery: r.Battery, Status: r.Status, JobID: r.JobID, WaitTicks: r.WaitTicks, Blocked: r.Blocked}})
+	}
 	return view, nil
 }
 
