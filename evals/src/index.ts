@@ -1,6 +1,7 @@
 import { isDeepStrictEqual as equal } from "node:util";
 import { reasoningSchema, type AIReasoning, type FleetState, type SnapshotReference } from "../../agent/src/contracts.js";
 import { validateSnapshot } from "../../agent/src/reasoning.js";
+import { reasoningTextGrounded } from "../../agent/src/statements.js";
 
 type Identity<T> = T extends unknown ? Omit<T, "evidence" | "rationale"> : never;
 export type Action = Identity<NonNullable<AIReasoning["proposedAction"]>>;
@@ -92,7 +93,7 @@ export function scoreCase(test: EvaluationCase, actual: ActualOutput): ScoringRe
   result.checks.evidenceGrounding = check(reasoning.tick === test.input.tick && reasoning.interpretations.every(i => {
     const incident = test.input.activeIncidents.find(other => equal(ref(test.input, other), i.reference));
     return incident !== undefined && incident.severity === i.severity && equal(incident.telemetry, i.telemetry);
-  }) && groundedAction(reasoning.proposedAction, test.input));
+  }) && groundedAction(reasoning.proposedAction, test.input) && reasoningTextGrounded(reasoning, test.input));
   result.checks.recommendationValidity = check(equal(reasoning.proposedAction ? actionIdentity(reasoning.proposedAction) : null, test.expected.action));
   result.checks.operatorAttention = test.expected.incidents.length === 0 ? "not_applicable" :
     check(result.checks.incidentReferences === "pass" && reasoning.interpretations.every(i => i.recommendedResponse === "operator_attention"));
