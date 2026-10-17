@@ -1,0 +1,93 @@
+{
+  "source": "Genuine unedited local Go/PostgreSQL captures; automated UI verification, no human/live-LLM claim",
+  "initial_captures": "01-09",
+  "retained_intermediate_verification": "10-11",
+  "final_controller_captures": "12-17",
+  "captures": [
+    {
+      "file": "01-pending-tick42.jpg",
+      "bytes": 64759,
+      "sha256": "fd6867119a876c48afe996c23ea8639ae67de60b8376978e12db6f61e440904a"
+    },
+    {
+      "file": "02-approved-paused-tick42.jpg",
+      "bytes": 61521,
+      "sha256": "65d4615d0a02bfbe6414a2b12297a5b306301990f4713ab375c6063622e81057"
+    },
+    {
+      "file": "03-play-pause-tick43.jpg",
+      "bytes": 67321,
+      "sha256": "c23e35f1d8e176e145c32ae54d1b89d6b55e11a557c6d6465e29ad31754a2029"
+    },
+    {
+      "file": "04-step-tick44.jpg",
+      "bytes": 67488,
+      "sha256": "a1037ed47c88254d88048deb3c2b1ca89c03b06442df8964756f43f925152776"
+    },
+    {
+      "file": "05-delivered-tick45.jpg",
+      "bytes": 101692,
+      "sha256": "dbc5b9e0eac454e0d682a2487ad093efb5e0dc6da853b3773517c3f6543c5ddc"
+    },
+    {
+      "file": "06-rejected-tick42.jpg",
+      "bytes": 60304,
+      "sha256": "f0cd1bb28ec15f4f2e6c7489bbad04cfaea7b2cfe248708a0f49d1e3d744d753"
+    },
+    {
+      "file": "07-rejected-running-tick43.jpg",
+      "bytes": 62620,
+      "sha256": "14d878983fd0fe54ca93812bcc02cdea187b76d49fcf68744159fca032d7f5b7"
+    },
+    {
+      "file": "08-restart-pending-tick42.jpg",
+      "bytes": 64950,
+      "sha256": "4ac150f6225c54294703f5cfee68f307a6307b52cdfda52e925c7edfe36e8f6f"
+    },
+    {
+      "file": "09-stopped-unavailable.jpg",
+      "bytes": 68936,
+      "sha256": "fa36bd6677aa4e6c3339ad11fb7560a58822f46383c8fde46582ecdb82cb5877"
+    },
+    {
+      "file": "10-final-half-speed-paused.jpg",
+      "bytes": 67483,
+      "sha256": "d3347a84899820dc8a96367175a1a7f8b8d61533591148da68f4c48fe8f4d851"
+    },
+    {
+      "file": "11-status-cancellation-regression-before-fix.jpg",
+      "bytes": 76865,
+      "sha256": "bd07b1c31fb6e6c7ee9deaec054b551cf736d3f8a538bd4f524dea16b815e73f"
+    },
+    {
+      "file": "12-final-step-tick43.jpg",
+      "bytes": 64542,
+      "sha256": "112e693b087811bdc2bad1e764723349587ff06a064ed93b98dd04b5bc0c07de"
+    },
+    {
+      "file": "13-final-half-speed-pause-request.jpg",
+      "bytes": 67052,
+      "sha256": "6bef53d3baf7f6eab7c1f1fb8ebf221ff35b377284270b839557e1ee169c8aae"
+    },
+    {
+      "file": "14-final-paused-after-play.jpg",
+      "bytes": 67206,
+      "sha256": "f62b6a6a0696196112cd7fdc27bb4193e4b43da69fa75cf1986aedad94e60f5a"
+    },
+    {
+      "file": "15-final-step-after-pause.jpg",
+      "bytes": 67303,
+      "sha256": "0ca557c9710ef2d2dd0cfd2268b328807a3cf111944f84f2c8ed045da4fdf209"
+    },
+    {
+      "file": "16-final-restart-pending-tick42.jpg",
+      "bytes": 64950,
+      "sha256": "4ac150f6225c54294703f5cfee68f307a6307b52cdfda52e925c7edfe36e8f6f"
+    },
+    {
+      "file": "17-final-rejected-step-tick43.jpg",
+      "bytes": 62996,
+      "sha256": "bd525df4d7f5f29b07de2943d211dba18120c2134b40a50bd7c15c43c3dc41ea"
+    }
+  ]
+}

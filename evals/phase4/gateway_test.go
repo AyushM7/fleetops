@@ -87,7 +87,7 @@ func (g *demoGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "demo session ended", 401)
 		return
 	}
-	if r.URL.Path == "/graphql" || r.URL.Path == "/demo/status" || r.URL.Path == "/demo/restart" {
+	if r.URL.Path == "/graphql" || r.URL.Path == "/demo/status" || r.URL.Path == "/demo/restart" || isTimeControl(r.URL.Path) {
 		g.graphql(w, r)
 		return
 	}

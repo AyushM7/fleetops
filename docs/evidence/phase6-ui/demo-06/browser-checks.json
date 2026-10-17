@@ -1,0 +1,99 @@
+[
+  {
+    "stage": "pending",
+    "tick": "42",
+    "play": false,
+    "step": false
+  },
+  {
+    "stage": "approved",
+    "tick": "42"
+  },
+  {
+    "stage": "pause",
+    "tick": "43",
+    "at": 1792275486205
+  },
+  {
+    "stage": "pause-held",
+    "tick": "43",
+    "at": 1792275494297
+  },
+  {
+    "stage": "step",
+    "tick": "44"
+  },
+  {
+    "stage": "speed2-first-tick",
+    "elapsedMs": 1849,
+    "tick": "45"
+  },
+  {
+    "stage": "speed0.5-observed",
+    "tick": "48",
+    "note": "exact-tick wait timed out; later authoritative running state showed progression"
+  },
+  {
+    "stage": "rejected-running",
+    "tick": "43"
+  },
+  {
+    "stage": "restart-after-playing",
+    "tick": "42",
+    "play": false
+  },
+  {
+    "stage": "status-cancellation-regression",
+    "note": "Observed aborted status read permanently stopping owner; corrected and regression added before final completion."
+  },
+  {
+    "stage": "verified-half-play",
+    "tick": "42",
+    "at": 1792276177769
+  },
+  {
+    "stage": "verified-half-paused",
+    "tick": "44",
+    "elapsedMs": 12757
+  },
+  {
+    "stage": "pre-serialization-step-rejected",
+    "tick": "44",
+    "note": "A status read caused 409; replaced TryLock with safe serialization and added a regression."
+  },
+  {
+    "stage": "complete-step",
+    "before": 42,
+    "after": 43
+  },
+  {
+    "stage": "complete-half-running",
+    "tick": "43",
+    "at": 1792276626525
+  },
+  {
+    "stage": "complete-half-paused",
+    "tick": "48",
+    "elapsedMs": 21688
+  },
+  {
+    "stage": "complete-speed2-paused",
+    "tick": 49
+  },
+  {
+    "stage": "complete-step-after-pause",
+    "before": 49,
+    "after": 50
+  },
+  {
+    "stage": "complete-restart",
+    "tick": "42",
+    "playEnabled": false,
+    "speed": "1"
+  },
+  {
+    "stage": "complete-rejected-step",
+    "tick": "43",
+    "r1": "Select R1: moving, traffic blocked, battery 100%, job J1, position (0,3)"
+  }
+]

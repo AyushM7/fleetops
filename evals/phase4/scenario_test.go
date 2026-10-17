@@ -20,6 +20,7 @@ import (
 	"github.com/AyushM7/fleetops/backend/db"
 	"github.com/AyushM7/fleetops/backend/fleet"
 	"github.com/AyushM7/fleetops/backend/graphql"
+	"github.com/AyushM7/fleetops/backend/graphql/model"
 	"github.com/AyushM7/fleetops/backend/proposal"
 	"github.com/AyushM7/fleetops/backend/sim"
 )
@@ -72,7 +73,22 @@ func (f demoFactory) create(ctx context.Context) (*demoRun, error) {
 	if err := scenario.capture(ctx); err != nil {
 		return nil, err
 	}
-	return &demoRun{generation: scenario.generation, handler: handler, capture: scenario.capture, advance: scenario.advance}, nil
+	return &demoRun{generation: scenario.generation, handler: handler, capture: scenario.capture, advance: scenario.advance,
+		inspect: scenario.inspect, step: func(context.Context) error { return service.Tick() }}, nil
+}
+
+func (s *demoScenario) inspect(ctx context.Context) (*model.FleetState, bool, error) {
+	row, err := s.service.ReadProposal(ctx, s.evidence.ProposalID)
+	if err != nil {
+		return nil, false, err
+	}
+	if row == nil || !row.CurrentRuntime {
+		return nil, false, errors.New("active proposal missing")
+	}
+	state, err := (&graphql.Resolver{Service: s.service}).Query().FleetState(ctx)
+	// Expiry alone is not a human decision. A failed approval cannot open this gate.
+	decided := row.Proposal.State == proposal.Rejected || (row.Proposal.State == proposal.Approved && row.Execution == fleet.Succeeded)
+	return state, decided, err
 }
 
 func demoBaseline(initial sim.State) (demoEvidence, error) {
@@ -223,7 +239,7 @@ func TestPhase4AcceptanceDemo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := &demoController{run: run, ready: true, factory: factory.create, record: func(generation, outcome string) error {
+	c := &demoController{run: run, ready: true, interactive: true, speed: "1", factory: factory.create, record: func(generation, outcome string) error {
 		return writeDemoEvidence(evidenceDir, "lifecycle", struct {
 			Generation, Outcome string
 			At                  time.Time

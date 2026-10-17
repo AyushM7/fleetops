@@ -33,7 +33,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'gateway_test.go') -Destination (Join-Path $testBackend 'fleet/demo_gateway_test.go')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'gateway_security_test.go') -Destination (Join-Path $testBackend 'fleet/demo_gateway_security_test.go')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'gateway_integration_test.go') -Destination (Join-Path $testBackend 'fleet/demo_gateway_integration_test.go')
-    foreach ($name in @('controller_test.go','controller_security_test.go','scenario_test.go','restart_integration_test.go')) {
+    foreach ($name in @('controller_test.go','controller_security_test.go','controls_test.go','controls_behavior_test.go','controls_integration_test.go','scenario_test.go','restart_integration_test.go')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $testBackend "fleet/demo_$name")
     }
     docker run --detach --rm --name $container --publish '127.0.0.1::5432' --env POSTGRES_HOST_AUTH_METHOD=trust --env POSTGRES_DB=fleetops_p405 postgres:18.6 | Out-Null
@@ -62,7 +62,7 @@ try {
     Write-Output 'For the interactive run, follow docs/phase4-demo.md. Only a human operator should click Approve.'
     Push-Location $testBackend
     try {
-        $tests = if ($CheckOnly) { '^(TestPhase4AcceptanceDemo|TestDemo.*)$' } else { '^(TestPhase4AcceptanceDemo|TestDemoGatewaySecurity|TestDemoController.*|TestDemoTrustedBaseline)$' }
+        $tests = if ($CheckOnly) { '^(TestPhase4AcceptanceDemo|TestDemo.*)$' } else { '^(TestPhase4AcceptanceDemo|TestDemoGatewaySecurity|TestDemoController.*|TestDemoControls.*|TestDemoTrustedBaseline)$' }
         go test -tags fleetops_test ./fleet -run $tests -count=1 -v -timeout 25m
         $retainInfrastructure = $LASTEXITCODE -ne 0
         Assert-Exit 'Phase 4 local acceptance demo'
