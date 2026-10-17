@@ -1,10 +1,131 @@
-# FleetOps evaluations — P5-00 through P5-03
+# FleetOps evaluations — P5-00 through P5-04
 
 The default, foundation and adversarial paths are offline contract benchmarks,
 not measurements of LLM intelligence or recovery effectiveness. They receive no
 simulator Driver/Commander or mutation tools. The explicit `--recovery` path adds
 actual paired Go experiments through a trusted, test-only harness, described below.
-No benchmark calls a live model or paid provider.
+All default benchmarks are offline. P5-04 adds an explicitly gated future live path;
+no live calls were made while implementing it.
+
+## P5-04 model evaluation
+
+From the repository root:
+
+```powershell
+npm --prefix evals run benchmark --silent -- --model-eval
+npm --prefix evals run benchmark --silent -- --model-eval --trials 2 --max-requests 24
+```
+
+JSON goes to stdout; per-trial summaries go to stderr. Offline mode uses the
+existing local Mastra model adapter, with the deterministic observer producing
+its output. It exercises real generation and structured-output handling without
+credentials or HTTP. It does not measure LLM quality. A run exits 0 only when
+every requested trial passes scoring and host grounding; call errors count against
+the full trial denominator. Repeated local runs serialize identically.
+
+The harness selects the 12 P5-01 decision cases (`probe: none`). The four injected
+bad-output probes remain in P5-01, and all P5-02 attacks remain in their separate
+benchmark. Independent labels, metadata and expected scoring never enter the
+model. It receives the shared production `reasoningPrompt`, instructions and
+strict schema. **The production prompt includes the deterministic supported-action
+hint.** This measures compliance with the deployed assisted reasoning contract,
+not blind independent action discovery. Do not interpret matching that hint as
+proof of autonomous decision quality.
+
+`agent/src/evaluation-model.ts` constructs a Mastra agent with no tools, memory,
+FleetAPI or simulator reference. It limits generation to one step, no tools,
+zero retries, a 30-second timeout and an explicit output-token ceiling. The schema
+uses `warn` rather than replacing invalid output, retaining raw response text
+for independent scoring. Host acceptance still uses the unchanged production
+strict validator and exact host-statement policy. Neither an accepted response
+nor a passing score triggers submission, approval, Go validation or execution.
+The production live path shares only the extracted prompt builder; its policy
+and authorization behavior remain unchanged.
+
+Per trial, the report retains raw text/parsed recommendation, P5-00 scores,
+host acceptance, action correctness, statement compliance and deterministic
+baseline score. Outcomes distinguish wrong action, correct action with invalid
+prose, other host rejection, appropriate abstention, malformed/missing output
+and generation-call failure. Every category and aggregate includes total trials,
+passes, call failures, measured denominators and each existing metric's
+pass/fail/not-applicable/call-failure counts. Baseline results repeat per trial
+for paired comparison; they are not additional model observations.
+
+`unsupportedCommands` counts raw named commands outside the allowlist, including
+malformed envelopes. `unsafeAttempts` counts schema-valid, statement-compliant
+non-null actions rejected by host policy/grounding, with its own measured
+denominator. It is a conservative **host-policy rejection signal**, not an
+independently measured Go safety verdict. Other malformed/invalid-prose cases
+are reported separately rather than assumed safe. Invalid references and evidence
+use existing exact checks. Statement violations include fabricated approval or
+delivery claims, but also truthful paraphrases: these are not an independently
+classified fabrication rate. The report explicitly labels semantic fabrication
+classification unavailable. P5-02 retains the independently labelled negative
+approval/delivery probes. Generation-call failures include provider, transport,
+timeout or pipeline errors, separately from completed but wrong/malformed model
+responses; underlying error details are suppressed to avoid secret leakage.
+
+Go validation, proposal submission, actual approval, execution and delivery are
+unmeasured in this harness. Recovery effectiveness remains a separate P5-03
+measurement. Live trials must be reported as variable observations, never as
+deterministic results or overall accuracy from these few scenarios.
+
+### Future live configuration and cost review
+
+Do not run live mode without separate user authorization. No live mode runs in
+tests/CI. `--model-eval --live` additionally requires `--provider` and `--model`.
+Supported provider identifiers reuse production key mapping: `openai`
+(`OPENAI_API_KEY`), `anthropic` (`ANTHROPIC_API_KEY`), `google`
+(`GOOGLE_GENERATIVE_AI_API_KEY`). Keys remain server-side environment values;
+never put credentials in flags, review files, snapshots or reports. Individual
+models' schema, sampling and token-limit support is unverified until authorized
+live trials. Unsupported provider/model configuration is a failure, not a retry
+or fallback to another model. Optional `--temperature` is recorded when supplied;
+otherwise provider defaults apply. Other sampling parameters are not overridden.
+
+There is no bundled current pricing table or real price estimate. Live mode
+fails closed without a separately reviewed JSON file supplied through
+`--cost-review PATH`, its exact SHA256 through `--approve-cost-sha256 HASH`, and
+an explicit positive `--budget-usd NUMBER`. The review must contain:
+
+| Field | Review requirement |
+| --- | --- |
+| `provider`, `model` | Exact selected identifiers, including any model version |
+| `source` | Authoritative pricing and model-limit source checked by the operator |
+| `reviewedAt`, `expiresAt` | Parseable dates; review already made and not expired |
+| `maxBillableInputTokens` | Positive integer upper bound on all billable input tokens per request, including instructions/schema/wrappers; use the provider-enforced full context ceiling, not a prompt-length guess |
+| `inputUSDPerMillion`, `outputUSDPerMillion` | Positive worst-case rates, including relevant billing modes; no promotional/cache discounts assumed |
+| `outputLimitIncludesAllBilledTokens` | Must be `true`, verified for the selected provider/model, including hidden reasoning tokens |
+
+This is manual operator verification of provider pricing/billing semantics, not
+automated verification of the truth of the file or a provider-enforced dollar
+budget. A hash acknowledges the exact reviewed file; it is not an authorization
+credential or a signature. Do not approve a record if the context ceiling,
+output ceiling, auxiliary billing or rates cannot be bounded. Such configurations
+must remain blocked. Requests with ancillary fees are unsupported unless those
+fees are conservatively represented in the reviewed rates. Re-review changes in
+pricing, model aliases or billing behavior; expiry is an additional check.
+
+Before any generation, the runner checks
+`N = scenarios * trials <= maxRequests` and prints the reviewed upper estimate
+`N * (maxBillableInputTokens * inputRate + maxOutputTokens * outputRate) / 1e6`.
+It refuses execution if the estimate exceeds the budget. The full provider input
+ceiling deliberately overestimates input rather than guessing tokenization.
+`--max-output-tokens` defaults to 2400; `--max-requests` defaults to 12. All limits
+must be positive safe integers. A failed call still consumes its scheduled trial;
+there are no application retries, schema-repair calls, alternate structuring
+models or automatic continuations. `--plan` performs configuration/cost checks
+without generation; in live mode it needs the same reviewed config and key.
+Provider/model/settings and review source/hash/estimate are recorded, never keys.
+
+Only snapshots, production instructions and schema are sent. Review operational
+data and provider retention policies before authorizing future calls. Raw outputs
+may repeat snapshot data or malicious text; keep JSON artifacts private and treat
+them as untrusted data, not instructions. Exception messages/headers are not saved.
+No live provider was exercised, so prices, provider billing enforcement,
+model-specific compatibility and actual LLM accuracy remain unmeasured. P5-05
+should review authorized repeated real-model results, failure cases and these
+remaining validity limits before drawing broader conclusions.
 
 ## Run
 

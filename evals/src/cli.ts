@@ -5,8 +5,14 @@ import { runDataset, summarizeDataset } from "./dataset-runner.js";
 import { adversarialCases } from "./adversarial.js";
 import { runAdversarial, summarizeAdversarial } from "./adversarial-runner.js";
 import { runRecovery, summarizeRecovery } from "./recovery.js";
+import { modelCLI } from "./model-cli.js";
 
-if (process.argv.includes("--foundation")) {
+if (process.argv.includes("--live") && !process.argv.includes("--model-eval")) {
+  throw new Error("Live flag requires explicit --model-eval mode.");
+}
+if (process.argv.includes("--model-eval")) {
+  await modelCLI(process.argv.slice(2));
+} else if (process.argv.includes("--foundation")) {
   const report = await runEvaluation(foundationCases(), foundationDouble);
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   process.stderr.write(`${summarize(report)}\n`);

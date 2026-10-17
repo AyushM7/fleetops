@@ -31,6 +31,11 @@ function requireLive(enabled: boolean, model: string): void {
   if (!enabled || !hasProviderKey(model, process.env)) throw new Error("Live model execution requires explicit opt-in and a configured provider API key.");
 }
 
+export function reasoningPrompt(state: Parameters<typeof observedFacts>[0], demo?: { robotId: string; stationId: string }): string {
+  return JSON.stringify({ observedFacts: observedFacts(state), supportedAction: observeFleet(state, demo).recommendedAction,
+    demo: demo ?? null, reasoningStatements: reasoningStatements(state) });
+}
+
 export function createFleetAgent(api: FleetAPI, model: `${string}/${string}`, allowSubmit = false, liveEnabled = false, demo?: { robotId: string; stationId: string }) {
   const session = createFleetTools(api, allowSubmit, demo);
   const agent = new Agent({
@@ -62,8 +67,7 @@ export async function runLive(api: FleetAPI, options: {
   const { agent } = createFleetAgent({ readFleet: async () => structuredClone(state),
     submitCharging: async () => { throw new Error("Submission unavailable during reasoning."); },
     submitReassignment: async () => { throw new Error("Submission unavailable during reasoning."); } }, options.model, false, true);
-  const prompt = JSON.stringify({ observedFacts: observedFacts(state),
-    supportedAction: supported.recommendedAction, demo: options.demo ?? null, reasoningStatements: reasoningStatements(state) });
+  const prompt = reasoningPrompt(state, options.demo);
   let aiAnalysis: AIAnalysis;
   try {
     const result = await agent.generate(prompt, {
