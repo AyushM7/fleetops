@@ -1,4 +1,32 @@
-# FleetOps evaluations — P5-00 through P5-04
+# FleetOps evaluations — P5-00 through P5-05
+
+## Final Phase 5 review
+
+The [final engineering report](../docs/phase5-evaluation-report.md) consolidates
+methodology, coverage, recovery effects, saved live observations and limitations.
+The [archived OpenAI gpt-6-luna report](../docs/evidence/p5-04-live-full.json)
+records **11/12** decisions passed, no generation-call failures and one
+poisoned-runtime wrong action rejected by host validation. The prompt includes
+a deterministic supported-action hint; this is not independent action discovery.
+The owner-reported earlier pilot passed 2/2 and is not pooled with the full run.
+Exact charged cost and consumed tokens are unconfirmed. No API call was made for
+the final report; all infrastructure-only statements below describe the earlier
+implementation ticket, before these saved live observations were reviewed.
+
+Replay the saved responses against current scoring/host grounding without an API:
+
+```powershell
+# From evals/, after the workspace TEMP/TMP setup below:
+node ../agent/node_modules/vitest/vitest.mjs run src/final-report.test.ts --no-file-parallelism
+```
+
+This test checks the archive digest and all saved per-trial/category/aggregate
+outcomes. It uses supplied response text, not a newly generated model response.
+Preserve existing credit: do not run `--live` to reproduce the report. Model
+recommendation acceptance, Go validation, isolated simulator effects, real human
+approval and durable auditing are separate measurements. The current verification
+log, including the Windows CRLF golden-file mismatch, is in
+[docs/eval-results.md](../docs/eval-results.md#p5-05--final-review).
 
 The default, foundation and adversarial paths are offline contract benchmarks,
 not measurements of LLM intelligence or recovery effectiveness. They receive no
@@ -86,8 +114,9 @@ Supported provider identifiers reuse production key mapping: `openai`
 (`OPENAI_API_KEY`), `anthropic` (`ANTHROPIC_API_KEY`), `google`
 (`GOOGLE_GENERATIVE_AI_API_KEY`). Keys remain server-side environment values;
 never put credentials in flags, review files, snapshots or reports. Individual
-models' schema, sampling and token-limit support is unverified until authorized
-live trials. Unsupported provider/model configuration is a failure, not a retry
+models' schema, sampling and token-limit support requires separate evidence;
+only the archived OpenAI gpt-6-luna configuration has saved live observations.
+Unsupported provider/model configuration is a failure, not a retry
 or fallback to another model. Optional `--temperature` is recorded when supplied;
 otherwise provider defaults apply. Other sampling parameters are not overridden.
 
@@ -130,10 +159,10 @@ Only snapshots, production instructions and schema are sent. Review operational
 data and provider retention policies before authorizing future calls. Raw outputs
 may repeat snapshot data or malicious text; keep JSON artifacts private and treat
 them as untrusted data, not instructions. Exception messages/headers are not saved.
-No live provider was exercised, so prices, provider billing enforcement,
-model-specific compatibility and actual LLM accuracy remain unmeasured. P5-05
-should review authorized repeated real-model results, failure cases and these
-remaining validity limits before drawing broader conclusions.
+The infrastructure ticket exercised no live provider. The final review above
+adds saved OpenAI observations; current prices, actual charges, provider billing
+enforcement and other models remain unverified. Repeated real-model results and
+the stated validity limits need separate review before broader conclusions.
 
 ## Run
 
@@ -162,7 +191,8 @@ node ../agent/node_modules/typescript/bin/tsc --noEmit
 No install or dependency change is required for these fallback commands. The
 benchmark uses Node's built-in TypeScript stripping; `scripts/run.mjs` maps
 relative NodeNext `.js` source imports to their existing `.ts` sources. It does
-not compile or execute a model. Agent contracts/fixtures require the existing
+not compile sources. Default dataset evaluation executes no model; `--model-eval`
+uses the local double unless explicit live gates are satisfied. Agent contracts/fixtures require the existing
 agent installation. Type checking remains a separate required check.
 
 The dataset CLI exits 0 only for a nonempty benchmark whose complete declared
