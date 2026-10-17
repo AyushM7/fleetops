@@ -1,5 +1,36 @@
 # Evaluation results
 
+## P5-04 follow-up — bounded scenario pilot (2026-10-17)
+
+`--model-eval --scenario-limit 2` selects `traffic-eligible` and
+`traffic-no-candidate`, the first two decision scenarios in deterministic dataset
+order. Omitting the option retains all 12. Both plan and execution JSON include
+selected IDs/count; request counts, trial totals, cost estimates and budgets use
+the selected cases. Invalid, non-positive, fractional, unsafe-integer and
+out-of-range limits fail before generation. Live protections are unchanged.
+
+Verification used the existing Windows installed-agent tool fallback and workspace
+TEMP/TMP documented below. All commands exited **0**:
+
+- From `evals/`, `node ../agent/node_modules/vitest/vitest.mjs run src/model-cli.test.ts --no-file-parallelism`:
+  **18 focused tests passed**; full `run --no-file-parallelism`: **238 tests passed
+  across seven files**.
+- From `evals/`, `node ../agent/node_modules/typescript/bin/tsc --noEmit`: passed.
+- From repository root, `npm --prefix evals run benchmark --silent -- --model-eval --scenario-limit 2 --plan`:
+  selected two IDs, two planned requests, zero offline cost.
+- Same command without `--plan`: **2/2** offline trials passed; without
+  `--scenario-limit 2`: **12/12** passed.
+- From `evals/`, `node scripts/run.mjs --foundation`: **2/2**;
+  `node scripts/run.mjs`: **12/12 decisions and 4/4 expected rejections**;
+  `node scripts/run.mjs --adversarial`: **16/16 output rejections and 4/4 input defenses**;
+  `node scripts/run.mjs --recovery`: **5/5 criteria, two commands, one delivery improvement**.
+- `git diff --check`: passed.
+
+Cost/budget and credential checks were exercised only with synthetic test pricing,
+a fake key and `--plan`; generation was not invoked in those tests. No live API
+calls, new dependencies or production changes. Real-model limitations below remain
+unmeasured. P5-05 has not started.
+
 ## P5-04 — model-evaluation infrastructure (2026-10-17)
 
 No live model calls, including free-tier calls, were made. Actual LLM accuracy,

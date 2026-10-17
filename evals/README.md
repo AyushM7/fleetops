@@ -14,6 +14,9 @@ From the repository root:
 ```powershell
 npm --prefix evals run benchmark --silent -- --model-eval
 npm --prefix evals run benchmark --silent -- --model-eval --trials 2 --max-requests 24
+# Pilot the first two scenarios, or inspect the plan without generation:
+npm --prefix evals run benchmark --silent -- --model-eval --scenario-limit 2
+npm --prefix evals run benchmark --silent -- --model-eval --scenario-limit 2 --plan
 ```
 
 JSON goes to stdout; per-trial summaries go to stderr. Offline mode uses the
@@ -23,7 +26,12 @@ credentials or HTTP. It does not measure LLM quality. A run exits 0 only when
 every requested trial passes scoring and host grounding; call errors count against
 the full trial denominator. Repeated local runs serialize identically.
 
-The harness selects the 12 P5-01 decision cases (`probe: none`). The four injected
+The harness defaults to all 12 P5-01 decision cases (`probe: none`). Optional
+`--scenario-limit N` selects the first N in deterministic dataset order and rejects
+non-positive, fractional, malformed or out-of-range values. Request ceilings,
+trial totals, cost estimates and budget checks use only selected cases. Dry-run
+and execution JSON include `selectedScenarioCount` and `selectedScenarioIds`.
+All live safeguards remain required even for a two-scenario pilot. The four injected
 bad-output probes remain in P5-01, and all P5-02 attacks remain in their separate
 benchmark. Independent labels, metadata and expected scoring never enter the
 model. It receives the shared production `reasoningPrompt`, instructions and
