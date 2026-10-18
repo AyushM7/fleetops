@@ -5,7 +5,9 @@ import { observedFacts } from "./reasoning.js";
 import type { AgentResult } from "./contracts.js";
 
 const runners = vi.hoisted(() => ({ runOffline: vi.fn(), runLive: vi.fn() }));
+const decisionRunner = vi.hoisted(() => ({ runRecoveryDecision: vi.fn() }));
 vi.mock("./agent.js", () => runners);
+vi.mock("./decision-agent.js", () => decisionRunner);
 vi.mock("./graphql.js", () => ({ createFleetClient: vi.fn(() => ({})), FleetError: class extends Error {} }));
 const originalArgs = process.argv;
 const originalExitCode = process.exitCode;
@@ -53,4 +55,13 @@ it("sanitizes provider or private configuration errors", async () => {
   await import("./cli.js");
   await vi.waitFor(() => expect(process.exitCode).toBe(1));
   expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("test-only-private-token");
+});
+it("routes explicit v2 inference and submission to the isolated decision runner", async () => {
+  process.argv.push("--live", "--decision-v2", "--submit");
+  vi.stubEnv("FLEETOPS_MODEL", "openai/test"); vi.stubEnv("FLEETOPS_DECISION_OBJECTIVE", "preserve_battery_headroom");
+  decisionRunner.runRecoveryDecision.mockResolvedValue({ ...resultFixture(), aiAnalysis: { status: "accepted", decision: null } });
+  await import("./cli.js"); await vi.waitFor(() => expect(console.log).toHaveBeenCalled());
+  expect(decisionRunner.runRecoveryDecision).toHaveBeenCalledExactlyOnceWith({}, { enabled: true, model: "openai/test", objective: "preserve_battery_headroom", allowSubmit: true });
+  expect(runners.runLive).not.toHaveBeenCalled(); expect(runners.runOffline).not.toHaveBeenCalled();
+  expect(process.exitCode).toBeUndefined();
 });
