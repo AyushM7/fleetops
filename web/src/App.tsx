@@ -8,11 +8,12 @@ import { isLocalDemo } from "./demo";
 import { controlSimulation, DemoError, pollDemoStatus, restartScenario, selectScenario, RestartControl, type DemoStatus, type TimeOperation } from "./restart";
 import { ScenarioSelector, type ScenarioID } from "./scenarios";
 import SimulationControls from "./SimulationControls";
+import AgentActivity from "./AgentActivity";
 
 export { Warehouse } from "./Warehouse";
 
 const emptyFeed: Feed = { phase: "loading", snapshot: null, updatedAt: null };
-export function Dashboard({ feed, decisionPanel, simulationControls }: { feed: Feed; decisionPanel?: ReactNode; simulationControls?: ReactNode }): JSX.Element {
+export function Dashboard({ feed, decisionPanel, simulationControls, agentActivity }: { feed: Feed; decisionPanel?: ReactNode; simulationControls?: ReactNode; agentActivity?: ReactNode }): JSX.Element {
   const fleet = feed.snapshot;
   const [selection, setSelection] = useState<string | null>(null);
   const selectedRobot = fleet?.robots.find(r => r.id === selection) ?? null;
@@ -35,6 +36,7 @@ export function Dashboard({ feed, decisionPanel, simulationControls }: { feed: F
       <aside className="operator-context" aria-label="Operator context">
         {fleet && <ActiveIncidents fleet={fleet} stale={feed.phase !== "live"} selectedRobotID={selectedRobotID} onSelectRobot={setSelection} />}
         <div className="decision-panel">{decisionPanel}</div>
+        {agentActivity}
         {fleet && <>
           <details className="fleet-panel"><summary>Robot fleet <span>{fleet.robots.length} robots</span></summary><ul className="robot-list">{fleet.robots.map(r => <RobotCard key={r.id} robot={r} selectedRobotID={selectedRobotID} onSelectRobot={setSelection} />)}</ul></details>
           <details className="job-disclosure"><summary>Job progress <span>{fleet.jobs.filter(j => j.status !== "done").length} open jobs</span></summary><JobProgress fleet={fleet} stale={feed.phase !== "live"} /></details>
@@ -125,6 +127,6 @@ export default function App(): JSX.Element {
     <main id="main-content" tabIndex={-1}>{demo && !token ? <div className="notice notice-error" role="alert">Demo session ended. Reload the local demo URL while the runner is active.</div> : !token ? <section className="login-panel"><p className="eyebrow">LIVE WAREHOUSE</p><h1>Your fleet, in view.</h1><p>Connect to the running simulator with your bearer token.</p>
       <form onSubmit={connect}><label htmlFor="viewer-token">Bearer token</label><input id="viewer-token" type="password" autoComplete="off" spellCheck={false} value={draft} onChange={event => setDraft(event.target.value)} placeholder="Paste a viewer or operator token" required /><button className="primary-button" type="submit">Connect to fleet <span aria-hidden="true">→</span></button></form>
       {authError && <p className="auth-error" role="alert">Authentication failed. Check your token and connect again.</p>}
-      <p className="privacy-note">Viewer credentials monitor the fleet; operator credentials enable the approval inbox. Your token stays in memory for this tab and is cleared on disconnect or refresh.</p></section> : <><Dashboard key={demo ? generation : "normal"} feed={feed} simulationControls={demo ? <SimulationControls status={simulationStatus} busy={controlling || restarting} unavailable={!statusKnown || !scenarioReady || feed.phase !== "live" || feed.snapshot?.poisoned !== false} error={controlError} onControl={operation => { void control(operation); }} /> : undefined} decisionPanel={demo && (!generation || restarting) ? <section id="approval-inbox" className="approval-inbox"><h2>Approval inbox</h2><p role="status">Waiting for the fresh scenario…</p></section> : <ApprovalInbox key={demo ? generation : "normal"} token={demo ? generation : token} evidenceContext={demo ? { generation, scenarioId: simulationStatus?.scenarioId, evidence: simulationStatus?.evidence, current: feed.snapshot, available: statusKnown && scenarioReady && feed.phase === "live" } : undefined} runtimeAvailable={feed.phase === "live" && feed.snapshot?.poisoned === false && (!demo || scenarioReady)} onUnauthorized={onUnauthorized} onDecision={onDecision} />} /></>}</main>
+      <p className="privacy-note">Viewer credentials monitor the fleet; operator credentials enable the approval inbox. Your token stays in memory for this tab and is cleared on disconnect or refresh.</p></section> : <><Dashboard key={demo ? generation : "normal"} feed={feed} agentActivity={<AgentActivity key={demo ? generation : token} token={demo ? generation : token} available={feed.phase === "live" && !restarting && (!demo || scenarioReady && statusKnown)} revision={refresh} onUnauthorized={onUnauthorized} />} simulationControls={demo ? <SimulationControls status={simulationStatus} busy={controlling || restarting} unavailable={!statusKnown || !scenarioReady || feed.phase !== "live" || feed.snapshot?.poisoned !== false} error={controlError} onControl={operation => { void control(operation); }} /> : undefined} decisionPanel={demo && (!generation || restarting) ? <section id="approval-inbox" className="approval-inbox"><h2>Approval inbox</h2><p role="status">Waiting for the fresh scenario…</p></section> : <ApprovalInbox key={demo ? generation : "normal"} token={demo ? generation : token} evidenceContext={demo ? { generation, scenarioId: simulationStatus?.scenarioId, evidence: simulationStatus?.evidence, current: feed.snapshot, available: statusKnown && scenarioReady && feed.phase === "live" } : undefined} runtimeAvailable={feed.phase === "live" && feed.snapshot?.poisoned === false && (!demo || scenarioReady)} onUnauthorized={onUnauthorized} onDecision={onDecision} />} /></>}</main>
   </div>;
 }

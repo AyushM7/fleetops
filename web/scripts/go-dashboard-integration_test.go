@@ -105,14 +105,14 @@ func dashboardCredentials(t *testing.T) (*auth.Authenticator, string) {
 }
 
 func TestDashboardHTTPIntegration(t *testing.T) {
-	for _, profile := range []string{"charging", "reassignment"} {
+	for _, profile := range []string{"charging", "reassignment", "agent"} {
 		t.Run(profile, func(t *testing.T) {
 			var now atomic.Int64
 			now.Store(time.Now().UTC().UnixNano())
 			clock := func() time.Time { return time.Unix(0, now.Load()).UTC() }
 			var service *fleet.Service
 			layout := fleet.LayoutView{}
-			if profile == "reassignment" {
+			if profile == "reassignment" || profile == "agent" {
 				service = fleet.NewReassignmentTestService(t, clock)
 				simulator, err := sim.NewReassignmentTestFixture()
 				if err != nil {
@@ -140,7 +140,11 @@ func TestDashboardHTTPIntegration(t *testing.T) {
 			a, tokens := dashboardCredentials(t)
 			server := httptest.NewServer(graphql.NewHandler(dashboardFixture{Service: service, layout: layout}, a))
 			defer server.Close()
-			cmd := exec.Command("node", filepath.Join(os.Getenv("FLEETOPS_P404_WEB_ROOT"), "scripts", "check-backend.mjs"))
+			script := "check-backend.mjs"
+			if profile == "agent" {
+				script = "check-agent-backend.mjs"
+			}
+			cmd := exec.Command("node", filepath.Join(os.Getenv("FLEETOPS_P404_WEB_ROOT"), "scripts", script))
 			cmd.Env = append(os.Environ(), "FLEETOPS_P404_URL="+server.URL, "FLEETOPS_P404_TOKENS="+tokens, "FLEETOPS_P404_PROFILE="+profile)
 			input, err := cmd.StdinPipe()
 			if err != nil {

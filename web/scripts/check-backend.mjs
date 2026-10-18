@@ -21,9 +21,12 @@ const signal = () => new AbortController().signal;
 const read = () => fetchFleet(tokens.viewer, signal());
 const render = snapshot => renderToString(createElement(Dashboard, { feed: { phase: "live", snapshot, updatedAt: new Date() } })).replace(/<!--.*?-->/g, "");
 async function submit(expiresAt = new Date(Date.now() + 60_000).toISOString()) {
+  const observed = await fetch("/graphql", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokens.proposer}` }, body: JSON.stringify({ query: "{fleetState{observationId}}" }) });
+  const current = await observed.json(); assert.equal(current.errors, undefined);
   const query = reassign ? "mutation($input:ReassignUnstartedJobInput!){submitReassignment(input:$input){proposalId error auditCommitted}}"
     : "mutation($input:SetChargingInput!){submitProposal(input:$input){proposalId error auditCommitted}}";
   const input = reassign ? { jobId: "J1", fromRobotId: "R1", toRobotId: "R3", expiresAt } : { robotId: "R1", stationId: "S1", expiresAt };
+  input.expectedObservationId = current.data.fleetState.observationId;
   const response = await fetch("/graphql", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokens.proposer}` }, body: JSON.stringify({ query, variables: { input } }) });
   const body = await response.json(); assert.equal(body.errors, undefined);
   const result = body.data[reassign ? "submitReassignment" : "submitProposal"];

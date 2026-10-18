@@ -3,6 +3,8 @@ package graphql
 import (
 	"context"
 	"encoding/json"
+	"errors"
+
 	"github.com/AyushM7/fleetops/backend/fleet"
 	"github.com/AyushM7/fleetops/backend/graphql/model"
 	"github.com/vektah/gqlparser/v2/gqlerror"
@@ -65,15 +67,23 @@ func (r *mutationResolver) finishAgentRun(ctx context.Context, id, completion st
 func (r *queryResolver) agentRuns(ctx context.Context, id string, limit int) ([]*model.AgentRun, error) {
 	service, ok := r.Service.(agentRunService)
 	if !ok {
-		return nil, agentRunError()
+		return nil, agentRunReadError(fleet.ErrPersistence)
 	}
 	runs, err := service.ReadAgentRuns(ctx, id, limit)
 	if err != nil {
-		return nil, agentRunError()
+		return nil, agentRunReadError(err)
 	}
 	result := make([]*model.AgentRun, 0, len(runs))
 	for i := range runs {
 		result = append(result, agentRunModel(&runs[i]))
 	}
 	return result, nil
+}
+
+func agentRunReadError(err error) error {
+	code, message := "UNAVAILABLE", "agent provenance unavailable"
+	if errors.Is(err, fleet.ErrUnauthorized) {
+		code, message = "FORBIDDEN", "agent provenance access required"
+	}
+	return &gqlerror.Error{Message: message, Extensions: map[string]any{"code": code}}
 }
