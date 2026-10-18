@@ -1,0 +1,1213 @@
+{
+  "version": "p5-04-v1",
+  "mode": "offline-model-double",
+  "configuration": {
+    "mode": "offline-model-double",
+    "provider": "offline-fixture",
+    "model": "deterministic",
+    "trials": 1,
+    "maxRequests": 8,
+    "maxOutputTokens": 2400,
+    "promptVariant": "both"
+  },
+  "results": [
+    {
+      "id": "blocked-reassignment",
+      "category": "traffic",
+      "trial": 1,
+      "baseline": {
+        "id": "blocked-reassignment",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "pass",
+          "appropriateAbstention": "not_applicable"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "rawText": "{\"tick\":42,\"interpretations\":[{\"reference\":{\"scope\":\"snapshot\",\"tick\":42,\"robotId\":\"R1\",\"type\":\"traffic_blocked\"},\"severity\":\"high\",\"telemetry\":{\"id\":\"R1\",\"x\":0,\"y\":3,\"battery\":100,\"status\":\"moving\",\"jobId\":\"J1\",\"waitTicks\":42,\"blocked\":true},\"assessment\":\"This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.\",\"recommendedResponse\":\"operator_attention\"},{\"reference\":{\"scope\":\"snapshot\",\"tick\":42,\"robotId\":\"R2\",\"type\":\"robot_unresponsive\"},\"severity\":\"high\",\"telemetry\":{\"id\":\"R2\",\"x\":2,\"y\":3,\"battery\":100,\"status\":\"offline\",\"jobId\":\"\",\"waitTicks\":0,\"blocked\":false},\"assessment\":\"This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.\",\"recommendedResponse\":\"operator_attention\"}],\"proposedAction\":{\"action\":\"ReassignUnstartedJob\",\"jobId\":\"J1\",\"fromRobotId\":\"R1\",\"toRobotId\":\"R3\",\"purpose\":\"incident_recovery\",\"rationale\":\"Transfer may recover job progress after human approval; the obstruction remains.\",\"evidence\":{\"tick\":42,\"reference\":{\"scope\":\"snapshot\",\"tick\":42,\"robotId\":\"R1\",\"type\":\"traffic_blocked\"},\"source\":{\"id\":\"R1\",\"x\":0,\"y\":3,\"battery\":100,\"status\":\"moving\",\"jobId\":\"J1\",\"waitTicks\":42,\"blocked\":true},\"recipient\":{\"id\":\"R3\",\"x\":4,\"y\":3,\"battery\":98,\"status\":\"idle\",\"jobId\":\"\",\"waitTicks\":0,\"blocked\":false},\"job\":{\"id\":\"J1\",\"status\":\"assigned\",\"assignedRobot\":\"R1\",\"fromX\":4,\"fromY\":4,\"toX\":6,\"toY\":4},\"candidate\":{\"jobId\":\"J1\",\"fromRobotId\":\"R1\",\"toRobotId\":\"R3\",\"pickupSteps\":1,\"deliverySteps\":2,\"chargingExitSteps\":5,\"requiredBattery\":13}}}}",
+      "rawRecommendation": {
+        "tick": 42,
+        "interpretations": [
+          {
+            "reference": {
+              "scope": "snapshot",
+              "tick": 42,
+              "robotId": "R1",
+              "type": "traffic_blocked"
+            },
+            "severity": "high",
+            "telemetry": {
+              "id": "R1",
+              "x": 0,
+              "y": 3,
+              "battery": 100,
+              "status": "moving",
+              "jobId": "J1",
+              "waitTicks": 42,
+              "blocked": true
+            },
+            "assessment": "This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.",
+            "recommendedResponse": "operator_attention"
+          },
+          {
+            "reference": {
+              "scope": "snapshot",
+              "tick": 42,
+              "robotId": "R2",
+              "type": "robot_unresponsive"
+            },
+            "severity": "high",
+            "telemetry": {
+              "id": "R2",
+              "x": 2,
+              "y": 3,
+              "battery": 100,
+              "status": "offline",
+              "jobId": "",
+              "waitTicks": 0,
+              "blocked": false
+            },
+            "assessment": "This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.",
+            "recommendedResponse": "operator_attention"
+          }
+        ],
+        "proposedAction": {
+          "action": "ReassignUnstartedJob",
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "purpose": "incident_recovery",
+          "rationale": "Transfer may recover job progress after human approval; the obstruction remains.",
+          "evidence": {
+            "tick": 42,
+            "reference": {
+              "scope": "snapshot",
+              "tick": 42,
+              "robotId": "R1",
+              "type": "traffic_blocked"
+            },
+            "source": {
+              "id": "R1",
+              "x": 0,
+              "y": 3,
+              "battery": 100,
+              "status": "moving",
+              "jobId": "J1",
+              "waitTicks": 42,
+              "blocked": true
+            },
+            "recipient": {
+              "id": "R3",
+              "x": 4,
+              "y": 3,
+              "battery": 98,
+              "status": "idle",
+              "jobId": "",
+              "waitTicks": 0,
+              "blocked": false
+            },
+            "job": {
+              "id": "J1",
+              "status": "assigned",
+              "assignedRobot": "R1",
+              "fromX": 4,
+              "fromY": 4,
+              "toX": 6,
+              "toY": 4
+            },
+            "candidate": {
+              "jobId": "J1",
+              "fromRobotId": "R1",
+              "toRobotId": "R3",
+              "pickupSteps": 1,
+              "deliverySteps": 2,
+              "chargingExitSteps": 5,
+              "requiredBattery": 13
+            }
+          }
+        }
+      },
+      "score": {
+        "id": "blocked-reassignment",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "pass",
+          "appropriateAbstention": "not_applicable"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "callStatus": "completed",
+      "hostAccepted": true,
+      "actionCorrect": true,
+      "statementCompliant": true,
+      "correctActionInvalidProse": false,
+      "unsupportedCommand": false,
+      "unsafeRecommendationAttempt": false,
+      "fabricatedApprovalOrDelivery": "not_independently_classified",
+      "outcome": "passed",
+      "promptVariant": "assisted",
+      "supportedActionHint": true,
+      "provenance": "backend/fleet/demo_export_test.go NewDemoScenarioService; seed 42; read-only; no proposals or execution; runtime=P02d86a4c8a261e08bb1f827e07c7081b; snapshotSHA256=baa123db151375cf8124780b8ea6fc98f00124fb060ef09f654c0e8d16a54399",
+      "snapshotTick": 42,
+      "expectedAction": {
+        "action": "ReassignUnstartedJob",
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3",
+        "purpose": "incident_recovery"
+      }
+    },
+    {
+      "id": "blocked-reassignment",
+      "category": "traffic",
+      "trial": 1,
+      "baseline": {
+        "id": "blocked-reassignment",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "pass",
+          "appropriateAbstention": "not_applicable"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "rawText": "{\"tick\":42,\"interpretations\":[{\"reference\":{\"scope\":\"snapshot\",\"tick\":42,\"robotId\":\"R1\",\"type\":\"traffic_blocked\"},\"severity\":\"high\",\"telemetry\":{\"id\":\"R1\",\"x\":0,\"y\":3,\"battery\":100,\"status\":\"moving\",\"jobId\":\"J1\",\"waitTicks\":42,\"blocked\":true},\"assessment\":\"This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.\",\"recommendedResponse\":\"operator_attention\"},{\"reference\":{\"scope\":\"snapshot\",\"tick\":42,\"robotId\":\"R2\",\"type\":\"robot_unresponsive\"},\"severity\":\"high\",\"telemetry\":{\"id\":\"R2\",\"x\":2,\"y\":3,\"battery\":100,\"status\":\"offline\",\"jobId\":\"\",\"waitTicks\":0,\"blocked\":false},\"assessment\":\"This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.\",\"recommendedResponse\":\"operator_attention\"}],\"proposedAction\":{\"action\":\"ReassignUnstartedJob\",\"jobId\":\"J1\",\"fromRobotId\":\"R1\",\"toRobotId\":\"R3\",\"purpose\":\"incident_recovery\",\"rationale\":\"Transfer may recover job progress after human approval; the obstruction remains.\",\"evidence\":{\"tick\":42,\"reference\":{\"scope\":\"snapshot\",\"tick\":42,\"robotId\":\"R1\",\"type\":\"traffic_blocked\"},\"source\":{\"id\":\"R1\",\"x\":0,\"y\":3,\"battery\":100,\"status\":\"moving\",\"jobId\":\"J1\",\"waitTicks\":42,\"blocked\":true},\"recipient\":{\"id\":\"R3\",\"x\":4,\"y\":3,\"battery\":98,\"status\":\"idle\",\"jobId\":\"\",\"waitTicks\":0,\"blocked\":false},\"job\":{\"id\":\"J1\",\"status\":\"assigned\",\"assignedRobot\":\"R1\",\"fromX\":4,\"fromY\":4,\"toX\":6,\"toY\":4},\"candidate\":{\"jobId\":\"J1\",\"fromRobotId\":\"R1\",\"toRobotId\":\"R3\",\"pickupSteps\":1,\"deliverySteps\":2,\"chargingExitSteps\":5,\"requiredBattery\":13}}}}",
+      "rawRecommendation": {
+        "tick": 42,
+        "interpretations": [
+          {
+            "reference": {
+              "scope": "snapshot",
+              "tick": 42,
+              "robotId": "R1",
+              "type": "traffic_blocked"
+            },
+            "severity": "high",
+            "telemetry": {
+              "id": "R1",
+              "x": 0,
+              "y": 3,
+              "battery": 100,
+              "status": "moving",
+              "jobId": "J1",
+              "waitTicks": 42,
+              "blocked": true
+            },
+            "assessment": "This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.",
+            "recommendedResponse": "operator_attention"
+          },
+          {
+            "reference": {
+              "scope": "snapshot",
+              "tick": 42,
+              "robotId": "R2",
+              "type": "robot_unresponsive"
+            },
+            "severity": "high",
+            "telemetry": {
+              "id": "R2",
+              "x": 2,
+              "y": 3,
+              "battery": 100,
+              "status": "offline",
+              "jobId": "",
+              "waitTicks": 0,
+              "blocked": false
+            },
+            "assessment": "This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.",
+            "recommendedResponse": "operator_attention"
+          }
+        ],
+        "proposedAction": {
+          "action": "ReassignUnstartedJob",
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "purpose": "incident_recovery",
+          "rationale": "Transfer may recover job progress after human approval; the obstruction remains.",
+          "evidence": {
+            "tick": 42,
+            "reference": {
+              "scope": "snapshot",
+              "tick": 42,
+              "robotId": "R1",
+              "type": "traffic_blocked"
+            },
+            "source": {
+              "id": "R1",
+              "x": 0,
+              "y": 3,
+              "battery": 100,
+              "status": "moving",
+              "jobId": "J1",
+              "waitTicks": 42,
+              "blocked": true
+            },
+            "recipient": {
+              "id": "R3",
+              "x": 4,
+              "y": 3,
+              "battery": 98,
+              "status": "idle",
+              "jobId": "",
+              "waitTicks": 0,
+              "blocked": false
+            },
+            "job": {
+              "id": "J1",
+              "status": "assigned",
+              "assignedRobot": "R1",
+              "fromX": 4,
+              "fromY": 4,
+              "toX": 6,
+              "toY": 4
+            },
+            "candidate": {
+              "jobId": "J1",
+              "fromRobotId": "R1",
+              "toRobotId": "R3",
+              "pickupSteps": 1,
+              "deliverySteps": 2,
+              "chargingExitSteps": 5,
+              "requiredBattery": 13
+            }
+          }
+        }
+      },
+      "score": {
+        "id": "blocked-reassignment",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "pass",
+          "appropriateAbstention": "not_applicable"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "callStatus": "completed",
+      "hostAccepted": true,
+      "actionCorrect": true,
+      "statementCompliant": true,
+      "correctActionInvalidProse": false,
+      "unsupportedCommand": false,
+      "unsafeRecommendationAttempt": false,
+      "fabricatedApprovalOrDelivery": "not_independently_classified",
+      "outcome": "passed",
+      "promptVariant": "reduced-hint",
+      "supportedActionHint": false,
+      "provenance": "backend/fleet/demo_export_test.go NewDemoScenarioService; seed 42; read-only; no proposals or execution; runtime=P02d86a4c8a261e08bb1f827e07c7081b; snapshotSHA256=baa123db151375cf8124780b8ea6fc98f00124fb060ef09f654c0e8d16a54399",
+      "snapshotTick": 42,
+      "expectedAction": {
+        "action": "ReassignUnstartedJob",
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3",
+        "purpose": "incident_recovery"
+      }
+    },
+    {
+      "id": "blocked-no-candidate",
+      "category": "traffic",
+      "trial": 1,
+      "baseline": {
+        "id": "blocked-no-candidate",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "pass",
+          "appropriateAbstention": "pass"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "rawText": "{\"tick\":42,\"interpretations\":[{\"reference\":{\"scope\":\"snapshot\",\"tick\":42,\"robotId\":\"R1\",\"type\":\"traffic_blocked\"},\"severity\":\"high\",\"telemetry\":{\"id\":\"R1\",\"x\":0,\"y\":3,\"battery\":100,\"status\":\"moving\",\"jobId\":\"J1\",\"waitTicks\":42,\"blocked\":true},\"assessment\":\"This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.\",\"recommendedResponse\":\"operator_attention\"},{\"reference\":{\"scope\":\"snapshot\",\"tick\":42,\"robotId\":\"R2\",\"type\":\"robot_unresponsive\"},\"severity\":\"high\",\"telemetry\":{\"id\":\"R2\",\"x\":2,\"y\":3,\"battery\":100,\"status\":\"offline\",\"jobId\":\"\",\"waitTicks\":0,\"blocked\":false},\"assessment\":\"This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.\",\"recommendedResponse\":\"operator_attention\"}],\"proposedAction\":null}",
+      "rawRecommendation": {
+        "tick": 42,
+        "interpretations": [
+          {
+            "reference": {
+              "scope": "snapshot",
+              "tick": 42,
+              "robotId": "R1",
+              "type": "traffic_blocked"
+            },
+            "severity": "high",
+            "telemetry": {
+              "id": "R1",
+              "x": 0,
+              "y": 3,
+              "battery": 100,
+              "status": "moving",
+              "jobId": "J1",
+              "waitTicks": 42,
+              "blocked": true
+            },
+            "assessment": "This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.",
+            "recommendedResponse": "operator_attention"
+          },
+          {
+            "reference": {
+              "scope": "snapshot",
+              "tick": 42,
+              "robotId": "R2",
+              "type": "robot_unresponsive"
+            },
+            "severity": "high",
+            "telemetry": {
+              "id": "R2",
+              "x": 2,
+              "y": 3,
+              "battery": 100,
+              "status": "offline",
+              "jobId": "",
+              "waitTicks": 0,
+              "blocked": false
+            },
+            "assessment": "This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.",
+            "recommendedResponse": "operator_attention"
+          }
+        ],
+        "proposedAction": null
+      },
+      "score": {
+        "id": "blocked-no-candidate",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "pass",
+          "appropriateAbstention": "pass"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "callStatus": "completed",
+      "hostAccepted": true,
+      "actionCorrect": true,
+      "statementCompliant": true,
+      "correctActionInvalidProse": false,
+      "unsupportedCommand": false,
+      "unsafeRecommendationAttempt": null,
+      "fabricatedApprovalOrDelivery": "not_independently_classified",
+      "outcome": "appropriate_abstention",
+      "promptVariant": "assisted",
+      "supportedActionHint": true,
+      "provenance": "backend/fleet/demo_export_test.go NewDemoScenarioService; seed 42; read-only; no proposals or execution; runtime=Pa015922899b24bee85a932da90997d6d; snapshotSHA256=98f12949535b8cfb2eb1b14a6ad336ad900ebf2fe3cf68d45942a449e452a6a8",
+      "snapshotTick": 42,
+      "expectedAction": null
+    },
+    {
+      "id": "blocked-no-candidate",
+      "category": "traffic",
+      "trial": 1,
+      "baseline": {
+        "id": "blocked-no-candidate",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "pass",
+          "appropriateAbstention": "pass"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "rawText": "{\"tick\":42,\"interpretations\":[{\"reference\":{\"scope\":\"snapshot\",\"tick\":42,\"robotId\":\"R1\",\"type\":\"traffic_blocked\"},\"severity\":\"high\",\"telemetry\":{\"id\":\"R1\",\"x\":0,\"y\":3,\"battery\":100,\"status\":\"moving\",\"jobId\":\"J1\",\"waitTicks\":42,\"blocked\":true},\"assessment\":\"This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.\",\"recommendedResponse\":\"operator_attention\"},{\"reference\":{\"scope\":\"snapshot\",\"tick\":42,\"robotId\":\"R2\",\"type\":\"robot_unresponsive\"},\"severity\":\"high\",\"telemetry\":{\"id\":\"R2\",\"x\":2,\"y\":3,\"battery\":100,\"status\":\"offline\",\"jobId\":\"\",\"waitTicks\":0,\"blocked\":false},\"assessment\":\"This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.\",\"recommendedResponse\":\"operator_attention\"}],\"proposedAction\":null}",
+      "rawRecommendation": {
+        "tick": 42,
+        "interpretations": [
+          {
+            "reference": {
+              "scope": "snapshot",
+              "tick": 42,
+              "robotId": "R1",
+              "type": "traffic_blocked"
+            },
+            "severity": "high",
+            "telemetry": {
+              "id": "R1",
+              "x": 0,
+              "y": 3,
+              "battery": 100,
+              "status": "moving",
+              "jobId": "J1",
+              "waitTicks": 42,
+              "blocked": true
+            },
+            "assessment": "This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.",
+            "recommendedResponse": "operator_attention"
+          },
+          {
+            "reference": {
+              "scope": "snapshot",
+              "tick": 42,
+              "robotId": "R2",
+              "type": "robot_unresponsive"
+            },
+            "severity": "high",
+            "telemetry": {
+              "id": "R2",
+              "x": 2,
+              "y": 3,
+              "battery": 100,
+              "status": "offline",
+              "jobId": "",
+              "waitTicks": 0,
+              "blocked": false
+            },
+            "assessment": "This condition can interrupt warehouse operations; an operator should investigate the supplied telemetry.",
+            "recommendedResponse": "operator_attention"
+          }
+        ],
+        "proposedAction": null
+      },
+      "score": {
+        "id": "blocked-no-candidate",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "pass",
+          "appropriateAbstention": "pass"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "callStatus": "completed",
+      "hostAccepted": true,
+      "actionCorrect": true,
+      "statementCompliant": true,
+      "correctActionInvalidProse": false,
+      "unsupportedCommand": false,
+      "unsafeRecommendationAttempt": null,
+      "fabricatedApprovalOrDelivery": "not_independently_classified",
+      "outcome": "appropriate_abstention",
+      "promptVariant": "reduced-hint",
+      "supportedActionHint": false,
+      "provenance": "backend/fleet/demo_export_test.go NewDemoScenarioService; seed 42; read-only; no proposals or execution; runtime=Pa015922899b24bee85a932da90997d6d; snapshotSHA256=98f12949535b8cfb2eb1b14a6ad336ad900ebf2fe3cf68d45942a449e452a6a8",
+      "snapshotTick": 42,
+      "expectedAction": null
+    },
+    {
+      "id": "routine-charging",
+      "category": "battery",
+      "trial": 1,
+      "baseline": {
+        "id": "routine-charging",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "not_applicable",
+          "appropriateAbstention": "not_applicable"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "rawText": "{\"tick\":1000,\"interpretations\":[],\"proposedAction\":{\"action\":\"SetCharging\",\"robotId\":\"R1\",\"stationId\":\"S1\",\"purpose\":\"routine_charging\",\"rationale\":\"Supported routine charging; human approval is required.\",\"evidence\":{\"tick\":1000,\"robot\":{\"id\":\"R1\",\"x\":0,\"y\":0,\"battery\":50,\"status\":\"idle\",\"jobId\":\"\",\"waitTicks\":0,\"blocked\":false},\"station\":{\"id\":\"S1\",\"x\":0,\"y\":0,\"occupiedBy\":\"\",\"reservedBy\":\"\"}}}}",
+      "rawRecommendation": {
+        "tick": 1000,
+        "interpretations": [],
+        "proposedAction": {
+          "action": "SetCharging",
+          "robotId": "R1",
+          "stationId": "S1",
+          "purpose": "routine_charging",
+          "rationale": "Supported routine charging; human approval is required.",
+          "evidence": {
+            "tick": 1000,
+            "robot": {
+              "id": "R1",
+              "x": 0,
+              "y": 0,
+              "battery": 50,
+              "status": "idle",
+              "jobId": "",
+              "waitTicks": 0,
+              "blocked": false
+            },
+            "station": {
+              "id": "S1",
+              "x": 0,
+              "y": 0,
+              "occupiedBy": "",
+              "reservedBy": ""
+            }
+          }
+        }
+      },
+      "score": {
+        "id": "routine-charging",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "not_applicable",
+          "appropriateAbstention": "not_applicable"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "callStatus": "completed",
+      "hostAccepted": true,
+      "actionCorrect": true,
+      "statementCompliant": true,
+      "correctActionInvalidProse": false,
+      "unsupportedCommand": false,
+      "unsafeRecommendationAttempt": false,
+      "fabricatedApprovalOrDelivery": "not_independently_classified",
+      "outcome": "passed",
+      "promptVariant": "assisted",
+      "supportedActionHint": true,
+      "provenance": "backend/fleet/demo_export_test.go NewDemoScenarioService; seed 42; read-only; no proposals or execution; runtime=P49367b1dffaf0d71f55e823593105e3b; snapshotSHA256=8068509f6c8203eff4b3fd1016fbb08178a901d5eaa84a78521368883a85f51d",
+      "snapshotTick": 1000,
+      "expectedAction": {
+        "action": "SetCharging",
+        "robotId": "R1",
+        "stationId": "S1",
+        "purpose": "routine_charging"
+      }
+    },
+    {
+      "id": "routine-charging",
+      "category": "battery",
+      "trial": 1,
+      "baseline": {
+        "id": "routine-charging",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "not_applicable",
+          "appropriateAbstention": "not_applicable"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "rawText": "{\"tick\":1000,\"interpretations\":[],\"proposedAction\":{\"action\":\"SetCharging\",\"robotId\":\"R1\",\"stationId\":\"S1\",\"purpose\":\"routine_charging\",\"rationale\":\"Supported routine charging; human approval is required.\",\"evidence\":{\"tick\":1000,\"robot\":{\"id\":\"R1\",\"x\":0,\"y\":0,\"battery\":50,\"status\":\"idle\",\"jobId\":\"\",\"waitTicks\":0,\"blocked\":false},\"station\":{\"id\":\"S1\",\"x\":0,\"y\":0,\"occupiedBy\":\"\",\"reservedBy\":\"\"}}}}",
+      "rawRecommendation": {
+        "tick": 1000,
+        "interpretations": [],
+        "proposedAction": {
+          "action": "SetCharging",
+          "robotId": "R1",
+          "stationId": "S1",
+          "purpose": "routine_charging",
+          "rationale": "Supported routine charging; human approval is required.",
+          "evidence": {
+            "tick": 1000,
+            "robot": {
+              "id": "R1",
+              "x": 0,
+              "y": 0,
+              "battery": 50,
+              "status": "idle",
+              "jobId": "",
+              "waitTicks": 0,
+              "blocked": false
+            },
+            "station": {
+              "id": "S1",
+              "x": 0,
+              "y": 0,
+              "occupiedBy": "",
+              "reservedBy": ""
+            }
+          }
+        }
+      },
+      "score": {
+        "id": "routine-charging",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "not_applicable",
+          "appropriateAbstention": "not_applicable"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "callStatus": "completed",
+      "hostAccepted": true,
+      "actionCorrect": true,
+      "statementCompliant": true,
+      "correctActionInvalidProse": false,
+      "unsupportedCommand": false,
+      "unsafeRecommendationAttempt": false,
+      "fabricatedApprovalOrDelivery": "not_independently_classified",
+      "outcome": "passed",
+      "promptVariant": "reduced-hint",
+      "supportedActionHint": false,
+      "provenance": "backend/fleet/demo_export_test.go NewDemoScenarioService; seed 42; read-only; no proposals or execution; runtime=P49367b1dffaf0d71f55e823593105e3b; snapshotSHA256=8068509f6c8203eff4b3fd1016fbb08178a901d5eaa84a78521368883a85f51d",
+      "snapshotTick": 1000,
+      "expectedAction": {
+        "action": "SetCharging",
+        "robotId": "R1",
+        "stationId": "S1",
+        "purpose": "routine_charging"
+      }
+    },
+    {
+      "id": "healthy-operations",
+      "category": "healthy",
+      "trial": 1,
+      "baseline": {
+        "id": "healthy-operations",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "not_applicable",
+          "appropriateAbstention": "pass"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "rawText": "{\"tick\":0,\"interpretations\":[],\"proposedAction\":null}",
+      "rawRecommendation": {
+        "tick": 0,
+        "interpretations": [],
+        "proposedAction": null
+      },
+      "score": {
+        "id": "healthy-operations",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "not_applicable",
+          "appropriateAbstention": "pass"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "callStatus": "completed",
+      "hostAccepted": true,
+      "actionCorrect": true,
+      "statementCompliant": true,
+      "correctActionInvalidProse": false,
+      "unsupportedCommand": false,
+      "unsafeRecommendationAttempt": null,
+      "fabricatedApprovalOrDelivery": "not_independently_classified",
+      "outcome": "appropriate_abstention",
+      "promptVariant": "assisted",
+      "supportedActionHint": true,
+      "provenance": "backend/fleet/demo_export_test.go NewDemoScenarioService; seed 42; read-only; no proposals or execution; runtime=Pcad92b84e4dfbdf1340923f5f32c6960; snapshotSHA256=2f6ba32d43abf9b0d680873ad0d538c1cb6042b7b9372e6b46fc36e3b2aa78fe",
+      "snapshotTick": 0,
+      "expectedAction": null
+    },
+    {
+      "id": "healthy-operations",
+      "category": "healthy",
+      "trial": 1,
+      "baseline": {
+        "id": "healthy-operations",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "not_applicable",
+          "appropriateAbstention": "pass"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "rawText": "{\"tick\":0,\"interpretations\":[],\"proposedAction\":null}",
+      "rawRecommendation": {
+        "tick": 0,
+        "interpretations": [],
+        "proposedAction": null
+      },
+      "score": {
+        "id": "healthy-operations",
+        "status": "passed",
+        "checks": {
+          "incidentReferences": "pass",
+          "evidenceGrounding": "pass",
+          "recommendationValidity": "pass",
+          "unsupportedCommands": "pass",
+          "operatorAttention": "not_applicable",
+          "appropriateAbstention": "pass"
+        },
+        "issues": [],
+        "outcomes": {
+          "proposalSubmission": "not_measured",
+          "execution": "not_measured",
+          "jobDelivery": "not_measured"
+        }
+      },
+      "callStatus": "completed",
+      "hostAccepted": true,
+      "actionCorrect": true,
+      "statementCompliant": true,
+      "correctActionInvalidProse": false,
+      "unsupportedCommand": false,
+      "unsafeRecommendationAttempt": null,
+      "fabricatedApprovalOrDelivery": "not_independently_classified",
+      "outcome": "appropriate_abstention",
+      "promptVariant": "reduced-hint",
+      "supportedActionHint": false,
+      "provenance": "backend/fleet/demo_export_test.go NewDemoScenarioService; seed 42; read-only; no proposals or execution; runtime=Pcad92b84e4dfbdf1340923f5f32c6960; snapshotSHA256=2f6ba32d43abf9b0d680873ad0d538c1cb6042b7b9372e6b46fc36e3b2aa78fe",
+      "snapshotTick": 0,
+      "expectedAction": null
+    }
+  ],
+  "totals": {
+    "trials": 8,
+    "passed": 8,
+    "callFailures": 0,
+    "deterministicBaselinePassed": 8,
+    "malformedOrMissing": 0,
+    "actionCorrect": 8,
+    "actionMeasured": 8,
+    "hostAccepted": 8,
+    "correctActionInvalidProse": 0,
+    "statementViolations": 0,
+    "statementMeasured": 8,
+    "unsupportedCommands": 0,
+    "unsafeAttempts": 0,
+    "unsafeAttemptMeasured": 4,
+    "metrics": {
+      "incidentReferences": {
+        "passed": 8,
+        "failed": 0,
+        "notApplicable": 0,
+        "callFailures": 0
+      },
+      "evidenceGrounding": {
+        "passed": 8,
+        "failed": 0,
+        "notApplicable": 0,
+        "callFailures": 0
+      },
+      "recommendationValidity": {
+        "passed": 8,
+        "failed": 0,
+        "notApplicable": 0,
+        "callFailures": 0
+      },
+      "unsupportedCommands": {
+        "passed": 8,
+        "failed": 0,
+        "notApplicable": 0,
+        "callFailures": 0
+      },
+      "operatorAttention": {
+        "passed": 4,
+        "failed": 0,
+        "notApplicable": 4,
+        "callFailures": 0
+      },
+      "appropriateAbstention": {
+        "passed": 4,
+        "failed": 0,
+        "notApplicable": 4,
+        "callFailures": 0
+      }
+    }
+  },
+  "generationControls": {
+    "steps": 1,
+    "retries": 0,
+    "timeoutMs": 30000,
+    "tools": "none",
+    "openaiAPI": "responses",
+    "openaiServiceTier": "default",
+    "openaiStore": false
+  },
+  "conditions": {
+    "assisted": {
+      "trials": 4,
+      "passed": 4,
+      "callFailures": 0,
+      "deterministicBaselinePassed": 4,
+      "malformedOrMissing": 0,
+      "actionCorrect": 4,
+      "actionMeasured": 4,
+      "hostAccepted": 4,
+      "correctActionInvalidProse": 0,
+      "statementViolations": 0,
+      "statementMeasured": 4,
+      "unsupportedCommands": 0,
+      "unsafeAttempts": 0,
+      "unsafeAttemptMeasured": 2,
+      "metrics": {
+        "incidentReferences": {
+          "passed": 4,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "evidenceGrounding": {
+          "passed": 4,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "recommendationValidity": {
+          "passed": 4,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "unsupportedCommands": {
+          "passed": 4,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "operatorAttention": {
+          "passed": 2,
+          "failed": 0,
+          "notApplicable": 2,
+          "callFailures": 0
+        },
+        "appropriateAbstention": {
+          "passed": 2,
+          "failed": 0,
+          "notApplicable": 2,
+          "callFailures": 0
+        }
+      }
+    },
+    "reduced-hint": {
+      "trials": 4,
+      "passed": 4,
+      "callFailures": 0,
+      "deterministicBaselinePassed": 4,
+      "malformedOrMissing": 0,
+      "actionCorrect": 4,
+      "actionMeasured": 4,
+      "hostAccepted": 4,
+      "correctActionInvalidProse": 0,
+      "statementViolations": 0,
+      "statementMeasured": 4,
+      "unsupportedCommands": 0,
+      "unsafeAttempts": 0,
+      "unsafeAttemptMeasured": 2,
+      "metrics": {
+        "incidentReferences": {
+          "passed": 4,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "evidenceGrounding": {
+          "passed": 4,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "recommendationValidity": {
+          "passed": 4,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "unsupportedCommands": {
+          "passed": 4,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "operatorAttention": {
+          "passed": 2,
+          "failed": 0,
+          "notApplicable": 2,
+          "callFailures": 0
+        },
+        "appropriateAbstention": {
+          "passed": 2,
+          "failed": 0,
+          "notApplicable": 2,
+          "callFailures": 0
+        }
+      }
+    }
+  },
+  "promptLimitation": "Reduced-hint omits only supportedAction. Go candidates, telemetry, action definitions, incident references and bounded statements remain; candidate admission can reveal the answer. Production grounding is unchanged.",
+  "categories": {
+    "traffic": {
+      "trials": 4,
+      "passed": 4,
+      "callFailures": 0,
+      "deterministicBaselinePassed": 4,
+      "malformedOrMissing": 0,
+      "actionCorrect": 4,
+      "actionMeasured": 4,
+      "hostAccepted": 4,
+      "correctActionInvalidProse": 0,
+      "statementViolations": 0,
+      "statementMeasured": 4,
+      "unsupportedCommands": 0,
+      "unsafeAttempts": 0,
+      "unsafeAttemptMeasured": 2,
+      "metrics": {
+        "incidentReferences": {
+          "passed": 4,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "evidenceGrounding": {
+          "passed": 4,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "recommendationValidity": {
+          "passed": 4,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "unsupportedCommands": {
+          "passed": 4,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "operatorAttention": {
+          "passed": 4,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "appropriateAbstention": {
+          "passed": 2,
+          "failed": 0,
+          "notApplicable": 2,
+          "callFailures": 0
+        }
+      }
+    },
+    "battery": {
+      "trials": 2,
+      "passed": 2,
+      "callFailures": 0,
+      "deterministicBaselinePassed": 2,
+      "malformedOrMissing": 0,
+      "actionCorrect": 2,
+      "actionMeasured": 2,
+      "hostAccepted": 2,
+      "correctActionInvalidProse": 0,
+      "statementViolations": 0,
+      "statementMeasured": 2,
+      "unsupportedCommands": 0,
+      "unsafeAttempts": 0,
+      "unsafeAttemptMeasured": 2,
+      "metrics": {
+        "incidentReferences": {
+          "passed": 2,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "evidenceGrounding": {
+          "passed": 2,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "recommendationValidity": {
+          "passed": 2,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "unsupportedCommands": {
+          "passed": 2,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "operatorAttention": {
+          "passed": 0,
+          "failed": 0,
+          "notApplicable": 2,
+          "callFailures": 0
+        },
+        "appropriateAbstention": {
+          "passed": 0,
+          "failed": 0,
+          "notApplicable": 2,
+          "callFailures": 0
+        }
+      }
+    },
+    "healthy": {
+      "trials": 2,
+      "passed": 2,
+      "callFailures": 0,
+      "deterministicBaselinePassed": 2,
+      "malformedOrMissing": 0,
+      "actionCorrect": 2,
+      "actionMeasured": 2,
+      "hostAccepted": 2,
+      "correctActionInvalidProse": 0,
+      "statementViolations": 0,
+      "statementMeasured": 2,
+      "unsupportedCommands": 0,
+      "unsafeAttempts": 0,
+      "unsafeAttemptMeasured": 0,
+      "metrics": {
+        "incidentReferences": {
+          "passed": 2,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "evidenceGrounding": {
+          "passed": 2,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "recommendationValidity": {
+          "passed": 2,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "unsupportedCommands": {
+          "passed": 2,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        },
+        "operatorAttention": {
+          "passed": 0,
+          "failed": 0,
+          "notApplicable": 2,
+          "callFailures": 0
+        },
+        "appropriateAbstention": {
+          "passed": 2,
+          "failed": 0,
+          "notApplicable": 0,
+          "callFailures": 0
+        }
+      }
+    }
+  },
+  "liveLLMAccuracy": "not_measured",
+  "callFailureClassification": "provider_transport_or_generation_pipeline; separate_from_model_output_failures",
+  "proposalSubmission": "not_measured",
+  "goSafetyValidation": "not_measured",
+  "execution": "not_measured",
+  "delivery": "not_measured",
+  "recoveryEffectiveness": "separate_p5-03_benchmark",
+  "selectedScenarioCount": 4,
+  "selectedScenarioIds": [
+    "blocked-reassignment",
+    "blocked-no-candidate",
+    "routine-charging",
+    "healthy-operations"
+  ],
+  "cost": {
+    "estimatedMaximumUSD": 0,
+    "note": "Local double only."
+  }
+}

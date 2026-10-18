@@ -1,0 +1,11 @@
+{
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "source": "https://developers.openai.com/api/docs/models/gpt-6-luna ; https://developers.openai.com/api/docs/pricing ; https://developers.openai.com/api/docs/guides/reasoning ; conservative full 1050000-token context bound; long-context Standard cache-write input upper rate 0.25; long-context output rate 0.75; fixed default service tier, no regional endpoint or tools",
+  "reviewedAt": "2026-10-18T04:00:00Z",
+  "expiresAt": "2026-10-19T04:00:00Z",
+  "maxBillableInputTokens": 1050000,
+  "inputUSDPerMillion": 0.25,
+  "outputUSDPerMillion": 0.75,
+  "outputLimitIncludesAllBilledTokens": true
+}

@@ -2,7 +2,7 @@ import { reasoningSchema } from "../../agent/src/contracts.js";
 import { validateReasoning } from "../../agent/src/reasoning.js";
 import { reasoningTextGrounded } from "../../agent/src/statements.js";
 import { offlineModelFixture } from "../../agent/src/fixtures.js";
-import { generateEvaluationResponse, type CapturedResponse } from "../../agent/src/evaluation-model.js";
+import { generateEvaluationResponse, type CapturedResponse, type PromptVariant } from "../../agent/src/evaluation-model.js";
 import type { FleetState } from "../../agent/src/contracts.js";
 import { dataset, type Scenario } from "./dataset.js";
 import { metadataIssues } from "./dataset-runner.js";
@@ -12,7 +12,7 @@ import { checkConfig, type ModelConfig } from "./model-controls.js";
 
 export const defaultModelConfig: ModelConfig = { mode: "offline-model-double", provider: "offline-fixture",
   model: "deterministic", trials: 1, maxRequests: 12, maxOutputTokens: 2400 };
-export type Generate = (input: FleetState) => Promise<CapturedResponse>;
+export type Generate = (input: FleetState, variant?: PromptVariant) => Promise<CapturedResponse>;
 export const decisionScenarios = (): Scenario[] => dataset().filter(s => s.probe === "none");
 
 function measure(test: Scenario, captured: CapturedResponse) {
@@ -44,15 +44,23 @@ export async function runModelEvaluation(config: ModelConfig = defaultModelConfi
   checkConfig(config, cases.length);
   if (config.mode === "live-model" && !generate) throw new Error("Live execution requires the CLI cost gate.");
   if (cases.some(s => metadataIssues(s).length || s.probe !== "none") || new Set(cases.map(s => s.id)).size !== cases.length) throw new Error("Invalid model evaluation dataset.");
-  const call = generate ?? (async input => generateEvaluationResponse(input,
-    offlineModelFixture(offlineReasoning(input)), { maxOutputTokens: config.maxOutputTokens, temperature: config.temperature }));
-  const results: ({ id: string; category: string; trial: number; baseline: ReturnType<typeof scoreCase> } & ReturnType<typeof measure>)[] = [];
+  const call: Generate = generate ?? (async (input, variant) => generateEvaluationResponse(input,
+    offlineModelFixture(offlineReasoning(input)), { maxOutputTokens: config.maxOutputTokens, temperature: config.temperature, promptVariant: variant }));
+  const results: ({ id: string; category: string; trial: number; baseline: ReturnType<typeof scoreCase>;
+    promptVariant?: PromptVariant; supportedActionHint?: boolean; provenance?: string; snapshotTick?: number;
+    expectedAction?: Scenario["expected"]["action"]; latencyMs?: number; usage?: CapturedResponse["usage"] | null } & ReturnType<typeof measure>)[] = [];
+  const variants: PromptVariant[] = config.promptVariant === "both" ? ["assisted", "reduced-hint"] : [config.promptVariant ?? "assisted"];
   for (const test of cases) {
     const baseline = scoreCase(test, { reasoning: offlineReasoning(test.input) });
     for (let trial = 1; trial <= config.trials; trial++) {
+     for (const variant of variants) {
       let captured: CapturedResponse;
-      try { captured = await call(structuredClone(test.input)); } catch { captured = { text: null, callFailed: true }; }
-      results.push({ id: test.id, category: test.category, trial, baseline, ...measure(test, captured) });
+      try { captured = config.promptVariant ? await call(structuredClone(test.input), variant) : await call(structuredClone(test.input)); } catch { captured = { text: null, callFailed: true }; }
+      results.push({ id: test.id, category: test.category, trial, baseline, ...measure(test, captured),
+        ...(config.promptVariant ? { promptVariant: variant, supportedActionHint: variant === "assisted",
+          provenance: test.provenance, snapshotTick: test.input.tick, expectedAction: test.expected.action,
+          ...(config.mode === "live-model" ? { latencyMs: captured.latencyMs, usage: captured.usage ?? null } : {}) } : {}) });
+     }
     }
   }
   const count = (items: typeof results) => ({ trials: items.length,
@@ -77,6 +85,9 @@ export async function runModelEvaluation(config: ModelConfig = defaultModelConfi
         callFailures: items.filter(r => r.callStatus !== "completed").length }];
     })) });
   return { version: "p5-04-v1", mode: config.mode, configuration: config, results, totals: count(results),
+    ...(config.promptVariant ? { generationControls: { steps: 1, retries: 0, timeoutMs: 30000, tools: "none", openaiAPI: "responses", openaiServiceTier: "default", openaiStore: false },
+      conditions: Object.fromEntries(variants.map(v => [v, count(results.filter(r => r.promptVariant === v))])),
+      promptLimitation: "Reduced-hint omits only supportedAction. Go candidates, telemetry, action definitions, incident references and bounded statements remain; candidate admission can reveal the answer. Production grounding is unchanged." } : {}),
     categories: Object.fromEntries([...new Set(results.map(r => r.category))].map(c => [c, count(results.filter(r => r.category === c))])),
     liveLLMAccuracy: config.mode === "live-model" && results.some(r => r.callStatus === "completed") ? "measured_by_these_trials_only" : "not_measured",
     callFailureClassification: "provider_transport_or_generation_pipeline; separate_from_model_output_failures",

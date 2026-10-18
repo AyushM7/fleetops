@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type JSX } from "react";
 import { decideProposal, fetchProposal, pollPending, ProposalError, type Decision, type DecisionResult, type InboxFeed, type InboxPolling, type Proposal } from "./proposals";
 import { isLocalDemo } from "./demo";
+import { Evidence, type EvidenceContext } from "./Evidence";
 
 export interface Receipt {
   id: string; decision: Decision; result: DecisionResult | null;
@@ -23,6 +24,7 @@ function executionMessage(receipt: Receipt): string {
 interface InboxViewProps {
   feed: InboxFeed; busy: string | null; receipt: Receipt | null; runtimeAvailable: boolean;
   decide: (proposal: Proposal, decision: Decision) => void; refresh: () => void; refreshStatus: () => void;
+  evidenceContext?: EvidenceContext;
 }
 
 function DecisionReceipt({ receipt, refreshStatus, busy }: { receipt: Receipt; refreshStatus: () => void; busy: boolean }): JSX.Element {
@@ -50,7 +52,7 @@ function ProposalEvidence({ proposal: p }: { proposal: Proposal }): JSX.Element 
   </dl></div>;
 }
 
-export function InboxView({ feed, busy, receipt, runtimeAvailable, decide, refresh, refreshStatus }: InboxViewProps): JSX.Element {
+export function InboxView({ feed, busy, receipt, runtimeAvailable, decide, refresh, refreshStatus, evidenceContext }: InboxViewProps): JSX.Element {
   const allowed = feed.phase === "ready" && runtimeAvailable && busy === null;
   return <section id="approval-inbox" className="approval-inbox" aria-label="Operator approval inbox">
     <div className="panel-heading"><div><h2>Human decision</h2></div><button className="secondary-button" onClick={refresh} disabled={busy !== null}>Refresh inbox</button></div>
@@ -58,12 +60,14 @@ export function InboxView({ feed, busy, receipt, runtimeAvailable, decide, refre
     {feed.phase === "forbidden" && <p className="inbox-message">Operator access required. Viewer and proposer credentials cannot review this inbox or approve decisions. Fleet monitoring remains available.</p>}
     {feed.phase === "unavailable" && <p className="inbox-message decision-error" role="alert">Approval inbox unavailable. Retrying… Displayed proposals may be stale; decisions are disabled.</p>}
     {feed.phase === "ready" && feed.proposals.length === 0 && <p className="inbox-message">No pending proposals in this runtime.</p>}
+    {evidenceContext && feed.phase === "ready" && feed.proposals.length === 0 && <Evidence context={evidenceContext} proposal={receipt?.latest ?? receipt?.proposal} />}
     {feed.phase !== "forbidden" && feed.proposals.length > 0 && <ul className="proposal-list">{feed.proposals.map(p => <li className="proposal-card" key={p.id} data-proposal-id={p.id}>
       <div className="proposal-summary"><div>{p.action === "reassign_unstarted_job" ? <><p className="action-label">Reassign uncollected job</p><h3>Job {p.jobId}: {p.fromRobotId} <span>→ {p.toRobotId}</span></h3><p>Approval does not complete delivery.</p></> : <><p className="action-label">Start charging in place</p><h3>{p.robotId} <span>→ {p.stationId}</span></h3><p>At the robot’s current station.</p></>}</div><span className="status">{p.state}</span></div>
       <p className="rationale">{isLocalDemo() ? "Deterministic local adapter · not a live LLM." : "No rationale recorded"}</p>
       {!p.currentRuntime && <p className="decision-error">Prior runtime; decisions are disabled.</p>}
       {Date.parse(p.expiresAt) <= Date.now() && <p className="decision-error">Expiration time has passed. Go will recheck expiration before deciding.</p>}
       <div className="proposal-actions"><button className="approve-button" disabled={!allowed || !p.currentRuntime || p.state !== "pending" || Date.parse(p.expiresAt) <= Date.now()} onClick={() => decide(p, "approve")}>{busy === p.id ? "Processing…" : "Approve"}</button><button className="reject-button" disabled={!allowed || !p.currentRuntime || p.state !== "pending" || Date.parse(p.expiresAt) <= Date.now()} onClick={() => decide(p, "reject")}>Reject</button><span>Human decision required · Go revalidates before execution</span></div>
+      {evidenceContext && <Evidence context={{ ...evidenceContext, available: evidenceContext.available && feed.phase === "ready" }} proposal={p} />}
       <details className="proposal-details"><summary>Evidence, expiry & validation</summary>
         <p>Requested action: <strong>{p.action === "reassign_unstarted_job" ? "ReassignUnstartedJob" : "SetCharging"}</strong></p>
         <ProposalEvidence proposal={p} />
@@ -78,7 +82,7 @@ export function InboxView({ feed, busy, receipt, runtimeAvailable, decide, refre
   </section>;
 }
 
-export default function ApprovalInbox({ token, runtimeAvailable, onUnauthorized, onDecision }: { token: string; runtimeAvailable: boolean; onUnauthorized: () => void; onDecision: () => void }): JSX.Element {
+export default function ApprovalInbox({ token, runtimeAvailable, onUnauthorized, onDecision, evidenceContext }: { token: string; runtimeAvailable: boolean; onUnauthorized: () => void; onDecision: () => void; evidenceContext?: EvidenceContext }): JSX.Element {
   const [feed, setFeed] = useState<InboxFeed>({ phase: "loading", proposals: [], updatedAt: null });
   const [busy, setBusy] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -128,5 +132,5 @@ export default function ApprovalInbox({ token, runtimeAvailable, onUnauthorized,
     if (!controller.signal.aborted) { setBusy(null); inFlight.current = false; }
     poller.current?.refresh(); onDecision();
   };
-  return <InboxView feed={feed} busy={busy} receipt={receipt} runtimeAvailable={runtimeAvailable} decide={(proposal, decision) => { void decide(proposal, decision); }} refresh={() => poller.current?.refresh()} refreshStatus={() => { void refreshStatus(); }} />;
+  return <InboxView feed={feed} busy={busy} receipt={receipt} runtimeAvailable={runtimeAvailable} evidenceContext={evidenceContext} decide={(proposal, decision) => { void decide(proposal, decision); }} refresh={() => poller.current?.refresh()} refreshStatus={() => { void refreshStatus(); }} />;
 }

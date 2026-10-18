@@ -75,12 +75,19 @@ func TestDemoScenariosPostgres(t *testing.T) {
 				t.Fatal(err)
 			}
 			initial := status.Snapshot
+			e := status.Evidence
+			if e == nil || e.Generation != c.run.generation || e.RuntimeID == "" || e.ScenarioID != id || !reflect.DeepEqual(e.Observation, initial) {
+				t.Fatal("missing or mismatched original evidence")
+			}
 			if controllerRequest(c, "/demo/play", before).Code != 409 || controllerRequest(c, "/demo/scenario/healthy-operations", before).Code != 409 {
 				t.Fatal("stale generation accepted")
 			}
 			rows := call(`{pendingProposals{id action currentRuntime}}`)
 			actionable := id == "routine-charging" || id == "blocked-reassignment"
 			if actionable {
+				if e.ProposalID == "" {
+					t.Fatal("proposal evidence not linked")
+				}
 				if status.State != "awaiting_decision" || !strings.Contains(rows, `"currentRuntime":true`) || stepRequest(c, c.run.generation, initial.Tick).Code != 409 {
 					t.Fatal("missing decision gate", rows)
 				}
@@ -91,6 +98,9 @@ func TestDemoScenariosPostgres(t *testing.T) {
 				}
 			} else if status.State != "paused" || !strings.Contains(rows, `"pendingProposals":[]`) {
 				t.Fatal("unnecessary proposal", rows, status.State)
+			}
+			if !actionable && e.ProposalID != "" {
+				t.Fatal("fabricated no-action proposal evidence")
 			}
 			if w := stepRequest(c, c.run.generation, initial.Tick); w.Code != 200 {
 				t.Fatal(w.Body.String())
@@ -113,6 +123,9 @@ func TestDemoScenariosPostgres(t *testing.T) {
 			if err != nil || status.Snapshot.Tick != initial.Tick+4 {
 				t.Fatal("incorrect tick progression", err)
 			}
+			if !reflect.DeepEqual(status.Evidence.Observation, initial) || status.Evidence.Generation != e.Generation {
+				t.Fatal("original evidence changed after ticks")
+			}
 			if id == "routine-charging" && (status.Snapshot.Robots[0].Battery <= initial.Robots[0].Battery || status.Snapshot.Robots[0].Status != "charging" || status.Snapshot.Stations[0].OccupiedBy != "R1") {
 				t.Fatal("real charging effects missing")
 			}
@@ -129,6 +142,10 @@ func TestDemoScenariosPostgres(t *testing.T) {
 			reset, err := c.status(context.Background())
 			if err != nil || reset.ScenarioID != id || !reflect.DeepEqual(initial, reset.Snapshot) {
 				t.Fatal("restart changed selected scenario", err)
+			}
+			if reset.Evidence == nil || reset.Evidence.Generation == e.Generation || reset.Evidence.RuntimeID == e.RuntimeID ||
+				(actionable && reset.Evidence.ProposalID == e.ProposalID) {
+				t.Fatal("old evidence reused after restart")
 			}
 			if !actionable { // Leave a running scenario for the next selection to drain.
 				if controllerRequest(c, "/demo/play", c.run.generation).Code != 200 {

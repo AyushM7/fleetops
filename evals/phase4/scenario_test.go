@@ -56,8 +56,14 @@ func (f demoFactory) createScenario(ctx context.Context, id string) (*demoRun, e
 	if err := scenario.capture(ctx); err != nil {
 		return nil, err
 	}
+	observation, err := (&graphql.Resolver{Service: scenario.service}).Query().FleetState(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return &demoRun{scenarioID: id, generation: scenario.generation, handler: handler, capture: scenario.capture, advance: scenario.advance,
-		inspect: scenario.inspect, step: func(context.Context) error { return scenario.service.Tick() }}, nil
+		inspect: scenario.inspect, step: func(context.Context) error { return scenario.service.Tick() },
+		evidence: &demoExplanation{Generation: scenario.generation, RuntimeID: scenario.runtimeID, ScenarioID: id,
+			ProposalID: scenario.evidence.ProposalID, Observation: observation}}, nil
 }
 
 func (f demoFactory) prepareScenario(id string) (*demoScenario, error) {

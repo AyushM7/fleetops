@@ -67,6 +67,7 @@ func (c *demoController) status(ctx context.Context) (demoStatus, error) {
 		return status, err
 	}
 	status.Snapshot = snapshot
+	status.Evidence = c.run.evidence
 	if snapshot.Poisoned {
 		c.running = false
 		return status, nil

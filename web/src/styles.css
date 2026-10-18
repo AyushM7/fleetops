@@ -286,3 +286,10 @@ footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12
   .scenario-picker { flex-wrap: wrap; gap: 6px; padding: 10px 16px; }
   .scenario-picker label { flex-wrap: wrap; }
 }
+/* Evidence is read-only context inside the existing decision column. */
+.reasoning-evidence { border-top: 1px solid var(--border, #343638); margin-top: 12px; padding-top: 12px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.reasoning-evidence summary { cursor: pointer; min-height: 32px; color: #eeefed; font-weight: 600; }
+.reasoning-evidence p { margin: 8px 0; }
+.reasoning-stages { display: grid; gap: 12px; }
+.reasoning-stages dt { font-weight: 600; color: #eeefed; }
+.reasoning-stages dd { margin: 4px 0 0; color: #a9abab; }

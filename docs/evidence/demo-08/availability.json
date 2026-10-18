@@ -1,0 +1,12 @@
+{
+  "model": "gpt-6-luna",
+  "check": "GET https://api.openai.com/v1/models/gpt-6-luna",
+  "httpStatus": 403,
+  "accountAvailability": "not verified; access refused",
+  "documentationAvailability": "listed in official OpenAI model documentation",
+  "generationRequestsMade": 0,
+  "generationUsage": null,
+  "providerBilledCost": null,
+  "providerErrorDetails": "not retained",
+  "decision": "No paid generation or model fallback. Offline evaluation only."
+}
