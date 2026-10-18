@@ -41,43 +41,94 @@ type demoScenario struct {
 }
 
 func (f demoFactory) create(ctx context.Context) (*demoRun, error) {
-	service, err := fleet.NewDemoReassignmentService(f.pool, time.Now)
+	return f.createScenario(ctx, "blocked-reassignment")
+}
+
+func (f demoFactory) createScenario(ctx context.Context, id string) (*demoRun, error) {
+	scenario, err := f.prepareScenario(id)
 	if err != nil {
 		return nil, err
 	}
-	evidence, err := demoBaseline(service.Snapshot())
+	handler := graphql.NewHandler(scenario.service, f.auth)
+	if err := scenario.prepareProposal(ctx, handler); err != nil {
+		return nil, err
+	}
+	if err := scenario.capture(ctx); err != nil {
+		return nil, err
+	}
+	return &demoRun{scenarioID: id, generation: scenario.generation, handler: handler, capture: scenario.capture, advance: scenario.advance,
+		inspect: scenario.inspect, step: func(context.Context) error { return scenario.service.Tick() }}, nil
+}
+
+func (f demoFactory) prepareScenario(id string) (*demoScenario, error) {
+	if !allowedScenario(id) {
+		return nil, errors.New("unsupported scenario")
+	}
+	service, err := fleet.NewDemoScenarioService(id, f.pool, time.Now)
 	if err != nil {
 		return nil, err
+	}
+	evidence := demoEvidence{ScenarioID: id, ModelMode: "deterministic local Mastra adapter; NOT live LLM", NoExecutionBeforeApproval: true, Initial: service.Snapshot()}
+	if id == "blocked-reassignment" {
+		evidence, err = demoBaseline(service.Snapshot())
+		if err != nil {
+			return nil, err
+		}
+		evidence.ScenarioID = id
 	}
 	scenario := &demoScenario{factory: f, service: service, generation: demoRandom(), evidence: evidence}
 	scenario.dir = filepath.Join(f.evidenceDir, scenario.generation)
 	if err := os.Mkdir(scenario.dir, 0700); err != nil {
 		return nil, err
 	}
-	handler := graphql.NewHandler(service, f.auth)
-	id, err := f.propose(ctx, handler, scenario.dir)
+	scenario.runtimeID = fleet.DemoRuntimeID(service)
+	return scenario, nil
+}
+
+func (s *demoScenario) prepareProposal(ctx context.Context, handler http.Handler) error {
+	proposalID := ""
+	id := s.evidence.ScenarioID
+	var err error
+	if id == "blocked-reassignment" || id == "routine-charging" {
+		proposalID, err = s.factory.propose(ctx, handler, s.dir)
+		if err != nil {
+			return err
+		}
+	}
+	if !reflect.DeepEqual(s.evidence.Initial, s.service.Snapshot()) {
+		return errors.New("proposal submission mutated simulator")
+	}
+	s.evidence.ProposalID = proposalID
+	view, err := s.service.ReadState(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if !reflect.DeepEqual(evidence.Initial, service.Snapshot()) {
-		return nil, errors.New("proposal submission mutated simulator")
+	if id == "blocked-no-candidate" && len(view.ReassignmentCandidates) != 0 {
+		return errors.New("no-candidate preset admitted a transfer")
 	}
-	scenario.evidence.ProposalID = id
-	if err := f.pool.QueryRow(ctx, `SELECT runtime_id FROM fleet_proposals WHERE id=$1 AND state='pending' AND execution='none' AND submitted_by='proposer'`, id).Scan(&scenario.runtimeID); err != nil {
-		return nil, err
+	if proposalID != "" {
+		return s.verifySubmission(ctx)
+	}
+	return nil
+}
+
+func (s *demoScenario) verifySubmission(ctx context.Context) error {
+	var runtime string
+	if err := s.factory.pool.QueryRow(ctx, `SELECT runtime_id FROM fleet_proposals WHERE id=$1 AND state='pending' AND execution='none' AND submitted_by='proposer'`, s.evidence.ProposalID).Scan(&runtime); err != nil {
+		return err
 	}
 	var audits int
-	if err := f.pool.QueryRow(ctx, `SELECT count(*) FROM fleet_audit WHERE proposal_id=$1 AND attempt='create' AND accepted AND operator_subject='proposer'`, id).Scan(&audits); err != nil || audits != 1 {
-		return nil, errors.New("committed proposer audit not confirmed")
+	if err := s.factory.pool.QueryRow(ctx, `SELECT count(*) FROM fleet_audit WHERE proposal_id=$1 AND attempt='create' AND accepted AND operator_subject='proposer'`, s.evidence.ProposalID).Scan(&audits); err != nil || audits != 1 || runtime != s.runtimeID {
+		return errors.New("committed proposer audit or runtime not confirmed")
 	}
-	if err := scenario.capture(ctx); err != nil {
-		return nil, err
-	}
-	return &demoRun{generation: scenario.generation, handler: handler, capture: scenario.capture, advance: scenario.advance,
-		inspect: scenario.inspect, step: func(context.Context) error { return service.Tick() }}, nil
+	return nil
 }
 
 func (s *demoScenario) inspect(ctx context.Context) (*model.FleetState, bool, error) {
+	if s.evidence.ProposalID == "" {
+		state, err := (&graphql.Resolver{Service: s.service}).Query().FleetState(ctx)
+		return state, true, err
+	}
 	row, err := s.service.ReadProposal(ctx, s.evidence.ProposalID)
 	if err != nil {
 		return nil, false, err
@@ -128,6 +179,9 @@ func (f demoFactory) propose(ctx context.Context, handler http.Handler, dir stri
 }
 
 func (s *demoScenario) capture(ctx context.Context) error {
+	if s.evidence.ProposalID == "" {
+		return s.factory.capture(ctx, s.dir, s.generation, s.runtimeID, s.service, s.evidence)
+	}
 	row, err := s.service.ReadProposal(ctx, s.evidence.ProposalID)
 	if err != nil {
 		return err
@@ -141,6 +195,9 @@ func (s *demoScenario) capture(ctx context.Context) error {
 }
 
 func (s *demoScenario) advance(ctx context.Context) error {
+	if s.evidence.ScenarioID != "blocked-reassignment" {
+		return nil
+	}
 	row, err := s.service.ReadProposal(ctx, s.evidence.ProposalID)
 	if err != nil {
 		return err
@@ -239,7 +296,7 @@ func TestPhase4AcceptanceDemo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := &demoController{run: run, ready: true, interactive: true, speed: "1", factory: factory.create, record: func(generation, outcome string) error {
+	c := &demoController{run: run, ready: true, interactive: true, speed: "1", factory: factory.create, selectFactory: factory.createScenario, record: func(generation, outcome string) error {
 		return writeDemoEvidence(evidenceDir, "lifecycle", struct {
 			Generation, Outcome string
 			At                  time.Time

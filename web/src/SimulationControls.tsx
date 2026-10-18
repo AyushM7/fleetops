@@ -10,6 +10,8 @@ export default function SimulationControls({ status, busy, unavailable, error, o
   const awaiting = state === "awaiting_decision";
   const reason = blocked ? "Simulation unavailable. Refresh session status before another action." : awaiting
     ? "Awaiting the human decision. Approve or reject the proposal before advancing time."
+    : status?.scenarioId === "routine-charging" ? "Charging changes battery through subsequent simulator ticks; it provides no navigation."
+    : status?.scenarioId === "healthy-operations" || status?.scenarioId === "blocked-no-candidate" ? "Controls advance real warehouse operations. No recovery action is submitted in this scenario."
     : "Approval transfers ownership. Delivery requires subsequent simulator ticks.";
   return <div className="simulation-controls" aria-label="Simulation controls" aria-busy={busy}>
     <span className="simulation-state" role="status">{state === "awaiting_decision" ? "Awaiting Decision" : state === "running" ? "Running" : state === "paused" ? "Paused" : "Unavailable"}</span>

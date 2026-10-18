@@ -7,7 +7,7 @@ import { createFleetClient, observedFacts, validateReasoning } from "../dist/ind
 import { instructions } from "../dist/agent.js";
 import { reasoningSchema } from "../dist/contracts.js";
 import { createFleetTools } from "../dist/tools.js";
-import { offlineModelFixture, reasoningFixture } from "../src/fixtures.ts";
+import { offlineModelFixture, reasoningFixture, chargingReasoningFixture } from "../src/fixtures.ts";
 
 assert.equal(process.version, "v24.21.0");
 assert.ok(process.argv.includes("--submit"), "Explicit --submit opt-in is required.");
@@ -21,15 +21,14 @@ globalThis.fetch = (url, options) => {
 const api = createFleetClient(endpoint.href, process.env.FLEETOPS_P405_PROPOSER_TOKEN);
 const state = await api.readFleet();
 const candidate = state.reassignmentCandidates[0];
-assert.ok(candidate);
-const source = state.robots.find(r => r.id === candidate.fromRobotId);
-const recipient = state.robots.find(r => r.id === candidate.toRobotId);
-const job = state.jobs.find(j => j.id === candidate.jobId);
-const expected = { ...reasoningFixture(state), proposedAction: {
+const source = state.robots.find(r => r.id === candidate?.fromRobotId);
+const recipient = state.robots.find(r => r.id === candidate?.toRobotId);
+const job = state.jobs.find(j => j.id === candidate?.jobId);
+const expected = candidate ? { ...reasoningFixture(state), proposedAction: {
   action: "ReassignUnstartedJob", jobId: job.id, fromRobotId: source.id, toRobotId: recipient.id,
   purpose: "incident_recovery", rationale: "Deterministic test adapter: Go admitted this transfer; the obstruction remains and delivery is not guaranteed.",
   evidence: { tick: state.tick, reference: { scope: "snapshot", tick: state.tick, robotId: source.id, type: "traffic_blocked" }, source, recipient, job, candidate },
-} };
+} } : chargingReasoningFixture(state);
 let localCalls = 0;
 const model = new Agent({ id: "p405-local-adapter", name: "Acceptance test adapter", instructions,
   model: offlineModelFixture(expected, () => { localCalls++; }), maxRetries: 0 });
@@ -43,8 +42,10 @@ assert.equal(localCalls, 1);
 const freshAPI = { ...api, async readFleet() { const current = await api.readFleet(); assert.deepEqual(current, state); return current; } };
 const session = createFleetTools(freshAPI, true);
 // A human review session gets a requested 30-minute expiry; Go's clock remains real.
-const proposal = await session.submit({ jobId: job.id, fromRobotId: source.id, toRobotId: recipient.id,
-  expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() });
+const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
+const proposal = await session.submit(candidate
+  ? { jobId: job.id, fromRobotId: source.id, toRobotId: recipient.id, expiresAt }
+  : { robotId: expected.proposedAction.robotId, stationId: expected.proposedAction.stationId, expiresAt });
 assert.equal(proposal.status, "pending_approval");
 assert.deepEqual(await api.readFleet(), state);
 await fs.writeFile(process.env.FLEETOPS_P405_REASONING_FILE, JSON.stringify({

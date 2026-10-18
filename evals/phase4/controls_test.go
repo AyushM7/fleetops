@@ -49,7 +49,7 @@ func (c *demoController) advanceInteractive(ctx context.Context, now time.Time) 
 }
 
 func (c *demoController) status(ctx context.Context) (demoStatus, error) {
-	status := demoStatus{Generation: c.run.generation, Ready: c.ready && !c.closed}
+	status := demoStatus{Generation: c.run.generation, Ready: c.ready && !c.closed, ScenarioID: c.run.scenarioID}
 	if !c.interactive {
 		return status, nil
 	}

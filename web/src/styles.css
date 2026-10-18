@@ -273,3 +273,16 @@ footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12
 .simulation-controls select:focus-visible { outline: 2px solid #E8E9EB; outline-offset: 2px; }
 .simulation-state { font-size: 12px; margin-right: auto; }
 .simulation-help { flex-basis: 100%; font-size: 12px; color: #B9BBC1; }
+.scenario-picker { display: flex; align-items: center; gap: 20px; padding: 10px 24px; background: #141518; border-top: 1px solid #303135; }
+.scenario-picker label { display: flex; align-items: center; gap: 10px; flex-shrink: 0; font-size: 12px; color: #B9BBC1; }
+.scenario-picker select { min-height: 44px; max-width: 100%; padding: 8px; border: 1px solid #66676c; border-radius: 4px; color: #F5F5F5; background: #202124; font: inherit; }
+.scenario-picker select:focus-visible { outline: 2px solid #E8E9EB; outline-offset: 2px; }
+.scenario-picker p { color: #B9BBC1; font-size: 12px; line-height: 1.5; }
+@media (min-width: 851px) {
+  .scenario-picker ~ main .warehouse-panel { height: calc(100dvh - 129px); }
+  .scenario-picker ~ main .dashboard { min-height: calc(100dvh - 129px); }
+}
+@media (max-width: 850px) {
+  .scenario-picker { flex-wrap: wrap; gap: 6px; padding: 10px 16px; }
+  .scenario-picker label { flex-wrap: wrap; }
+}

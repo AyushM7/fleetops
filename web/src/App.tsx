@@ -5,7 +5,8 @@ import { ActiveIncidents, JobProgress } from "./Operations";
 import { RobotCard, Warehouse } from "./Warehouse";
 import "./styles.css";
 import { isLocalDemo } from "./demo";
-import { controlSimulation, DemoError, pollDemoStatus, restartScenario, RestartControl, type DemoStatus, type TimeOperation } from "./restart";
+import { controlSimulation, DemoError, pollDemoStatus, restartScenario, selectScenario, RestartControl, type DemoStatus, type TimeOperation } from "./restart";
+import { ScenarioSelector, type ScenarioID } from "./scenarios";
 import SimulationControls from "./SimulationControls";
 
 export { Warehouse } from "./Warehouse";
@@ -103,11 +104,11 @@ export default function App(): JSX.Element {
       if (!restartInFlight.current && generationRef.current === expectedGeneration) setControlError(error instanceof DemoError ? error.message : "Control outcome unknown. Refresh status; do not retry Step automatically.");
     } finally { controlInFlight.current = false; setControlling(false); }
   };
-  const restart = async () => {
-    if (restartInFlight.current || !generation || !token || !statusKnown) return;
+  const restart = async (selected?: ScenarioID) => {
+    if (restartInFlight.current || controlInFlight.current || !generation || !token || !statusKnown) return;
     restartInFlight.current = true; setRestarting(true); setRestartError(null); setFeed(emptyFeed); setScenarioReady(false); setStatusKnown(false);
     setSimulationStatus(null); setControlError(null);
-    try { acceptStatus(await restartScenario(generation)); }
+    try { acceptStatus(await (selected ? selectScenario(selected, generation) : restartScenario(generation))); }
     catch (error) {
       if (error instanceof DemoError && error.authentication) onUnauthorized();
       setRestartError(error instanceof DemoError ? error.message : "Restart outcome unknown. Refresh session status before retrying. Historical outcomes may require reconciliation.");
@@ -118,8 +119,9 @@ export default function App(): JSX.Element {
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Skip to warehouse</a><header className="topbar"><a className="brand" href="/" aria-label="FleetOps home"><span className="brand-mark">F</span>FleetOps<span className="brand-divider" /> <span className="brand-context">Fleet control</span></a>
       {token && <div className="connection">{demo && <span className="demo-badge">Local demo · No live LLM</span>}<span className={`connection-badge ${feed.phase === "live" ? "connected" : ""}`}><i />{feed.phase === "live" ? "Connected" : feed.phase === "loading" ? "Connecting" : "Disconnected"}</span><a className="inbox-link" href="#approval-inbox">Decisions</a>{!demo && <button className="quiet-button" onClick={disconnect}>Disconnect</button>}</div>}
-      {demo && token && <RestartControl busy={restarting} disabled={!generation || !statusKnown} error={restartError || statusError} onRestart={() => { void restart(); }} />}
+      {demo && token && <RestartControl busy={restarting} disabled={!generation || !statusKnown || controlling} error={restartError || statusError} onRestart={() => { void restart(); }} />}
     </header>
+    {demo && token && <ScenarioSelector selected={simulationStatus?.scenarioId} disabled={!generation || !statusKnown || controlling} busy={restarting} onSelect={id => { void restart(id); }} />}
     <main id="main-content" tabIndex={-1}>{demo && !token ? <div className="notice notice-error" role="alert">Demo session ended. Reload the local demo URL while the runner is active.</div> : !token ? <section className="login-panel"><p className="eyebrow">LIVE WAREHOUSE</p><h1>Your fleet, in view.</h1><p>Connect to the running simulator with your bearer token.</p>
       <form onSubmit={connect}><label htmlFor="viewer-token">Bearer token</label><input id="viewer-token" type="password" autoComplete="off" spellCheck={false} value={draft} onChange={event => setDraft(event.target.value)} placeholder="Paste a viewer or operator token" required /><button className="primary-button" type="submit">Connect to fleet <span aria-hidden="true">→</span></button></form>
       {authError && <p className="auth-error" role="alert">Authentication failed. Check your token and connect again.</p>}
