@@ -1,5 +1,19 @@
 # Charging vertical slice
 
+`ReadState` returns an opaque `ObservationID` for this service runtime and simulator
+revision. Repeated reads and pending-proposal creation preserve it. Every tick and
+command attempt invalidates it before mutation, including failed or partial commands;
+poisoning also invalidates it. A restarted runtime always has a different identity.
+
+Authenticated proposers must pass the expected identity as the final argument to
+`Submit` or `SubmitReassignment`. The comparison, existing safety preflight and
+pending-proposal persistence share the service mutex. Missing, foreign or stale
+identities produce audited creation denials. Identity does not authorize any action.
+Legacy trusted Go callers and authenticated operators can omit it; a proposer
+cannot use that compatibility path. Approval and execution still recheck current
+safety, authorization and expiry independently; they do not freeze simulator state
+at the proposal's original observation. A token is not a reservation or idempotency key.
+
 P4-03 adds `SubmitReassignment(ctx, safety.ReassignUnstartedJobRequest, expiresAt)`
 and the `reassign_unstarted_job` action through the same serialized lifecycle.
 All three preflight gates dispatch on the immutable action, and only the final

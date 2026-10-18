@@ -18,13 +18,21 @@ import (
 
 // SubmitProposal is the resolver for the submitProposal field.
 func (r *mutationResolver) SubmitProposal(ctx context.Context, input model.SetChargingInput) (*model.MutationResult, error) {
-	result, err := r.Service.Submit(ctx, safety.SetChargingRequest{RobotID: input.RobotID, StationID: input.StationID}, input.ExpiresAt)
+	var expected []string
+	if input.ExpectedObservationID != nil {
+		expected = []string{*input.ExpectedObservationID}
+	}
+	result, err := r.Service.Submit(ctx, safety.SetChargingRequest{RobotID: input.RobotID, StationID: input.StationID}, input.ExpiresAt, expected...)
 	return mutationResult(result, err), nil
 }
 
 // SubmitReassignment is the resolver for the submitReassignment field.
 func (r *mutationResolver) SubmitReassignment(ctx context.Context, input model.ReassignUnstartedJobInput) (*model.MutationResult, error) {
-	result, err := r.Service.SubmitReassignment(ctx, safety.ReassignUnstartedJobRequest{JobID: input.JobID, FromRobotID: input.FromRobotID, ToRobotID: input.ToRobotID}, input.ExpiresAt)
+	var expected []string
+	if input.ExpectedObservationID != nil {
+		expected = []string{*input.ExpectedObservationID}
+	}
+	result, err := r.Service.SubmitReassignment(ctx, safety.ReassignUnstartedJobRequest{JobID: input.JobID, FromRobotID: input.FromRobotID, ToRobotID: input.ToRobotID}, input.ExpiresAt, expected...)
 	return mutationResult(result, err), nil
 }
 
@@ -44,7 +52,7 @@ func (r *queryResolver) FleetState(ctx context.Context) (*model.FleetState, erro
 	if err != nil {
 		return nil, errInternal
 	}
-	view := &model.FleetState{Tick: state.Tick, Poisoned: state.Poisoned, Robots: []*model.Robot{}, Stations: []*model.Station{}}
+	view := &model.FleetState{ObservationID: state.ObservationID, Tick: state.Tick, Poisoned: state.Poisoned, Robots: []*model.Robot{}, Stations: []*model.Station{}}
 	view.Layout = &model.WarehouseLayout{Width: state.Layout.Width, Height: state.Layout.Height, Cells: []*model.WarehouseCell{}}
 	for _, cell := range state.Layout.Cells {
 		view.Layout.Cells = append(view.Layout.Cells, &model.WarehouseCell{X: cell.X, Y: cell.Y, Kind: cell.Kind})

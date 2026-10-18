@@ -13,8 +13,8 @@ type Mutation {
   rejectProposal(id: ID!): MutationResult!
 }
 
-input SetChargingInput { robotId: ID!, stationId: ID!, expiresAt: Time! }
-input ReassignUnstartedJobInput { jobId: ID!, fromRobotId: ID!, toRobotId: ID!, expiresAt: Time! }
+input SetChargingInput { robotId: ID!, stationId: ID!, expiresAt: Time!, expectedObservationId: String }
+input ReassignUnstartedJobInput { jobId: ID!, fromRobotId: ID!, toRobotId: ID!, expiresAt: Time!, expectedObservationId: String }
 type Job { id: ID!, status: String!, assignedRobot: String!, fromX: Int!, fromY: Int!, toX: Int!, toY: Int! }
 type ReassignmentCandidate { jobId: ID!, fromRobotId: ID!, toRobotId: ID!, pickupSteps: Int!, deliverySteps: Int!, chargingExitSteps: Int!, requiredBattery: Int! }
 type Robot { id: ID!, x: Int!, y: Int!, battery: Int!, status: String!, jobId: String!, waitTicks: Int!, blocked: Boolean! }
@@ -22,7 +22,7 @@ type Station { id: ID!, x: Int!, y: Int!, occupiedBy: String!, reservedBy: Strin
 type WarehouseCell { x: Int!, y: Int!, kind: String! }
 type WarehouseLayout { width: Int!, height: Int!, cells: [WarehouseCell!]! }
 type ActiveIncident { robotId: ID!, type: String!, severity: String!, telemetry: Robot! }
-type FleetState { layout: WarehouseLayout!, tick: Int!, robots: [Robot!]!, stations: [Station!]!, poisoned: Boolean!, activeIncidents: [ActiveIncident!]!, jobs: [Job!]!, reassignmentCandidates: [ReassignmentCandidate!]! }
+type FleetState { observationId: String!, layout: WarehouseLayout!, tick: Int!, robots: [Robot!]!, stations: [Station!]!, poisoned: Boolean!, activeIncidents: [ActiveIncident!]!, jobs: [Job!]!, reassignmentCandidates: [ReassignmentCandidate!]! }
 type Proposal {
   id: ID!
   action: String!

@@ -37,7 +37,7 @@ describe("real Go GraphQL + PostgreSQL integration (no model)", () => {
     expect((await api.readFleet()).robots.find(r => r.id === "R1")!.status).toBe("idle");
   });
   it("handles a real invalid proposal as a committed denial", async () => {
-    const result = await api.submitCharging({ robotId: "missing-robot", stationId: "S1", expiresAt: new Date(Date.now() + 60_000).toISOString() });
+    const result = await api.submitCharging({ robotId: "missing-robot", stationId: "S1", expiresAt: new Date(Date.now() + 60_000).toISOString(), expectedObservationId: (await api.readFleet()).observationId! });
     expect(result.error).toBeTruthy();
     expect(result.auditCommitted).toBe(true);
     expect(result.executionAttempted).toBe(false);
@@ -58,7 +58,7 @@ describe("real Go GraphQL + PostgreSQL integration (no model)", () => {
   });
   it("rejects invalid authentication and viewer submission", async () => {
     await expect(createFleetClient(endpoint!, randomBytes(32).toString("hex")).readFleet()).rejects.toThrow("authentication");
-    const result = await createFleetClient(endpoint!, viewer!).submitCharging({ robotId: "R1", stationId: "S1", expiresAt: new Date(Date.now() + 60_000).toISOString() });
+    const result = await createFleetClient(endpoint!, viewer!).submitCharging({ robotId: "R1", stationId: "S1", expiresAt: new Date(Date.now() + 60_000).toISOString(), expectedObservationId: (await api.readFleet()).observationId! });
     expect(result.error).toBe("unauthorized");
     expect(result.executionAttempted).toBe(false);
     expect(result.auditCommitted).toBe(true);

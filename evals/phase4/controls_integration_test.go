@@ -44,7 +44,11 @@ func TestDemoControlsPostgresDecisions(t *testing.T) {
 				}
 				return w.Body.String()
 			}
-			created := call(`mutation{submitReassignment(input:{jobId:"J1",fromRobotId:"R1",toRobotId:"R3",expiresAt:"`+now.Add(time.Minute).UTC().Format(time.RFC3339Nano)+`"}){proposalId error}}`, "proposer")
+			observation, err := service.ReadState(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			created := call(`mutation{submitReassignment(input:{jobId:"J1",fromRobotId:"R1",toRobotId:"R3",expiresAt:"`+now.Add(time.Minute).UTC().Format(time.RFC3339Nano)+`",expectedObservationId:"`+observation.ObservationID+`"}){proposalId error}}`, "proposer")
 			var result struct {
 				Data struct {
 					SubmitReassignment struct {

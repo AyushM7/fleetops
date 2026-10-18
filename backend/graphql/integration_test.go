@@ -148,7 +148,8 @@ const outcome = ` { proposalId state execution auditCommitted executionAttempted
 
 func (api *testAPI) submit(t *testing.T, role string) map[string]any {
 	t.Helper()
-	return api.request(t, role, `mutation($input:SetChargingInput!){submitProposal(input:$input)`+outcome+`}`, map[string]any{"input": map[string]any{"robotId": "R1", "stationId": "S1", "expiresAt": time.Unix(0, api.now.Load()).Add(time.Minute).UTC().Format(time.RFC3339Nano)}})["submitProposal"].(map[string]any)
+	state := api.request(t, role, `{fleetState{observationId}}`, nil)["fleetState"].(map[string]any)
+	return api.request(t, role, `mutation($input:SetChargingInput!){submitProposal(input:$input)`+outcome+`}`, map[string]any{"input": map[string]any{"robotId": "R1", "stationId": "S1", "expiresAt": time.Unix(0, api.now.Load()).Add(time.Minute).UTC().Format(time.RFC3339Nano), "expectedObservationId": state["observationId"]}})["submitProposal"].(map[string]any)
 }
 func (api *testAPI) decide(t *testing.T, role, action, id string) map[string]any {
 	t.Helper()

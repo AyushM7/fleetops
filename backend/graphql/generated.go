@@ -49,6 +49,7 @@ type ComplexityRoot struct {
 		ActiveIncidents        func(childComplexity int) int
 		Jobs                   func(childComplexity int) int
 		Layout                 func(childComplexity int) int
+		ObservationID          func(childComplexity int) int
 		Poisoned               func(childComplexity int) int
 		ReassignmentCandidates func(childComplexity int) int
 		Robots                 func(childComplexity int) int
@@ -223,6 +224,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FleetState.Layout(childComplexity), true
+	case "FleetState.observationId":
+		if e.ComplexityRoot.FleetState.ObservationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FleetState.ObservationID(childComplexity), true
 	case "FleetState.poisoned":
 		if e.ComplexityRoot.FleetState.Poisoned == nil {
 			break
@@ -764,6 +771,8 @@ func (ec *executionContext) childFields_ActiveIncident(ctx context.Context, fiel
 
 func (ec *executionContext) childFields_FleetState(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
+	case "observationId":
+		return ec.fieldContext_FleetState_observationId(ctx, field)
 	case "layout":
 		return ec.fieldContext_FleetState_layout(ctx, field)
 	case "tick":
@@ -1295,6 +1304,29 @@ func (ec *executionContext) fieldContext_ActiveIncident_telemetry(_ context.Cont
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _FleetState_observationId(ctx context.Context, field graphql.CollectedField, obj *model.FleetState) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FleetState_observationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ObservationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FleetState_observationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FleetState", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _FleetState_layout(ctx context.Context, field graphql.CollectedField, obj *model.FleetState) (ret graphql.Marshaler) {
@@ -4170,7 +4202,7 @@ func (ec *executionContext) unmarshalInputReassignUnstartedJobInput(ctx context.
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"jobId", "fromRobotId", "toRobotId", "expiresAt"}
+	fieldsInOrder := [...]string{"jobId", "fromRobotId", "toRobotId", "expiresAt", "expectedObservationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -4205,6 +4237,13 @@ func (ec *executionContext) unmarshalInputReassignUnstartedJobInput(ctx context.
 				return it, err
 			}
 			it.ExpiresAt = data
+		case "expectedObservationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedObservationId"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedObservationID = data
 		}
 	}
 	return it, nil
@@ -4221,7 +4260,7 @@ func (ec *executionContext) unmarshalInputSetChargingInput(ctx context.Context, 
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"robotId", "stationId", "expiresAt"}
+	fieldsInOrder := [...]string{"robotId", "stationId", "expiresAt", "expectedObservationId"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -4249,6 +4288,13 @@ func (ec *executionContext) unmarshalInputSetChargingInput(ctx context.Context, 
 				return it, err
 			}
 			it.ExpiresAt = data
+		case "expectedObservationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedObservationId"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedObservationID = data
 		}
 	}
 	return it, nil
@@ -4327,6 +4373,11 @@ func (ec *executionContext) _FleetState(ctx context.Context, sel ast.SelectionSe
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("FleetState")
+		case "observationId":
+			out.Values[i] = ec._FleetState_observationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "layout":
 			out.Values[i] = ec._FleetState_layout(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

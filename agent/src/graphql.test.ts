@@ -5,7 +5,7 @@ import { fleetFixture, pendingFixture } from "./fixtures.js";
 
 const token = randomBytes(32).toString("hex");
 const endpoint = "http://127.0.0.1:8080/graphql";
-const input = { robotId: "R1", stationId: "S1", expiresAt: "2026-10-16T12:01:00Z" };
+const input = { robotId: "R1", stationId: "S1", expiresAt: "2026-10-16T12:01:00Z", expectedObservationId: "a".repeat(64) };
 describe("typed GraphQL transport", () => {
   it("uses only supported operations, authenticates privately and strips extra fields", async () => {
     const transport = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({ data: { fleetState: fleetFixture() } }))
@@ -44,6 +44,18 @@ describe("typed GraphQL transport", () => {
     const transport = vi.fn<typeof fetch>();
     await expect(createFleetClient(endpoint, token, transport).submitCharging({ ...input, expiresAt: "bad" })).rejects.toThrow("configuration");
     expect(transport).not.toHaveBeenCalled();
+  });
+  it.each([undefined, "", "fabricated"])("rejects missing or malformed observation identity %s before transport", async expectedObservationId => {
+    const transport = vi.fn<typeof fetch>();
+    const api = createFleetClient(endpoint, token, transport);
+    await expect(api.submitCharging({ ...input, expectedObservationId } as never)).rejects.toThrow("configuration");
+    await expect(api.submitReassignment({ jobId: "J1", fromRobotId: "R1", toRobotId: "R3", expiresAt: input.expiresAt, expectedObservationId } as never)).rejects.toThrow("configuration");
+    expect(transport).not.toHaveBeenCalled();
+  });
+  it("requires a live identity on production reads while archived snapshots remain parseable", async () => {
+    const { observationId: _identity, ...archived } = fleetFixture();
+    const transport = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ data: { fleetState: archived } }));
+    await expect(createFleetClient(endpoint, token, transport).readFleet()).rejects.toThrow("malformed");
   });
   it.each(["http://example.com/graphql", "https://user:pass@example.com/graphql", `${endpoint}?token=x`, "invalid"])("rejects unsafe endpoint %s", url => {
     expect(() => createFleetClient(url, token)).toThrow("configuration");

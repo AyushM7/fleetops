@@ -78,7 +78,8 @@ func TestDemoGatewayBackendIntegration(t *testing.T) {
 		return result.Data
 	}
 	submit := func() string {
-		input := map[string]any{"jobId": "J1", "fromRobotId": "R1", "toRobotId": "R3", "expiresAt": now().Add(time.Minute).UTC().Format(time.RFC3339Nano)}
+		state := call(backend, `{fleetState{observationId}}`, nil, true)["fleetState"].(map[string]any)
+		input := map[string]any{"jobId": "J1", "fromRobotId": "R1", "toRobotId": "R3", "expiresAt": now().Add(time.Minute).UTC().Format(time.RFC3339Nano), "expectedObservationId": state["observationId"]}
 		data := call(backend, `mutation($input:ReassignUnstartedJobInput!){submitReassignment(input:$input){proposalId error auditCommitted}}`, map[string]any{"input": input}, true)
 		row := data["submitReassignment"].(map[string]any)
 		if row["error"] != nil || row["auditCommitted"] != true {

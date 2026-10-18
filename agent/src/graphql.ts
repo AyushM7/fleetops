@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { chargingSchema, reassignmentSchema, fleetSchema, mutationSchema, type ChargingInput, type ReassignmentInput, type FleetState, type MutationResult } from "./contracts.js";
+import { boundChargingSchema, boundReassignmentSchema, fleetSchema, observationIdSchema, mutationSchema, type BoundChargingInput, type BoundReassignmentInput, type FleetState, type MutationResult } from "./contracts.js";
 
 export const fleetQuery = `query FleetState { fleetState {
-  tick poisoned robots { id x y battery status jobId waitTicks blocked }
+  observationId tick poisoned robots { id x y battery status jobId waitTicks blocked }
   stations { id x y occupiedBy reservedBy }
   activeIncidents { robotId type severity telemetry { id x y battery status jobId waitTicks blocked } }
   jobs { id status assignedRobot fromX fromY toX toY }
@@ -21,8 +21,8 @@ export class FleetError extends Error {
 }
 export interface FleetAPI {
   readFleet(): Promise<FleetState>;
-  submitCharging(input: ChargingInput): Promise<MutationResult>;
-  submitReassignment(input: ReassignmentInput): Promise<MutationResult>;
+  submitCharging(input: BoundChargingInput): Promise<MutationResult>;
+  submitReassignment(input: BoundReassignmentInput): Promise<MutationResult>;
 }
 export function createFleetClient(endpoint: string, token: string, transport: typeof fetch = fetch): FleetAPI {
   let url: URL;
@@ -52,14 +52,14 @@ export function createFleetClient(endpoint: string, token: string, transport: ty
     return parsed.data;
   }
   return {
-    async readFleet() { return (await request(fleetQuery, {}, z.object({ fleetState: fleetSchema }))).fleetState; },
+    async readFleet() { return (await request(fleetQuery, {}, z.object({ fleetState: fleetSchema.extend({ observationId: observationIdSchema }) }))).fleetState; },
     async submitCharging(input) {
-      const parsed = chargingSchema.safeParse(input);
+      const parsed = boundChargingSchema.safeParse(input);
       if (!parsed.success) throw new FleetError("configuration");
       return (await request(submitMutation, { input: parsed.data }, z.object({ submitProposal: mutationSchema }))).submitProposal;
     },
     async submitReassignment(input) {
-      const parsed = reassignmentSchema.safeParse(input);
+      const parsed = boundReassignmentSchema.safeParse(input);
       if (!parsed.success) throw new FleetError("configuration");
       return (await request(reassignMutation, { input: parsed.data }, z.object({ submitReassignment: mutationSchema }))).submitReassignment;
     },

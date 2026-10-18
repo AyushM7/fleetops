@@ -12,6 +12,10 @@ export async function submitReviewedAction(api: FleetAPI, snapshot: FleetState, 
       let current: FleetState;
       try { current = validateSnapshot(await api.readFleet()); }
       catch { submissionCheck = "unavailable"; throw new Error("Fresh snapshot unavailable."); }
+      if (!current.observationId || !snapshot.observationId) {
+        submissionCheck = "unavailable";
+        throw new Error("Live observation identity unavailable.");
+      }
       if (!sameFacts(current, snapshot)) {
         submissionCheck = "snapshot_changed";
         throw new Error("Snapshot changed; request a new analysis.");

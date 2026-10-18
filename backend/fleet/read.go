@@ -23,6 +23,7 @@ type StationView struct {
 	OccupiedBy, ReservedBy string
 }
 type StateView struct {
+	ObservationID          string
 	Layout                 LayoutView
 	Tick                   int
 	Robots                 []RobotView
@@ -106,7 +107,7 @@ func (s *Service) ReadState(context.Context) (StateView, error) {
 	if err != nil {
 		return StateView{}, err
 	}
-	view := StateView{Tick: snapshot.Tick, Poisoned: s.poisoned, Robots: []RobotView{}, Stations: []StationView{}}
+	view := StateView{ObservationID: s.observationID(), Tick: snapshot.Tick, Poisoned: s.poisoned, Robots: []RobotView{}, Stations: []StationView{}}
 	view.ActiveIncidents = incidents
 	view.Jobs = make([]JobView, 0, len(snapshot.Jobs))
 	view.ReassignmentCandidates = []ReassignmentCandidateView{}

@@ -27,10 +27,10 @@ func (*readOnlyFixture) ReadProposal(context.Context, string) (*fleet.ProposalVi
 func (*readOnlyFixture) ReadPendingProposals(context.Context) ([]fleet.ProposalView, error) {
 	return nil, fleet.ErrUnauthorized
 }
-func (*readOnlyFixture) Submit(context.Context, safety.SetChargingRequest, time.Time) (fleet.Result, error) {
+func (*readOnlyFixture) Submit(context.Context, safety.SetChargingRequest, time.Time, ...string) (fleet.Result, error) {
 	panic("unexpected mutation")
 }
-func (*readOnlyFixture) SubmitReassignment(context.Context, safety.ReassignUnstartedJobRequest, time.Time) (fleet.Result, error) {
+func (*readOnlyFixture) SubmitReassignment(context.Context, safety.ReassignUnstartedJobRequest, time.Time, ...string) (fleet.Result, error) {
 	panic("unexpected mutation")
 }
 func (*readOnlyFixture) Decide(context.Context, string, proposal.Decision, proposal.OperatorIdentity) (fleet.Result, error) {

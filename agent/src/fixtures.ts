@@ -2,7 +2,7 @@ import type { AIReasoning, FleetState, MutationResult } from "./contracts.js";
 import type { MastraModelConfig } from "@mastra/core/llm";
 
 export function fleetFixture(battery = 100): FleetState {
-  return { tick: 0, poisoned: false, activeIncidents: [], jobs: [], reassignmentCandidates: [],
+  return { observationId: "a".repeat(64), tick: 0, poisoned: false, activeIncidents: [], jobs: [], reassignmentCandidates: [],
     robots: [{ id: "R1", x: 0, y: 0, battery, status: "idle", jobId: "", waitTicks: 0, blocked: false }],
     stations: [{ id: "S1", x: 0, y: 0, occupiedBy: "", reservedBy: "" }],
   };

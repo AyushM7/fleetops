@@ -70,11 +70,11 @@ func TestIntegrationGraphQLReassignmentRecovery(t *testing.T) {
 			if !reflect.DeepEqual(before, baseline.Snapshot()) {
 				t.Fatal("baseline and intervention must start from identical snapshots")
 			}
-			state := request("proposer", `{fleetState{tick jobs{id status assignedRobot} reassignmentCandidates{jobId fromRobotId toRobotId pickupSteps deliverySteps chargingExitSteps requiredBattery} activeIncidents{robotId type severity}}}`, nil)["fleetState"].(map[string]any)
+			state := request("proposer", `{fleetState{observationId tick jobs{id status assignedRobot} reassignmentCandidates{jobId fromRobotId toRobotId pickupSteps deliverySteps chargingExitSteps requiredBattery} activeIncidents{robotId type severity}}}`, nil)["fleetState"].(map[string]any)
 			if len(state["reassignmentCandidates"].([]any)) == 0 || !reflect.DeepEqual(before, s.Snapshot()) {
 				t.Fatal("missing real candidates or read mutated state")
 			}
-			variables := map[string]any{"input": map[string]any{"jobId": "J1", "fromRobotId": "R1", "toRobotId": "R3", "expiresAt": now.Add(time.Minute).Format(time.RFC3339Nano)}}
+			variables := map[string]any{"input": map[string]any{"jobId": "J1", "fromRobotId": "R1", "toRobotId": "R3", "expiresAt": now.Add(time.Minute).Format(time.RFC3339Nano), "expectedObservationId": state["observationId"]}}
 			mutation := `mutation($input:ReassignUnstartedJobInput!){submitReassignment(input:$input)` + reassignmentOutcome + `}`
 			viewer := request("viewer", mutation, variables)["submitReassignment"].(map[string]any)
 			if viewer["error"] == nil || viewer["executionAttempted"] != false {
@@ -150,6 +150,10 @@ func TestIntegrationGraphQLReassignmentRecovery(t *testing.T) {
 				t.Fatal(result)
 			}
 			after := s.Snapshot()
+			afterView, readErr := s.ReadState(context.Background())
+			if readErr != nil || afterView.ObservationID == state["observationId"] {
+				t.Fatal("same-tick reassignment did not invalidate observation", readErr)
+			}
 			if after.Robots[0].JobID != "" || after.Robots[2].JobID != "J1" || after.Jobs[0].AssignedRobot != "R3" || after.Jobs[0].Status != sim.JobAssigned || after.Tick != before.Tick {
 				t.Fatal("non-atomic transfer", after)
 			}

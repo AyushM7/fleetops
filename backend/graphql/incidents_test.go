@@ -32,7 +32,7 @@ func (f *incidentReadFixture) ReadState(context.Context) (fleet.StateView, error
 	f.reads.Add(1)
 	return f.view, f.err
 }
-func (f *incidentReadFixture) Submit(context.Context, safety.SetChargingRequest, time.Time) (fleet.Result, error) {
+func (f *incidentReadFixture) Submit(context.Context, safety.SetChargingRequest, time.Time, ...string) (fleet.Result, error) {
 	f.mutations.Add(1)
 	return fleet.Result{}, errors.New("unexpected fixture mutation")
 }
@@ -55,7 +55,7 @@ func incidentHTTPFixture(t *testing.T) *incidentReadFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &incidentReadFixture{readOnlyFixture: &readOnlyFixture{}, view: fleet.StateView{Tick: state.Tick, Robots: []fleet.RobotView{}, Stations: []fleet.StationView{}, ActiveIncidents: []fleet.IncidentView{}}}
+	f := &incidentReadFixture{readOnlyFixture: &readOnlyFixture{}, view: fleet.StateView{ObservationID: strings.Repeat("a", 64), Tick: state.Tick, Robots: []fleet.RobotView{}, Stations: []fleet.StationView{}, ActiveIncidents: []fleet.IncidentView{}}}
 	byID := map[string]fleet.RobotView{}
 	for _, r := range state.Robots {
 		v := fleet.RobotView{ID: r.ID, X: r.X, Y: r.Y, Battery: r.Battery, Status: string(r.Status), JobID: r.JobID, WaitTicks: r.WaitTicks, Blocked: r.Blocked}
