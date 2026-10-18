@@ -19,6 +19,25 @@ func NewDemoReassignmentService(pool *db.Pool, clock func() time.Time) (*Service
 	if err != nil {
 		return nil, err
 	}
+	return newDemoService(simulator, pool, clock)
+}
+
+func NewDemoGuidedService(pool *db.Pool, clock func() time.Time) (*Service, error) {
+	simulator, err := sim.NewReassignmentInitialFixture()
+	if err != nil {
+		return nil, err
+	}
+	return newDemoService(simulator, pool, clock)
+}
+
+// DemoRuntimeID identifies preproposal evidence without exposing capabilities.
+func (s *Service) DemoRuntimeID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.runtimeID
+}
+
+func newDemoService(simulator *sim.Sim, pool *db.Pool, clock func() time.Time) (*Service, error) {
 	s, err := newService(simulator, simulator.Tick, pool, clock, func(ctx context.Context, id proposal.OperatorIdentity) bool {
 		p, ok := auth.FromContext(ctx)
 		return ok && p.Role == auth.Operator && p.Subject == id.Subject

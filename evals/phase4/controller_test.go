@@ -23,6 +23,8 @@ type demoRun struct {
 	advance    func(context.Context) error
 	inspect    func(context.Context) (*model.FleetState, bool, error)
 	step       func(context.Context) error
+	prepare    func(context.Context) error
+	guidance   func() *demoGuidance
 }
 
 type demoStatus struct {
@@ -31,6 +33,7 @@ type demoStatus struct {
 	State      string            `json:"state,omitempty"`
 	Speed      string            `json:"speed,omitempty"`
 	Snapshot   *model.FleetState `json:"snapshot,omitempty"`
+	Guide      *demoGuidance     `json:"guide,omitempty"`
 }
 
 // All browser forwarding, progress ticks, capture and replacement share this
@@ -143,6 +146,12 @@ func (c *demoController) advance(ctx context.Context) error {
 		return nil
 	}
 	if c.interactive {
+		if c.run.prepare != nil {
+			if err := c.run.prepare(ctx); err != nil {
+				c.ready, c.running = false, false
+				return err
+			}
+		}
 		return c.advanceInteractive(ctx, time.Now())
 	}
 	if err := c.run.advance(ctx); err != nil {

@@ -44,6 +44,12 @@ func (c *demoController) advanceInteractive(ctx context.Context, now time.Time) 
 		c.ready, c.running = false, false
 		return err
 	}
+	if c.run.guidance != nil {
+		if _, err := c.status(ctx); err != nil {
+			c.ready, c.running = false, false
+			return err
+		}
+	}
 	c.nextTick = now.Add(demoInterval(c.speed))
 	return nil
 }
@@ -54,6 +60,9 @@ func (c *demoController) status(ctx context.Context) (demoStatus, error) {
 		return status, nil
 	}
 	status.State, status.Speed = "unavailable", c.speed
+	if c.run.guidance != nil {
+		status.Guide = c.run.guidance()
+	}
 	if status.Speed == "" {
 		status.Speed = "1"
 	}
@@ -67,6 +76,9 @@ func (c *demoController) status(ctx context.Context) (demoStatus, error) {
 		return status, err
 	}
 	status.Snapshot = snapshot
+	if c.run.guidance != nil {
+		status.Guide = c.run.guidance()
+	}
 	if snapshot.Poisoned {
 		c.running = false
 		return status, nil
@@ -74,6 +86,9 @@ func (c *demoController) status(ctx context.Context) (demoStatus, error) {
 	status.State = "paused"
 	if !decided {
 		status.State, c.running = "awaiting_decision", false
+		if status.Guide != nil && status.Guide.Stage == "analyze" {
+			status.State = "preparing"
+		}
 	} else if c.running {
 		status.State = "running"
 	}
@@ -126,7 +141,7 @@ func (c *demoController) applyControl(w http.ResponseWriter, r *http.Request, st
 	now := time.Now()
 	switch r.URL.Path {
 	case "/demo/play", "/demo/step":
-		if status.State == "awaiting_decision" {
+		if status.State == "awaiting_decision" || status.State == "preparing" {
 			http.Error(w, "human decision required before ticking", 409)
 			return false
 		}

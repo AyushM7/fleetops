@@ -1,10 +1,11 @@
 import type { JSX } from "react";
 import { parseSnapshot, type FleetSnapshot } from "./fleet";
 
-export type SimulationState = "awaiting_decision" | "paused" | "running" | "unavailable";
+export type SimulationState = "awaiting_decision" | "preparing" | "paused" | "running" | "unavailable";
 export type SimulationSpeed = "0.5" | "1" | "2";
 export type TimeOperation = "play" | "pause" | "step" | `speed/${SimulationSpeed}`;
-export interface DemoStatus { generation: string; ready: boolean; state?: SimulationState; speed?: SimulationSpeed; snapshot?: FleetSnapshot }
+export interface DemoGuidance { stage: "observe" | "incident" | "analyze" | "decide" | "outcome"; decision?: "pending" | "approved" | "rejected" | "expired"; proposalId?: string; decisionTick?: number; deliveryTick?: number }
+export interface DemoStatus { generation: string; ready: boolean; state?: SimulationState; speed?: SimulationSpeed; snapshot?: FleetSnapshot; guide?: DemoGuidance }
 export class DemoError extends Error {
   constructor(public readonly authentication: boolean, message: string) { super(message); }
 }
@@ -25,13 +26,27 @@ async function demoRequest(path: "status" | "restart" | TimeOperation, generatio
   }
   const status: DemoStatus = { generation: body.generation, ready: body.ready };
   if ("state" in body || "speed" in body || "snapshot" in body) {
-    if (!("state" in body) || !["awaiting_decision", "paused", "running", "unavailable"].includes(body.state as string) ||
+    if (!("state" in body) || !["awaiting_decision", "preparing", "paused", "running", "unavailable"].includes(body.state as string) ||
         !("speed" in body) || !["0.5", "1", "2"].includes(body.speed as string)) throw new DemoError(false, "Invalid simulation status.");
     status.state = body.state as SimulationState; status.speed = body.speed as SimulationSpeed;
     if ("snapshot" in body) status.snapshot = parseSnapshot(body.snapshot);
     if (status.state !== "unavailable" && (!status.ready || !status.snapshot || status.snapshot.poisoned)) throw new DemoError(false, "Invalid simulation readiness.");
   }
+  if ("guide" in body) status.guide = parseGuidance(body.guide, status.snapshot);
   return status;
+}
+
+function parseGuidance(value: unknown, snapshot?: FleetSnapshot): DemoGuidance {
+  if (typeof value !== "object" || value === null || !("stage" in value) || !["observe", "incident", "analyze", "decide", "outcome"].includes(value.stage as string)) throw new DemoError(false, "Invalid guided stage.");
+  if ("decision" in value && !["pending", "approved", "rejected", "expired"].includes(value.decision as string)) throw new DemoError(false, "Invalid guided decision.");
+  if ("proposalId" in value && (typeof value.proposalId !== "string" || !/^P[a-f0-9]{32}$/.test(value.proposalId))) throw new DemoError(false, "Invalid guided proposal.");
+  const record = value as Record<string, unknown>;
+  for (const key of ["decisionTick", "deliveryTick"] as const) {
+    const tick = record[key];
+    if (key in record && (typeof tick !== "number" || !Number.isSafeInteger(tick) || tick < 0 || (snapshot && tick > snapshot.tick))) throw new DemoError(false, "Invalid guided measurement.");
+  }
+  if ("deliveryTick" in value && (!("decision" in value) || value.decision !== "approved" || !("decisionTick" in value) || (value.deliveryTick as number) < (value.decisionTick as number))) throw new DemoError(false, "Unconfirmed guided delivery.");
+  return value as DemoGuidance;
 }
 
 export async function controlSimulation(operation: TimeOperation, generation: string, tick: number): Promise<DemoStatus> {

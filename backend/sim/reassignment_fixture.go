@@ -5,6 +5,19 @@ package sim
 // NewReassignmentTestFixture is compiled only by explicitly tagged test builds.
 // It is never part of the production server or exposed through fleet/GraphQL.
 func NewReassignmentTestFixture() (*Sim, error) {
+	s, err := NewReassignmentInitialFixture()
+	if err != nil {
+		return nil, err
+	}
+	for range 42 {
+		s.Tick()
+	}
+	return s, nil
+}
+
+// NewReassignmentInitialFixture preserves the seed and setup before its warm-up.
+// R2 is already offline; subsequent ticks reveal R1's accumulating blockage.
+func NewReassignmentInitialFixture() (*Sim, error) {
 	cfg := DefaultConfig()
 	cfg.Width, cfg.Height = 8, 8
 	cfg.AisleColumns, cfg.AisleYMin, cfg.AisleYMax = []int{6}, 1, 2
@@ -24,8 +37,5 @@ func NewReassignmentTestFixture() (*Sim, error) {
 	s.state.Robots[0].Status, s.state.Robots[0].JobID = RobotMoving, "J1"
 	s.state.Robots[1].Status = RobotOffline
 	s.state.Jobs = []JobState{{ID: "J1", From: Point{4, 4}, To: Point{6, 4}, Status: JobAssigned, AssignedRobot: "R1"}}
-	for range 42 {
-		s.Tick()
-	}
 	return s, nil
 }

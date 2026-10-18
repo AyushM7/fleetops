@@ -30,6 +30,8 @@ type demoFactory struct {
 	auth              *auth.Authenticator
 	tokens            map[string]string
 	root, evidenceDir string
+	guided            bool
+	submit            func(context.Context, http.Handler, string) (string, error)
 }
 
 type demoScenario struct {
@@ -38,46 +40,87 @@ type demoScenario struct {
 	generation, runtimeID, dir string
 	evidence                   demoEvidence
 	nextTick                   time.Time
+	guide                      *demoGuidance
+	target                     sim.State
+	reached, attempted         bool
 }
 
 func (f demoFactory) create(ctx context.Context) (*demoRun, error) {
-	service, err := fleet.NewDemoReassignmentService(f.pool, time.Now)
+	construct := fleet.NewDemoReassignmentService
+	if f.guided {
+		construct = fleet.NewDemoGuidedService
+	}
+	service, err := construct(f.pool, time.Now)
 	if err != nil {
 		return nil, err
 	}
-	evidence, err := demoBaseline(service.Snapshot())
+	initial := service.Snapshot()
+	target := initial
+	if f.guided {
+		fixture, err := sim.NewReassignmentTestFixture()
+		if err != nil {
+			return nil, err
+		}
+		target = fixture.Snapshot()
+	}
+	evidence, err := demoBaseline(target)
 	if err != nil {
 		return nil, err
 	}
-	scenario := &demoScenario{factory: f, service: service, generation: demoRandom(), evidence: evidence}
-	scenario.dir = filepath.Join(f.evidenceDir, scenario.generation)
-	if err := os.Mkdir(scenario.dir, 0700); err != nil {
+	evidence.Initial = initial
+	s := &demoScenario{factory: f, service: service, generation: demoRandom(), runtimeID: service.DemoRuntimeID(), evidence: evidence, target: target}
+	s.dir = filepath.Join(f.evidenceDir, s.generation)
+	if err := os.Mkdir(s.dir, 0700); err != nil {
 		return nil, err
 	}
 	handler := graphql.NewHandler(service, f.auth)
-	id, err := f.propose(ctx, handler, scenario.dir)
+	run := &demoRun{generation: s.generation, handler: handler, capture: s.capture, advance: s.advance, inspect: s.inspect,
+		step: func(context.Context) error { return service.Tick() }}
+	if f.guided {
+		s.guide = &demoGuidance{Stage: "observe"}
+		s.evidence.Mode = "guided"
+		run.step, run.prepare, run.guidance = s.guidedStep, s.prepareGuided, s.guidance
+	} else if err := s.installProposal(ctx); err != nil {
+		return nil, err
+	}
+	if err := s.capture(ctx); err != nil {
+		return nil, err
+	}
+	return run, nil
+}
+
+func (s *demoScenario) installProposal(ctx context.Context) error {
+	before := s.service.Snapshot()
+	handler := graphql.NewHandler(s.service, s.factory.auth)
+	id, err := s.factory.propose(ctx, handler, s.dir)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if !reflect.DeepEqual(evidence.Initial, service.Snapshot()) {
-		return nil, errors.New("proposal submission mutated simulator")
+	s.evidence.ProposalID = id
+	if s.guide != nil {
+		s.guide.ProposalID = id
 	}
-	scenario.evidence.ProposalID = id
-	if err := f.pool.QueryRow(ctx, `SELECT runtime_id FROM fleet_proposals WHERE id=$1 AND state='pending' AND execution='none' AND submitted_by='proposer'`, id).Scan(&scenario.runtimeID); err != nil {
-		return nil, err
+	if !reflect.DeepEqual(before, s.service.Snapshot()) {
+		return errors.New("proposal submission mutated simulator")
+	}
+	var runtimeID string
+	if err := s.factory.pool.QueryRow(ctx, `SELECT runtime_id FROM fleet_proposals WHERE id=$1 AND state='pending' AND execution='none' AND submitted_by='proposer'`, id).Scan(&runtimeID); err != nil {
+		return err
+	}
+	if runtimeID != s.runtimeID {
+		return errors.New("proposal runtime mismatch")
 	}
 	var audits int
-	if err := f.pool.QueryRow(ctx, `SELECT count(*) FROM fleet_audit WHERE proposal_id=$1 AND attempt='create' AND accepted AND operator_subject='proposer'`, id).Scan(&audits); err != nil || audits != 1 {
-		return nil, errors.New("committed proposer audit not confirmed")
+	if err := s.factory.pool.QueryRow(ctx, `SELECT count(*) FROM fleet_audit WHERE proposal_id=$1 AND attempt='create' AND accepted AND operator_subject='proposer'`, id).Scan(&audits); err != nil || audits != 1 {
+		return errors.New("committed proposer audit not confirmed")
 	}
-	if err := scenario.capture(ctx); err != nil {
-		return nil, err
-	}
-	return &demoRun{generation: scenario.generation, handler: handler, capture: scenario.capture, advance: scenario.advance,
-		inspect: scenario.inspect, step: func(context.Context) error { return service.Tick() }}, nil
+	return nil
 }
 
 func (s *demoScenario) inspect(ctx context.Context) (*model.FleetState, bool, error) {
+	if s.guide != nil && s.evidence.ProposalID == "" {
+		return s.inspectLeadup(ctx)
+	}
 	row, err := s.service.ReadProposal(ctx, s.evidence.ProposalID)
 	if err != nil {
 		return nil, false, err
@@ -88,6 +131,12 @@ func (s *demoScenario) inspect(ctx context.Context) (*model.FleetState, bool, er
 	state, err := (&graphql.Resolver{Service: s.service}).Query().FleetState(ctx)
 	// Expiry alone is not a human decision. A failed approval cannot open this gate.
 	decided := row.Proposal.State == proposal.Rejected || (row.Proposal.State == proposal.Approved && row.Execution == fleet.Succeeded)
+	if s.guide != nil {
+		s.guide.Stage, s.guide.Decision = "decide", string(row.Proposal.State)
+		if decided {
+			s.guide.Stage = "outcome"
+		}
+	}
 	return state, decided, err
 }
 
@@ -106,6 +155,9 @@ func demoBaseline(initial sim.State) (demoEvidence, error) {
 }
 
 func (f demoFactory) propose(ctx context.Context, handler http.Handler, dir string) (string, error) {
+	if f.submit != nil {
+		return f.submit(ctx, handler, dir)
+	}
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	server := httptest.NewServer(handler)
@@ -128,6 +180,9 @@ func (f demoFactory) propose(ctx context.Context, handler http.Handler, dir stri
 }
 
 func (s *demoScenario) capture(ctx context.Context) error {
+	if s.evidence.ProposalID == "" {
+		return s.factory.capture(ctx, s.dir, s.generation, s.runtimeID, s.service, s.evidence)
+	}
 	row, err := s.service.ReadProposal(ctx, s.evidence.ProposalID)
 	if err != nil {
 		return err
@@ -232,7 +287,7 @@ func TestPhase4AcceptanceDemo(t *testing.T) {
 	if err := pool.Migrate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	factory := demoFactory{pool: pool, auth: a, tokens: tokens, root: root, evidenceDir: evidenceDir}
+	factory := demoFactory{pool: pool, auth: a, tokens: tokens, root: root, evidenceDir: evidenceDir, guided: os.Getenv("FLEETOPS_DEMO_GUIDED") == "1"}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	run, err := factory.create(ctx)
 	cancel()
@@ -265,7 +320,7 @@ func TestPhase4AcceptanceDemo(t *testing.T) {
 	saveDemoJSON(t, privateFile, map[string]string{"url": browser.URL})
 	defer os.Remove(privateFile)
 	if os.Getenv("FLEETOPS_P405_CHECK_ONLY") == "1" {
-		t.Log("PASS: fresh tick-42 fixture, deterministic proposer, committed pending proposal, no execution; human review NOT tested")
+		t.Log("PASS: selected direct/guided initial fixture, retained evidence, no execution; human review NOT tested")
 		return
 	}
 	fmt.Printf("READY: %s · Restart Scenario enabled · evidence %s\n", browser.URL, evidenceDir)

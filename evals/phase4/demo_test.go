@@ -27,6 +27,9 @@ type demoEvidence struct {
 	CheckOnly                 bool
 	Initial, Baseline, Final  sim.State
 	Progress                  []sim.State
+	Mode                      string
+	DecisionPoint             *sim.State
+	DeliveredTick             *int
 	Audit                     []demoAudit
 }
 

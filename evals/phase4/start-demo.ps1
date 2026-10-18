@@ -1,4 +1,4 @@
-param([switch]$Submit, [switch]$CheckOnly, [switch]$LocalDemo)
+param([switch]$Submit, [switch]$CheckOnly, [switch]$LocalDemo, [switch]$Guided)
 $ErrorActionPreference = 'Stop'
 if (!$LocalDemo) { throw 'Use -LocalDemo to explicitly enable the loopback-only session gateway.' }
 if (!$Submit) { throw 'Submission defaults off. Use -Submit to explicitly create one pending demo proposal. No live LLM calls are made.' }
@@ -33,7 +33,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'gateway_test.go') -Destination (Join-Path $testBackend 'fleet/demo_gateway_test.go')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'gateway_security_test.go') -Destination (Join-Path $testBackend 'fleet/demo_gateway_security_test.go')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'gateway_integration_test.go') -Destination (Join-Path $testBackend 'fleet/demo_gateway_integration_test.go')
-    foreach ($name in @('controller_test.go','controller_security_test.go','controls_test.go','controls_behavior_test.go','controls_integration_test.go','scenario_test.go','restart_integration_test.go')) {
+    foreach ($name in @('controller_test.go','controller_security_test.go','controls_test.go','controls_behavior_test.go','controls_integration_test.go','scenario_test.go','restart_integration_test.go','guided_test.go','guided_behavior_test.go')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $testBackend "fleet/demo_$name")
     }
     docker run --detach --rm --name $container --publish '127.0.0.1::5432' --env POSTGRES_HOST_AUTH_METHOD=trust --env POSTGRES_DB=fleetops_p405 postgres:18.6 | Out-Null
@@ -56,19 +56,21 @@ try {
     $env:FLEETOPS_P405_RUN_DIR = $runDir
     $env:FLEETOPS_P405_SUBMIT = '1'
     $env:FLEETOPS_LOCAL_DEMO = '1'
+    $env:FLEETOPS_DEMO_GUIDED = if ($Guided) { '1' } else { '0' }
     $env:FLEETOPS_P405_CHECK_ONLY = if ($CheckOnly) { '1' } else { '0' }
     Write-Output 'MODEL MODE: deterministic local Mastra adapter. NOT a live LLM demonstration. Paid requests: disabled.'
     Write-Output 'Demo Mode: open the READY URL. Backend credentials remain in server memory; no token entry is needed.'
+    Write-Output $(if ($Guided) { 'GUIDED MODE: authentic tick-0 fixture; Play reaches a verified, paused decision boundary.' } else { 'DIRECT REVIEW MODE: tick 42 with one pending proposal.' })
     Write-Output 'For the interactive run, follow docs/phase4-demo.md. Only a human operator should click Approve.'
     Push-Location $testBackend
     try {
-        $tests = if ($CheckOnly) { '^(TestPhase4AcceptanceDemo|TestDemo.*)$' } else { '^(TestPhase4AcceptanceDemo|TestDemoGatewaySecurity|TestDemoController.*|TestDemoControls.*|TestDemoTrustedBaseline)$' }
+        $tests = if ($CheckOnly) { '^(TestPhase4AcceptanceDemo|TestDemo.*)$' } else { '^(TestPhase4AcceptanceDemo|TestDemoGatewaySecurity|TestDemoController.*|TestDemoControls.*|TestDemoGuided.*|TestDemoTrustedBaseline)$' }
         go test -tags fleetops_test ./fleet -run $tests -count=1 -v -timeout 25m
         $retainInfrastructure = $LASTEXITCODE -ne 0
         Assert-Exit 'Phase 4 local acceptance demo'
     } finally { Pop-Location }
 } finally {
-    foreach ($name in @('FLEETOPS_TEST_DATABASE_URL','FLEETOPS_REQUIRE_DB','FLEETOPS_P405_ROOT','FLEETOPS_P405_RUN_DIR','FLEETOPS_P405_SUBMIT','FLEETOPS_P405_CHECK_ONLY','FLEETOPS_LOCAL_DEMO')) { Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue }
+    foreach ($name in @('FLEETOPS_TEST_DATABASE_URL','FLEETOPS_REQUIRE_DB','FLEETOPS_P405_ROOT','FLEETOPS_P405_RUN_DIR','FLEETOPS_P405_SUBMIT','FLEETOPS_P405_CHECK_ONLY','FLEETOPS_LOCAL_DEMO','FLEETOPS_DEMO_GUIDED')) { Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue }
     if ($started -and !$retainInfrastructure) { docker stop $container | Out-Null }
     if ($retainInfrastructure) { Write-Warning "Demo failed: PostgreSQL container $container and work directory $workDir retained. Evidence may be incomplete; reconcile before manually stopping this named container. No historical success is implied." }
     $privateFile = Join-Path $runDir 'session.json'
