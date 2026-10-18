@@ -5,6 +5,7 @@ export interface ModelConfig {
   mode: "offline-model-double" | "live-model";
   provider: string; model: string; trials: number; maxRequests: number;
   maxOutputTokens: number; temperature?: number;
+  promptVariant?: "assisted" | "reduced-hint" | "both";
 }
 // An operator-reviewed upper bound, not a built-in or automatically refreshed price list.
 export interface CostReview {
@@ -18,7 +19,8 @@ export function checkConfig(config: ModelConfig, scenarios: number): number {
   }
   if (!["offline-model-double", "live-model"].includes(config.mode)) throw new Error("Unknown model mode.");
   if (config.temperature !== undefined && (!Number.isFinite(config.temperature) || config.temperature < 0 || config.temperature > 2)) throw new Error("Invalid temperature.");
-  const requests = scenarios * config.trials;
+  if (config.promptVariant !== undefined && !["assisted", "reduced-hint", "both"].includes(config.promptVariant)) throw new Error("Unknown prompt variant.");
+  const requests = scenarios * config.trials * (config.promptVariant === "both" ? 2 : 1);
   if (!Number.isSafeInteger(requests) || requests > config.maxRequests) throw new Error("Request ceiling exceeded before generation.");
   if (config.mode === "offline-model-double" && (config.provider !== "offline-fixture" || config.model !== "deterministic")) throw new Error("Offline mode permits only the local double.");
   return requests;
@@ -26,6 +28,7 @@ export function checkConfig(config: ModelConfig, scenarios: number): number {
 export function verifyLiveCost(config: ModelConfig, requests: number, rawReview: string | undefined,
   approvedHash: string | undefined, budgetUSD: number, env: NodeJS.ProcessEnv, now = Date.now()) {
   checkConfig(config, 1);
+  if (env.CI && env.CI !== "false" && env.CI !== "0") throw new Error("Live evaluation is disabled in CI.");
   if (!Number.isSafeInteger(requests) || requests < 1 || requests > config.maxRequests) throw new Error("Request ceiling invalid.");
   if (config.mode !== "live-model" || !["openai", "anthropic", "google"].includes(config.provider) ||
     !/^[a-zA-Z0-9._:/-]+$/.test(config.model)) throw new Error("Explicit supported provider/model required.");

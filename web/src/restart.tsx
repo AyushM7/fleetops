@@ -1,11 +1,12 @@
 import type { JSX } from "react";
 import { parseSnapshot, type FleetSnapshot } from "./fleet";
 import { isScenarioID, type ScenarioID } from "./scenarios";
+import { parseEvidence, type ExplanationEvidence } from "./Evidence";
 
 export type SimulationState = "awaiting_decision" | "paused" | "running" | "unavailable";
 export type SimulationSpeed = "0.5" | "1" | "2";
 export type TimeOperation = "play" | "pause" | "step" | `speed/${SimulationSpeed}`;
-export interface DemoStatus { generation: string; ready: boolean; scenarioId?: ScenarioID; state?: SimulationState; speed?: SimulationSpeed; snapshot?: FleetSnapshot }
+export interface DemoStatus { generation: string; ready: boolean; scenarioId?: ScenarioID; state?: SimulationState; speed?: SimulationSpeed; snapshot?: FleetSnapshot; evidence?: ExplanationEvidence }
 export class DemoError extends Error {
   constructor(public readonly authentication: boolean, message: string) { super(message); }
 }
@@ -36,6 +37,7 @@ async function demoRequest(path: "status" | "restart" | `scenario/${ScenarioID}`
     if ("snapshot" in body) status.snapshot = parseSnapshot(body.snapshot);
     if (status.state !== "unavailable" && (!status.ready || !status.snapshot || status.snapshot.poisoned)) throw new DemoError(false, "Invalid simulation readiness.");
   }
+  if ("evidence" in body) status.evidence = parseEvidence(body.evidence, status.generation, status.scenarioId);
   return status;
 }
 

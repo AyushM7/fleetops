@@ -7,7 +7,8 @@ export interface Station { id: string; x: number; y: number; occupiedBy: string;
 export interface Layout { width: number; height: number; cells: { x: number; y: number; kind: CellKind }[] }
 export interface Incident { robotId: string; type: "low_battery" | "robot_unresponsive" | "traffic_blocked"; severity: "medium" | "high"; telemetry: Robot }
 export interface Job { id: string; status: "pending" | "assigned" | "in_progress" | "done"; assignedRobot: string; fromX: number; fromY: number; toX: number; toY: number }
-export interface FleetSnapshot { tick: number; poisoned: boolean; robots: Robot[]; stations: Station[]; layout: Layout; activeIncidents: Incident[]; jobs: Job[] }
+export interface Candidate { jobId: string; fromRobotId: string; toRobotId: string; pickupSteps: number; deliverySteps: number; chargingExitSteps: number; requiredBattery: number }
+export interface FleetSnapshot { tick: number; poisoned: boolean; robots: Robot[]; stations: Station[]; layout: Layout; activeIncidents: Incident[]; jobs: Job[]; reassignmentCandidates?: Candidate[] }
 export type Feed = { phase: "loading" | "live" | "unavailable"; snapshot: FleetSnapshot | null; updatedAt: Date | null };
 export const fleetQuery = `{ fleetState { tick poisoned layout { width height cells { x y kind } } robots { id x y battery status jobId waitTicks blocked } stations { id x y occupiedBy reservedBy } activeIncidents { robotId type severity telemetry { id x y battery status jobId waitTicks blocked } } jobs { id status assignedRobot fromX fromY toX toY } } }`;
 

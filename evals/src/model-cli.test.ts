@@ -58,12 +58,14 @@ it("rejects a request ceiling below selected cases times trials", async () => {
   expect(fetch).not.toHaveBeenCalled();
 });
 it("retains live configuration and cost gates when selection is limited", async () => {
+  vi.stubEnv("CI", "false");
   captureCLI();
   await expect(modelCLI(["--model-eval", "--scenario-limit", "2", "--live", "--plan"])).rejects.toThrow("provider and model");
   await expect(modelCLI(["--model-eval", "--scenario-limit", "2", "--live", "--provider", "openai", "--model", "test-only", "--plan"])).rejects.toThrow("Pricing unavailable");
   expect(fetch).not.toHaveBeenCalled();
 });
 it("scales dry-run cost/budget checks to selected trials, retaining credential checks without generation", async () => {
+  vi.stubEnv("CI", "false");
   const report = captureCLI();
   vi.stubEnv("OPENAI_API_KEY", "test-only-never-transmitted");
   const directory = mkdtempSync(join(tmpdir(), "fleetops-scenario-limit-"));
@@ -83,6 +85,27 @@ it("scales dry-run cost/budget checks to selected trials, retaining credential c
     await expect(modelCLI([...args, "--budget-usd", "4"])).rejects.toThrow("spending ceiling");
     vi.stubEnv("OPENAI_API_KEY", "");
     await expect(modelCLI([...args, "--budget-usd", "5"])).rejects.toThrow("credential missing");
+    expect(fetch).not.toHaveBeenCalled();
+  } finally { unlinkSync(file); rmdirSync(directory); }
+});
+it("blocks live evaluation in CI even with reviewed pricing, sufficient budget and credentials", async () => {
+  vi.stubEnv("CI", "true");
+  vi.stubEnv("OPENAI_API_KEY", "test-only-never-transmitted");
+  captureCLI();
+  const directory = mkdtempSync(join(tmpdir(), "fleetops-ci-guard-"));
+  const file = join(directory, "review.json");
+  try {
+    const args = ["--model-eval", "--live", "--provider", "openai", "--model", "test-only", "--scenario-limit", "2",
+      "--trials", "2", "--max-requests", "4", "--budget-usd", "5"];
+    await expect(modelCLI([...args, "--plan"])).rejects.toThrow("Live evaluation is disabled in CI.");
+    const review = JSON.stringify({ provider: "openai", model: "test-only", source: "Synthetic test prices; not a real quote",
+      reviewedAt: "2000-01-01", expiresAt: "2099-01-01", maxBillableInputTokens: 100000,
+      inputUSDPerMillion: 10, outputUSDPerMillion: 20, outputLimitIncludesAllBilledTokens: true });
+    writeFileSync(file, review);
+    const hash = createHash("sha256").update(review).digest("hex");
+    const reviewedArgs = [...args, "--cost-review", file, "--approve-cost-sha256", hash];
+    await expect(modelCLI([...reviewedArgs, "--plan"])).rejects.toThrow("Live evaluation is disabled in CI.");
+    await expect(modelCLI(reviewedArgs)).rejects.toThrow("Live evaluation is disabled in CI.");
     expect(fetch).not.toHaveBeenCalled();
   } finally { unlinkSync(file); rmdirSync(directory); }
 });

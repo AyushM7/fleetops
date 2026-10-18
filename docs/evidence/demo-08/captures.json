@@ -1,0 +1,137 @@
+[
+  {
+    "file": "after-blocked-desktop.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 68001,
+    "sha256": "84c222f2473dac1a82aeaf511934c3f3deaa6e431a9283db6c989c8becc784df",
+    "requestedViewport": "1280x720",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  },
+  {
+    "file": "after-blocked-mobile.jpg",
+    "width": 375,
+    "height": 811,
+    "bytes": 30190,
+    "sha256": "90dd330cc499318c99dd1ab3c44f433055599b87349ff6c1081530045ccfc777",
+    "requestedViewport": "390x844",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  },
+  {
+    "file": "after-charging-desktop.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 82751,
+    "sha256": "9c29d4452d0a03d9d98391d80a05f0379f78ce28081bb590f604afc274b55cf1",
+    "requestedViewport": "1280x720",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  },
+  {
+    "file": "after-charging-mobile.jpg",
+    "width": 375,
+    "height": 811,
+    "bytes": 37031,
+    "sha256": "a4f4ffb697aa97f7ec9ca639cd1f296ae64391f93792d662d60bcfd07b2c9f15",
+    "requestedViewport": "390x844",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  },
+  {
+    "file": "after-healthy-desktop.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 73094,
+    "sha256": "0cdec70f97190daa3a535acb4121320e690f7dad068ad05b16cfabd8433b6287",
+    "requestedViewport": "1280x720",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  },
+  {
+    "file": "after-healthy-mobile.jpg",
+    "width": 375,
+    "height": 811,
+    "bytes": 40427,
+    "sha256": "454a850d901f08c64f77b06ab95e765355d727511def8ce9163ac1cc64247563",
+    "requestedViewport": "390x844",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  },
+  {
+    "file": "after-no-candidate-desktop.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 65526,
+    "sha256": "e4b912ff3bca677cfbd20e02152003d2525f17278f5863af871d2da745d5ac45",
+    "requestedViewport": "1280x720",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  },
+  {
+    "file": "after-no-candidate-mobile.jpg",
+    "width": 375,
+    "height": 811,
+    "bytes": 27943,
+    "sha256": "d2507c629bf320c05aa7301a822f369affd45d09aa6ac313cf22b501a8322283",
+    "requestedViewport": "390x844",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  },
+  {
+    "file": "before-blocked-desktop.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 67320,
+    "sha256": "bd6f908bb0fc2f5b204dcafc00d251ff402c062da77b8007e4134834ee1a3eea",
+    "requestedViewport": "1280x720",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  },
+  {
+    "file": "before-blocked-mobile.jpg",
+    "width": 375,
+    "height": 811,
+    "bytes": 33721,
+    "sha256": "3266f3e2fdb11cbb2630bd43628f91cc244f56e638747b6c463fd7bed8dc2463",
+    "requestedViewport": "390x844",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  },
+  {
+    "file": "before-healthy-desktop.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 62240,
+    "sha256": "3e775ad845d02e71e333a08620cf0abba1ceffa251da745714fe7811d0b3be34",
+    "requestedViewport": "1280x720",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  },
+  {
+    "file": "before-healthy-mobile.jpg",
+    "width": 375,
+    "height": 811,
+    "bytes": 29939,
+    "sha256": "810df377d388e99726f7845ac1e2a0c048aebc974ffae2b67af7d180ddc7573a",
+    "requestedViewport": "390x844",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  },
+  {
+    "file": "blocked-tick-45-desktop.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 70535,
+    "sha256": "74014a4a584f11dcd2c22be211b51b123080791a8e3cc957127a0cfdcc5c1ccf",
+    "requestedViewport": "1280x720",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  },
+  {
+    "file": "charging-tick-1001-desktop.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 79491,
+    "sha256": "05721410ef3f657d46b4f101a9a7ee17bfafff3bcb26d8363823a904b4c32b63",
+    "requestedViewport": "1280x720",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  },
+  {
+    "file": "transport-loss-desktop.jpg",
+    "width": 1265,
+    "height": 712,
+    "bytes": 58352,
+    "sha256": "e02380059e5eced5f7b9850100aa84db93856c49f63e8e0b35bb2940dcd8b1b4",
+    "requestedViewport": "1280x720",
+    "capture": "genuine unedited browser viewport; sidebar/page may be scrolled"
+  }
+]

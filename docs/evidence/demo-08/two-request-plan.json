@@ -1,0 +1,24 @@
+{
+  "configuration": {
+    "mode": "live-model",
+    "provider": "openai",
+    "model": "gpt-6-luna",
+    "trials": 1,
+    "maxRequests": 2,
+    "maxOutputTokens": 6000,
+    "scenarioLimit": 1,
+    "promptVariant": "both"
+  },
+  "selectedScenarioCount": 1,
+  "selectedScenarioIds": [
+    "blocked-reassignment"
+  ],
+  "requests": 2,
+  "cost": {
+    "estimatedMaximumUSD": 0.534,
+    "budgetUSD": 1,
+    "pricingSource": "https://developers.openai.com/api/docs/models/gpt-6-luna ; https://developers.openai.com/api/docs/pricing ; https://developers.openai.com/api/docs/guides/reasoning ; conservative full 1050000-token context bound; long-context Standard cache-write input upper rate 0.25; long-context output rate 0.75; fixed default service tier, no regional endpoint or tools",
+    "reviewSHA256": "bc51b2b2b1b5cda44e4d11c31794f1d79970e3aacc22e46fe2dd27e0576056eb",
+    "verification": "operator-reviewed provider context/billing bound"
+  }
+}

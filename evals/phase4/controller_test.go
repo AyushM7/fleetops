@@ -25,6 +25,16 @@ type demoRun struct {
 	advance    func(context.Context) error
 	inspect    func(context.Context) (*model.FleetState, bool, error)
 	step       func(context.Context) error
+	evidence   *demoExplanation
+}
+
+// Read-only local-demo provenance. This never authorizes a command.
+type demoExplanation struct {
+	Generation  string            `json:"generation"`
+	RuntimeID   string            `json:"runtimeId"`
+	ScenarioID  string            `json:"scenarioId"`
+	ProposalID  string            `json:"proposalId"`
+	Observation *model.FleetState `json:"observation"`
 }
 
 type demoStatus struct {
@@ -34,6 +44,7 @@ type demoStatus struct {
 	State      string            `json:"state,omitempty"`
 	Speed      string            `json:"speed,omitempty"`
 	Snapshot   *model.FleetState `json:"snapshot,omitempty"`
+	Evidence   *demoExplanation  `json:"evidence,omitempty"`
 }
 
 // All browser forwarding, progress ticks, capture and replacement share this
