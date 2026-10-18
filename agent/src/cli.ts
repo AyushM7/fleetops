@@ -14,7 +14,8 @@ async function main(): Promise<void> {
     : await runOffline(api, { allowSubmit: config.allowSubmit, demo: config.demo });
   console.log(JSON.stringify(result, null, 2));
   if (["rejected", "unknown"].includes(result.proposal.status) || ["rejected", "failed"].includes(result.aiAnalysis.status) ||
-      ["snapshot_changed", "unavailable"].includes(result.submissionCheck)) process.exitCode = 1;
+      ["snapshot_changed", "unavailable"].includes(result.submissionCheck) ||
+      ("provenance" in result && result.provenance.status !== "recorded")) process.exitCode = 1;
 }
 main().catch((error: unknown) => {
   console.error(error instanceof FleetError ? error.message : "Agent failed. Check private configuration, provider opt-in, and backend availability. No automatic retry was made.");

@@ -65,3 +65,8 @@ it("routes explicit v2 inference and submission to the isolated decision runner"
   expect(runners.runLive).not.toHaveBeenCalled(); expect(runners.runOffline).not.toHaveBeenCalled();
   expect(process.exitCode).toBeUndefined();
 });
+it("returns exit 1 for an unacknowledged provenance completion", async () => {
+  process.argv.push("--live", "--decision-v2"); vi.stubEnv("FLEETOPS_MODEL", "openai/test");
+  decisionRunner.runRecoveryDecision.mockResolvedValue({ ...resultFixture(), aiAnalysis: { status: "accepted", decision: null }, provenance: { runId: "Arun", status: "unknown" } });
+  await import("./cli.js"); await vi.waitFor(() => expect(process.exitCode).toBe(1));
+});

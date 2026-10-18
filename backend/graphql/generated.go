@@ -45,6 +45,21 @@ type ComplexityRoot struct {
 		Type      func(childComplexity int) int
 	}
 
+	AgentRun struct {
+		Data          func(childComplexity int) int
+		ID            func(childComplexity int) int
+		ObservationID func(childComplexity int) int
+		Proposal      func(childComplexity int) int
+		RuntimeID     func(childComplexity int) int
+	}
+
+	AgentRunReceipt struct {
+		Denial         func(childComplexity int) int
+		ProposalResult func(childComplexity int) int
+		Recorded       func(childComplexity int) int
+		RunID          func(childComplexity int) int
+	}
+
 	FleetState struct {
 		ActiveIncidents        func(childComplexity int) int
 		Jobs                   func(childComplexity int) int
@@ -69,7 +84,9 @@ type ComplexityRoot struct {
 
 	Mutation struct {
 		ApproveProposal    func(childComplexity int, id string) int
+		FinishAgentRun     func(childComplexity int, id string, completion string) int
 		RejectProposal     func(childComplexity int, id string) int
+		StartAgentRun      func(childComplexity int, expectedObservationID string, metadata string) int
 		SubmitProposal     func(childComplexity int, input model.SetChargingInput) int
 		SubmitReassignment func(childComplexity int, input model.ReassignUnstartedJobInput) int
 	}
@@ -100,6 +117,8 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		AgentRun         func(childComplexity int, id string) int
+		AgentRuns        func(childComplexity int, limit int) int
 		FleetState       func(childComplexity int) int
 		PendingProposals func(childComplexity int) int
 		Proposal         func(childComplexity int, id string) int
@@ -156,11 +175,15 @@ type MutationResolver interface {
 	SubmitReassignment(ctx context.Context, input model.ReassignUnstartedJobInput) (*model.MutationResult, error)
 	ApproveProposal(ctx context.Context, id string) (*model.MutationResult, error)
 	RejectProposal(ctx context.Context, id string) (*model.MutationResult, error)
+	StartAgentRun(ctx context.Context, expectedObservationID string, metadata string) (*model.AgentRun, error)
+	FinishAgentRun(ctx context.Context, id string, completion string) (*model.AgentRunReceipt, error)
 }
 type QueryResolver interface {
 	FleetState(ctx context.Context) (*model.FleetState, error)
 	Proposal(ctx context.Context, id string) (*model.Proposal, error)
 	PendingProposals(ctx context.Context) ([]*model.Proposal, error)
+	AgentRun(ctx context.Context, id string) (*model.AgentRun, error)
+	AgentRuns(ctx context.Context, limit int) ([]*model.AgentRun, error)
 }
 
 // endregion ************************** generated!.gotpl **************************
@@ -205,6 +228,62 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ActiveIncident.Type(childComplexity), true
+
+	case "AgentRun.data":
+		if e.ComplexityRoot.AgentRun.Data == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentRun.Data(childComplexity), true
+	case "AgentRun.id":
+		if e.ComplexityRoot.AgentRun.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentRun.ID(childComplexity), true
+	case "AgentRun.observationId":
+		if e.ComplexityRoot.AgentRun.ObservationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentRun.ObservationID(childComplexity), true
+	case "AgentRun.proposal":
+		if e.ComplexityRoot.AgentRun.Proposal == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentRun.Proposal(childComplexity), true
+	case "AgentRun.runtimeId":
+		if e.ComplexityRoot.AgentRun.RuntimeID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentRun.RuntimeID(childComplexity), true
+
+	case "AgentRunReceipt.denial":
+		if e.ComplexityRoot.AgentRunReceipt.Denial == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentRunReceipt.Denial(childComplexity), true
+	case "AgentRunReceipt.proposalResult":
+		if e.ComplexityRoot.AgentRunReceipt.ProposalResult == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentRunReceipt.ProposalResult(childComplexity), true
+	case "AgentRunReceipt.recorded":
+		if e.ComplexityRoot.AgentRunReceipt.Recorded == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentRunReceipt.Recorded(childComplexity), true
+	case "AgentRunReceipt.runId":
+		if e.ComplexityRoot.AgentRunReceipt.RunID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AgentRunReceipt.RunID(childComplexity), true
 
 	case "FleetState.activeIncidents":
 		if e.ComplexityRoot.FleetState.ActiveIncidents == nil {
@@ -315,6 +394,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ApproveProposal(childComplexity, args["id"].(string)), true
+	case "Mutation.finishAgentRun":
+		if e.ComplexityRoot.Mutation.FinishAgentRun == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_finishAgentRun_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.FinishAgentRun(childComplexity, args["id"].(string), args["completion"].(string)), true
 	case "Mutation.rejectProposal":
 		if e.ComplexityRoot.Mutation.RejectProposal == nil {
 			break
@@ -326,6 +416,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RejectProposal(childComplexity, args["id"].(string)), true
+	case "Mutation.startAgentRun":
+		if e.ComplexityRoot.Mutation.StartAgentRun == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_startAgentRun_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.StartAgentRun(childComplexity, args["expectedObservationId"].(string), args["metadata"].(string)), true
 	case "Mutation.submitProposal":
 		if e.ComplexityRoot.Mutation.SubmitProposal == nil {
 			break
@@ -465,6 +566,28 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Proposal.ToRobotID(childComplexity), true
 
+	case "Query.agentRun":
+		if e.ComplexityRoot.Query.AgentRun == nil {
+			break
+		}
+
+		args, err := ec.field_Query_agentRun_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AgentRun(childComplexity, args["id"].(string)), true
+	case "Query.agentRuns":
+		if e.ComplexityRoot.Query.AgentRuns == nil {
+			break
+		}
+
+		args, err := ec.field_Query_agentRuns_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.AgentRuns(childComplexity, args["limit"].(int)), true
 	case "Query.fleetState":
 		if e.ComplexityRoot.Query.FleetState == nil {
 			break
@@ -767,6 +890,36 @@ func (ec *executionContext) childFields_ActiveIncident(ctx context.Context, fiel
 		return ec.fieldContext_ActiveIncident_telemetry(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ActiveIncident", field.Name)
+}
+
+func (ec *executionContext) childFields_AgentRun(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_AgentRun_id(ctx, field)
+	case "runtimeId":
+		return ec.fieldContext_AgentRun_runtimeId(ctx, field)
+	case "observationId":
+		return ec.fieldContext_AgentRun_observationId(ctx, field)
+	case "data":
+		return ec.fieldContext_AgentRun_data(ctx, field)
+	case "proposal":
+		return ec.fieldContext_AgentRun_proposal(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AgentRun", field.Name)
+}
+
+func (ec *executionContext) childFields_AgentRunReceipt(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "runId":
+		return ec.fieldContext_AgentRunReceipt_runId(ctx, field)
+	case "recorded":
+		return ec.fieldContext_AgentRunReceipt_recorded(ctx, field)
+	case "denial":
+		return ec.fieldContext_AgentRunReceipt_denial(ctx, field)
+	case "proposalResult":
+		return ec.fieldContext_AgentRunReceipt_proposalResult(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AgentRunReceipt", field.Name)
 }
 
 func (ec *executionContext) childFields_FleetState(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -1075,6 +1228,28 @@ func (ec *executionContext) field_Mutation_approveProposal_args(ctx context.Cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_finishAgentRun_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "completion",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["completion"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_rejectProposal_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -1086,6 +1261,28 @@ func (ec *executionContext) field_Mutation_rejectProposal_args(ctx context.Conte
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_startAgentRun_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "expectedObservationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedObservationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "metadata",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["metadata"] = arg1
 	return args, nil
 }
 
@@ -1128,6 +1325,34 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 		return nil, err
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_agentRun_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_agentRuns_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "limit",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg0
 	return args, nil
 }
 
@@ -1301,6 +1526,231 @@ func (ec *executionContext) fieldContext_ActiveIncident_telemetry(_ context.Cont
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Robot(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentRun_id(ctx context.Context, field graphql.CollectedField, obj *model.AgentRun) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentRun_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AgentRun_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AgentRun", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AgentRun_runtimeId(ctx context.Context, field graphql.CollectedField, obj *model.AgentRun) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentRun_runtimeId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RuntimeID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AgentRun_runtimeId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AgentRun", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AgentRun_observationId(ctx context.Context, field graphql.CollectedField, obj *model.AgentRun) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentRun_observationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ObservationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AgentRun_observationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AgentRun", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AgentRun_data(ctx context.Context, field graphql.CollectedField, obj *model.AgentRun) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentRun_data(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Data, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AgentRun_data(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AgentRun", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AgentRun_proposal(ctx context.Context, field graphql.CollectedField, obj *model.AgentRun) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentRun_proposal(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Proposal, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.Proposal) graphql.Marshaler {
+			return ec.marshalOProposal2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐProposal(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AgentRun_proposal(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentRun",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Proposal(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentRunReceipt_runId(ctx context.Context, field graphql.CollectedField, obj *model.AgentRunReceipt) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentRunReceipt_runId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RunID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AgentRunReceipt_runId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AgentRunReceipt", field, false, false, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AgentRunReceipt_recorded(ctx context.Context, field graphql.CollectedField, obj *model.AgentRunReceipt) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentRunReceipt_recorded(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Recorded, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AgentRunReceipt_recorded(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AgentRunReceipt", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _AgentRunReceipt_denial(ctx context.Context, field graphql.CollectedField, obj *model.AgentRunReceipt) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentRunReceipt_denial(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Denial, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AgentRunReceipt_denial(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AgentRunReceipt", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AgentRunReceipt_proposalResult(ctx context.Context, field graphql.CollectedField, obj *model.AgentRunReceipt) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AgentRunReceipt_proposalResult(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ProposalResult, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.MutationResult) graphql.Marshaler {
+			return ec.marshalOMutationResult2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐMutationResult(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AgentRunReceipt_proposalResult(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentRunReceipt",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_MutationResult(ctx, field)
 		},
 	}
 	return fc, nil
@@ -1904,6 +2354,94 @@ func (ec *executionContext) fieldContext_Mutation_rejectProposal(ctx context.Con
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_startAgentRun(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_startAgentRun(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().StartAgentRun(ctx, fc.Args["expectedObservationId"].(string), fc.Args["metadata"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.AgentRun) graphql.Marshaler {
+			return ec.marshalNAgentRun2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐAgentRun(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_startAgentRun(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AgentRun(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_startAgentRun_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_finishAgentRun(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_finishAgentRun(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().FinishAgentRun(ctx, fc.Args["id"].(string), fc.Args["completion"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.AgentRunReceipt) graphql.Marshaler {
+			return ec.marshalNAgentRunReceipt2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐAgentRunReceipt(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_finishAgentRun(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AgentRunReceipt(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_finishAgentRun_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MutationResult_proposalId(ctx context.Context, field graphql.CollectedField, obj *model.MutationResult) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2445,6 +2983,94 @@ func (ec *executionContext) fieldContext_Query_pendingProposals(_ context.Contex
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Proposal(ctx, field)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_agentRun(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_agentRun(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AgentRun(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.AgentRun) graphql.Marshaler {
+			return ec.marshalOAgentRun2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐAgentRun(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Query_agentRun(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AgentRun(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_agentRun_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_agentRuns(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_agentRuns(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().AgentRuns(ctx, fc.Args["limit"].(int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.AgentRun) graphql.Marshaler {
+			return ec.marshalNAgentRun2ᚕᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐAgentRunᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_agentRuns(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AgentRun(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_agentRuns_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -4361,6 +4987,117 @@ func (ec *executionContext) _ActiveIncident(ctx context.Context, sel ast.Selecti
 	return out
 }
 
+var agentRunImplementors = []string{"AgentRun"}
+
+func (ec *executionContext) _AgentRun(ctx context.Context, sel ast.SelectionSet, obj *model.AgentRun) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, agentRunImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AgentRun")
+		case "id":
+			out.Values[i] = ec._AgentRun_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "runtimeId":
+			out.Values[i] = ec._AgentRun_runtimeId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "observationId":
+			out.Values[i] = ec._AgentRun_observationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "data":
+			out.Values[i] = ec._AgentRun_data(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "proposal":
+			out.Values[i] = ec._AgentRun_proposal(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var agentRunReceiptImplementors = []string{"AgentRunReceipt"}
+
+func (ec *executionContext) _AgentRunReceipt(ctx context.Context, sel ast.SelectionSet, obj *model.AgentRunReceipt) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, agentRunReceiptImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AgentRunReceipt")
+		case "runId":
+			out.Values[i] = ec._AgentRunReceipt_runId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "recorded":
+			out.Values[i] = ec._AgentRunReceipt_recorded(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "denial":
+			out.Values[i] = ec._AgentRunReceipt_denial(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "proposalResult":
+			out.Values[i] = ec._AgentRunReceipt_proposalResult(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var fleetStateImplementors = []string{"FleetState"}
 
 func (ec *executionContext) _FleetState(ctx context.Context, sel ast.SelectionSet, obj *model.FleetState) graphql.Marshaler {
@@ -4551,6 +5288,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "rejectProposal":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_rejectProposal(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "startAgentRun":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_startAgentRun(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "finishAgentRun":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_finishAgentRun(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -4811,6 +5562,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_pendingProposals(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "agentRun":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_agentRun(ctx, field)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "agentRuns":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_agentRuns(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -5571,6 +6366,42 @@ func (ec *executionContext) marshalNActiveIncident2ᚖgithubᚗcomᚋAyushM7ᚋf
 	return ec._ActiveIncident(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNAgentRun2ᚕᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐAgentRunᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.AgentRun) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAgentRun2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐAgentRun(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAgentRun2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐAgentRun(ctx context.Context, sel ast.SelectionSet, v *model.AgentRun) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AgentRun(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAgentRunReceipt2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐAgentRunReceipt(ctx context.Context, sel ast.SelectionSet, v *model.AgentRunReceipt) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AgentRunReceipt(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v any) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -5987,6 +6818,13 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 	return res
 }
 
+func (ec *executionContext) marshalOAgentRun2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐAgentRun(ctx context.Context, sel ast.SelectionSet, v *model.AgentRun) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._AgentRun(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalOBoolean2bool(ctx context.Context, v any) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -6015,6 +6853,13 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	_ = ctx
 	res := graphql.MarshalBoolean(*v)
 	return res
+}
+
+func (ec *executionContext) marshalOMutationResult2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐMutationResult(ctx context.Context, sel ast.SelectionSet, v *model.MutationResult) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._MutationResult(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOProposal2ᚖgithubᚗcomᚋAyushM7ᚋfleetopsᚋbackendᚋgraphqlᚋmodelᚐProposal(ctx context.Context, sel ast.SelectionSet, v *model.Proposal) graphql.Marshaler {

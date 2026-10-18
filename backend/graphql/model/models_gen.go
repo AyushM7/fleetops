@@ -13,6 +13,21 @@ type ActiveIncident struct {
 	Telemetry *Robot `json:"telemetry"`
 }
 
+type AgentRun struct {
+	ID            string    `json:"id"`
+	RuntimeID     string    `json:"runtimeId"`
+	ObservationID string    `json:"observationId"`
+	Data          string    `json:"data"`
+	Proposal      *Proposal `json:"proposal,omitempty"`
+}
+
+type AgentRunReceipt struct {
+	RunID          string          `json:"runId"`
+	Recorded       bool            `json:"recorded"`
+	Denial         string          `json:"denial"`
+	ProposalResult *MutationResult `json:"proposalResult,omitempty"`
+}
+
 type FleetState struct {
 	ObservationID          string                   `json:"observationId"`
 	Layout                 *WarehouseLayout         `json:"layout"`

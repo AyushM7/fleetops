@@ -4,6 +4,8 @@ type Query {
   fleetState: FleetState!
   proposal(id: ID!): Proposal
   pendingProposals: [Proposal!]!
+  agentRun(id: ID!): AgentRun
+  agentRuns(limit: Int!): [AgentRun!]!
 }
 
 type Mutation {
@@ -11,7 +13,13 @@ type Mutation {
   submitReassignment(input: ReassignUnstartedJobInput!): MutationResult!
   approveProposal(id: ID!): MutationResult!
   rejectProposal(id: ID!): MutationResult!
+  startAgentRun(expectedObservationId: String!, metadata: String!): AgentRun!
+  finishAgentRun(id: ID!, completion: String!): AgentRunReceipt!
 }
+
+# data is the bounded agent-run-v1 JSON contract. It contains typed projections, never raw prompts or tool outputs.
+type AgentRun { id: ID!, runtimeId: ID!, observationId: String!, data: String!, proposal: Proposal }
+type AgentRunReceipt { runId: ID!, recorded: Boolean!, denial: String!, proposalResult: MutationResult }
 
 input SetChargingInput { robotId: ID!, stationId: ID!, expiresAt: Time!, expectedObservationId: String }
 input ReassignUnstartedJobInput { jobId: ID!, fromRobotId: ID!, toRobotId: ID!, expiresAt: Time!, expectedObservationId: String }

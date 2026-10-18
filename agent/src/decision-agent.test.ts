@@ -41,11 +41,15 @@ function stepsFor(state: FleetState, output: unknown): Step[] {
     { name: "readJobs", args: { ids: [...new Set(state.reassignmentCandidates.map(c => c.jobId))] } }]] : []), "Evidence collected.", JSON.stringify(output)];
 }
 function apiFixture(state = recoveryDecisionState()) {
-  return { readFleet: vi.fn().mockImplementation(async () => structuredClone(state)),
+  const api = { readFleet: vi.fn().mockImplementation(async () => structuredClone(state)),
     submitCharging: vi.fn().mockResolvedValue(pendingFixture), submitReassignment: vi.fn().mockResolvedValue(pendingFixture) };
+  // Emulate Go's atomic completion endpoint while retaining the existing admission-response assertions.
+  return { ...api, startAgentRun: vi.fn(async (observationId: string) => ({ id: "Arun", runtimeId: "runtime", observationId })),
+    finishAgentRun: vi.fn(async (id: string, input: import("./agent-run.js").AgentRunFinish) => ({ runId: id, recorded: true as const, denial: "",
+      proposalResult: input.submit ? await api.submitReassignment({ ...input.completion.decision!.selected!, expectedObservationId: input.observationId, expiresAt: input.submit.expiresAt }) : null })) };
 }
 function options(model: ReturnType<typeof scripted>["model"]) {
-  return { enabled: true, model, objective: "minimize_pickup_steps" as const, allowSubmit: true };
+  return { enabled: true, model, source: "mocked" as const, objective: "minimize_pickup_steps" as const, allowSubmit: true };
 }
 function complete(state = recoveryDecisionState(), output: unknown = recoveryDecisionFixture(state, "minimize_pickup_steps", "R4")) {
   return scripted(stepsFor(state, output));
@@ -203,6 +207,8 @@ it.each(["deadline", "cancel"])("stops a noncooperating model on %s without subm
   await vi.waitFor(() => expect(model.doGenerate).toHaveBeenCalledTimes(1));
   if (mode === "cancel") controller.abort(); else await vi.advanceTimersByTimeAsync(30_000);
   expect((await pending).aiAnalysis.status).toBe("failed"); expect(api.submitReassignment).not.toHaveBeenCalled();
+  expect(api.finishAgentRun).toHaveBeenCalledTimes(1);
+  expect(api.finishAgentRun.mock.calls[0][1].completion.failure).toBe(mode === "cancel" ? "cancelled" : "timeout");
 });
 it("includes the initial observation read in the overall deadline", async () => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
@@ -230,6 +236,12 @@ it("requires opt-in and credentials for live string models, and rejects missing 
   expect(api.readFleet).not.toHaveBeenCalled();
   const state = recoveryDecisionState(); delete state.observationId; const { model, requests } = scripted([]);
   await expect(runRecoveryDecision(apiFixture(state), options(model))).rejects.toThrow("grounding"); expect(requests).toHaveLength(0);
+});
+it("requires durable provenance support and explicit source labels for injected models", async () => {
+  const { model, requests } = complete(), api = apiFixture();
+  await expect(runRecoveryDecision(api, { enabled: true, model, objective: "compare_tradeoffs" })).rejects.toThrow("source category");
+  await expect(runRecoveryDecision({ readFleet: api.readFleet, submitCharging: api.submitCharging, submitReassignment: api.submitReassignment }, options(model))).rejects.toThrow("provenance API");
+  expect(requests).toHaveLength(0); expect(api.submitReassignment).not.toHaveBeenCalled();
 });
 it("preserves opt-in configuration, legacy charging grounding and the first-candidate offline baseline", async () => {
   const env = { FLEETOPS_PROPOSER_TOKEN: "test-only-token", FLEETOPS_MODEL: "openai/test" };
