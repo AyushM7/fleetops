@@ -6,11 +6,18 @@ import { adversarialCases } from "./adversarial.js";
 import { runAdversarial, summarizeAdversarial } from "./adversarial-runner.js";
 import { runRecovery, summarizeRecovery } from "./recovery.js";
 import { modelCLI } from "./model-cli.js";
+import { runDecisionEvaluation } from "./decisions.js";
 
 if (process.argv.includes("--live") && !process.argv.includes("--model-eval")) {
   throw new Error("Live flag requires explicit --model-eval mode.");
 }
-if (process.argv.includes("--model-eval")) {
+if (process.argv.includes("--decision-eval")) {
+  if (process.argv.slice(2).some(arg => arg !== "--decision-eval")) throw new Error("Decision evaluation permits only offline --decision-eval.");
+  const report = await runDecisionEvaluation();
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  process.stderr.write(`Decision v2 scripted validation: ${report.totals.passed}/${report.totals.cases}; actual LLM accuracy and simulator benefit not measured.\n`);
+  process.exitCode = report.totals.failed === 0 ? 0 : 1;
+} else if (process.argv.includes("--model-eval")) {
   await modelCLI(process.argv.slice(2));
 } else if (process.argv.includes("--foundation")) {
   const report = await runEvaluation(foundationCases(), foundationDouble);

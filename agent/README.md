@@ -2,6 +2,62 @@
 
 LLM proposes. Go validates. Human approves. Go executes.
 
+## AGENT-03: recovery-decision-v2
+
+The opt-in `--live --decision-v2` path uses a separate recovery-only schema,
+prompt and validator. Legacy `--live`, charging demonstrations, deterministic
+offline mode and archived evaluation scoring retain their existing contracts.
+Both submission paths retain AGENT-02's live observation identity and fresh read.
+No Go, GraphQL, command, approval or persistence change is required for v2.
+
+Set `FLEETOPS_DECISION_OBJECTIVE` to `compare_tradeoffs` (default),
+`minimize_pickup_steps`, or `preserve_battery_headroom`. The objective is trusted
+host configuration and must match the response. Strict objectives require a
+minimum pickup count or maximum admission headroom respectively; all ties are
+acceptable. Trade-off mode allows any admitted option without asserting it is
+best. A `pickup_cost` or `battery_headroom` basis still requires the corresponding
+extremum. A `tradeoff` basis requires actual advantages and disadvantages in
+verified comparisons; `admitted_option` claims eligibility only.
+
+The v2 prompt contains facts, eligible alternatives and the objective, with no
+`supportedAction`, preferred candidate or `reasoningStatements` catalog.
+Every candidate must be considered exactly once, with exact source, recipient,
+job and blocked-incident evidence. Output copies all Go incident evidence and
+acknowledges operator attention. Every selected candidate must be compared with
+every alternative. All references, numbers and less/equal/greater directions are
+independently checked against the observation, including these derived values:
+
+- `totalRouteSteps = pickupSteps + deliverySteps + chargingExitSteps`.
+- `missionHeadroom = battery - requiredBattery`.
+- `admissionHeadroom = battery - max(30, requiredBattery)`.
+
+Headroom is above the reported admission requirement, not a prediction of final
+battery, measured consumption or energy savings. Preview routes are not reserved.
+The model chooses structured claims, comparisons and decision basis. The host
+renders an explanation only after validation; arbitrary narrative and lifecycle,
+deadline, throughput or forecast claims are rejected rather than labelled verified.
+
+Abstention reasons are checked against facts: poisoned runtime, no candidates for
+a blocked incident, no supported incident, or an operator trade-off. The last
+requires trade-off mode and a conflict where no candidate attains both minimum
+pickup steps and maximum admission headroom. A tie alone does not justify it.
+All decisions include snapshot/route/delivery/approval/optimality limitations.
+
+This remains one generation step with no model tools, a 30-second deadline,
+6,000 output-token cap and no automatic retries. `--submit` is a separate host
+opt-in. Tool investigation is AGENT-04; no inference was paid for in AGENT-03 tests.
+The programmatic entry point is `runRecoveryDecision`; legacy `runLive` is unchanged.
+
+From `evals/`, `node scripts/run.mjs --decision-eval` runs 17 scripted validation
+cases, including non-first minima, route/battery trade-offs, ties, abstention,
+fabricated evidence, false comparisons and all six candidate-order permutations.
+Expected recipient sets are independently declared. These are **synthetic
+reasoning-only variants** of the saved Go observation: altered costs are not new
+Go admissions or measured simulator outcomes. The report does not establish model
+accuracy, scheduling superiority, throughput, or real recovery effectiveness.
+
+The sections below describe the preserved legacy path.
+
 This slice reads the real authenticated `fleetState`, including active incidents,
 jobs and Go-admitted reassignment candidates. The host can submit
 `SetChargingInput` through `submitProposal` or `ReassignUnstartedJobInput` through
