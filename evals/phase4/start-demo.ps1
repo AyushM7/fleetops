@@ -33,7 +33,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'gateway_test.go') -Destination (Join-Path $testBackend 'fleet/demo_gateway_test.go')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'gateway_security_test.go') -Destination (Join-Path $testBackend 'fleet/demo_gateway_security_test.go')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'gateway_integration_test.go') -Destination (Join-Path $testBackend 'fleet/demo_gateway_integration_test.go')
-    foreach ($name in @('controller_test.go','controller_security_test.go','controls_test.go','controls_behavior_test.go','controls_integration_test.go','scenario_test.go','restart_integration_test.go')) {
+    foreach ($name in @('controller_test.go','controller_security_test.go','controls_test.go','controls_behavior_test.go','controls_integration_test.go','scenario_test.go','restart_integration_test.go','scenarios_integration_test.go')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $testBackend "fleet/demo_$name")
     }
     docker run --detach --rm --name $container --publish '127.0.0.1::5432' --env POSTGRES_HOST_AUTH_METHOD=trust --env POSTGRES_DB=fleetops_p405 postgres:18.6 | Out-Null

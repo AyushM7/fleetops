@@ -31,7 +31,7 @@ func TestDemoRestartIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := &demoController{run: run, ready: true, factory: f.create, record: func(g, outcome string) error {
+	c := &demoController{run: run, ready: true, factory: f.create, selectFactory: f.createScenario, record: func(g, outcome string) error {
 		return writeDemoEvidence(dir, "lifecycle", map[string]string{"generation": g, "outcome": outcome})
 	}}
 	defer func() {
@@ -182,7 +182,8 @@ func TestDemoRestartIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	restored = true
-	if request("/demo/restart", c.run.generation, "{}").Code != 200 {
+	poisonedGeneration := c.run.generation
+	if request("/demo/scenario/healthy-operations", poisonedGeneration, "{}").Code != 200 || c.run.scenarioID != "healthy-operations" || c.run.generation == poisonedGeneration {
 		t.Fatal("could not replace captured poisoned runtime")
 	}
 	var poisonCaptured bool

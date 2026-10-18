@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,6 +18,7 @@ import (
 )
 
 type demoRun struct {
+	scenarioID string
 	generation string
 	handler    http.Handler
 	capture    func(context.Context) error
@@ -26,6 +28,7 @@ type demoRun struct {
 }
 
 type demoStatus struct {
+	ScenarioID string            `json:"scenarioId,omitempty"`
 	Generation string            `json:"generation"`
 	Ready      bool              `json:"ready"`
 	State      string            `json:"state,omitempty"`
@@ -36,19 +39,20 @@ type demoStatus struct {
 // All browser forwarding, progress ticks, capture and replacement share this
 // gate. No caller retains a handler/service reference outside the gate.
 type demoController struct {
-	mu          sync.Mutex
-	busy        atomic.Bool
-	stepping    atomic.Bool
-	run         *demoRun
-	ready       bool
-	closed      bool
-	factory     func(context.Context) (*demoRun, error)
-	record      func(string, string) error
-	interactive bool
-	running     bool
-	speed       string
-	nextTick    time.Time
-	lastStep    time.Time
+	mu            sync.Mutex
+	busy          atomic.Bool
+	stepping      atomic.Bool
+	run           *demoRun
+	ready         bool
+	closed        bool
+	factory       func(context.Context) (*demoRun, error)
+	selectFactory func(context.Context, string) (*demoRun, error)
+	record        func(string, string) error
+	interactive   bool
+	running       bool
+	speed         string
+	nextTick      time.Time
+	lastStep      time.Time
 }
 
 func (c *demoController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +60,7 @@ func (c *demoController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.control(w, r)
 		return
 	}
-	if r.URL.Path == "/demo/restart" {
+	if r.URL.Path == "/demo/restart" || strings.HasPrefix(r.URL.Path, "/demo/scenario/") {
 		c.restart(w, r)
 		return
 	}
@@ -79,6 +83,12 @@ func (c *demoController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *demoController) restart(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/demo/scenario/")
+	selecting := r.URL.Path != "/demo/restart"
+	if selecting && (!allowedScenario(id) || c.selectFactory == nil) {
+		http.Error(w, "unsupported scenario", http.StatusBadRequest)
+		return
+	}
 	if !c.busy.CompareAndSwap(false, true) {
 		http.Error(w, "restart already in progress; refresh status", http.StatusConflict)
 		return
@@ -105,28 +115,52 @@ func (c *demoController) restart(w http.ResponseWriter, r *http.Request) {
 	c.running = false
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	if err := c.replace(ctx); err != nil {
+	if !selecting {
+		id = c.run.scenarioID
+	}
+	if err := c.replaceScenario(ctx, id); err != nil {
 		_ = c.record(c.run.generation, "restart failed; old runtime stopped; reconciliation may be required")
 		http.Error(w, "restart failed; old runtime stopped; historical outcome is not reconciled; refresh status before retrying", http.StatusServiceUnavailable)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(demoStatus{Generation: c.run.generation, Ready: true})
+	_ = json.NewEncoder(w).Encode(demoStatus{Generation: c.run.generation, Ready: true, ScenarioID: c.run.scenarioID})
+}
+
+func allowedScenario(id string) bool {
+	switch id {
+	case "blocked-reassignment", "routine-charging", "healthy-operations", "blocked-no-candidate":
+		return true
+	}
+	return false
 }
 
 func (c *demoController) replace(ctx context.Context) error {
-	if err := c.record(c.run.generation, "restart requested; draining complete"); err != nil {
+	return c.replaceScenario(ctx, c.run.scenarioID)
+}
+
+func (c *demoController) replaceScenario(ctx context.Context, id string) error {
+	if err := c.record(c.run.generation, "restart requested; target scenario "+id+"; draining complete"); err != nil {
 		return err
 	}
 	if err := c.run.capture(ctx); err != nil {
 		return err
 	}
-	next, err := c.factory(ctx)
+	var next *demoRun
+	var err error
+	if c.selectFactory != nil {
+		next, err = c.selectFactory(ctx, id)
+	} else {
+		next, err = c.factory(ctx)
+	}
 	if err != nil {
 		return err
 	}
 	if next.generation == "" || next.generation == c.run.generation {
 		return errors.New("replacement identity is not fresh")
+	}
+	if c.selectFactory != nil && next.scenarioID != id {
+		return errors.New("replacement scenario does not match selection")
 	}
 	if err := c.record(next.generation, "replacement ready; previous evidence captured; no automatic approval"); err != nil {
 		return err

@@ -18,6 +18,7 @@ type demoAudit struct {
 	Accepted                 bool
 }
 type demoEvidence struct {
+	ScenarioID                string
 	ModelMode                 string
 	Decision                  string
 	ProposalID                string

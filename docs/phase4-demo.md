@@ -1,5 +1,12 @@
 # Phase 4 repeatable local recovery review
 
+**DEMO-09:** the local demo now offers four fixed scenarios. See the
+[scenario guide, verification report, and screenshot comparison](demo-09.md).
+Blocked job recovery remains the default and the historical tick-42 flow below
+still applies. Restart now recreates the **selected** scenario. Charging starts
+at tick 1000; healthy operations at tick 0; no-eligible recovery at tick 42.
+Only the two actionable scenarios create a pending proposal.
+
 This is a **seeded Go simulation with real PostgreSQL, GraphQL and React**.
 The default reasoning demonstration uses Mastra's **deterministic local model
 adapter, not a live LLM**. It does not establish live provider reasoning quality.

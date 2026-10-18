@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-17",
+  "mode": "real loopback Go/PostgreSQL; automated acceptance, not human approval; no paid LLM",
+  "observations": [
+    {
+      "scenario": "blocked-reassignment",
+      "tick": "42",
+      "initial": "Warehouse\n8 × 8\nSimulation tick\n42\nAwaiting Decision\nPlay\nStep Forward\nSpeed\n0.5×\n1×\n2×\nAwaiting the human decision. Approve or reject the proposal before advancing time.\n0\n1\n2\n3\n4\n5\n6\n7\n0\n1\n2\n3\n4\n5\n6\n7\nS1\nR1\nJ1\n!\nR2\n×\nR3\nR4\nR5\nSelect a robot to inspect.\nMap key & coordinates\nActive incidents\n2 active\nR1 · Traffic blocked\nHigh severity\n\nJob J1 · waiting 42 ticks\n\nTelemetry and context\nLocate R1\nR2 · Robot offline\nHigh severity\n\nJob none · waiting 0 ticks\n\nTelemetry and context\nLocate R2\nHuman decision\nRefresh inbox\n\nReassign uncollected job\n\nJob J1: R1 → R3\n\nApproval does not complete delivery.\n\npending\n\nDeterministic local adapter · not a live LLM.\n\nApprove\nReject\nHuman decision required · Go revalidates before execution\nEvidence, expiry & validation\nRobot fleet 5 robots\nJob progress 1 open jobs\nLast received 9:27:53 PM\nLLM proposes. Go validates. Human approves. Go executes."
+    },
+    {
+      "scenario": "blocked-reassignment",
+      "tick": "45",
+      "outcome": "Warehouse\n8 × 8\nSimulation tick\n45\nPaused\nPlay\nStep Forward\nSpeed\n0.5×\n1×\n2×\nApproval transfers ownership. Delivery requires subsequent simulator ticks.\n0\n1\n2\n3\n4\n5\n6\n7\n0\n1\n2\n3\n4\n5\n6\n7\nS1\nR1\nR2\n×\nR3\nR4\nR5\nSelect a robot to inspect.\nMap key & coordinates\nActive incidents\n1 active\nR2 · Robot offline\nHigh severity\n\nJob none · waiting 0 ticks\n\nTelemetry and context\nLocate R2\nHuman decision\nRefresh inbox\n\nNo pending proposals in this runtime.\n\n03 / GO EXECUTION RECEIPT\n\nDecision recorded\nPe2ca7b7102fe670becf108f7d0457e24\n\nJob J1 · R1 → R3\n\nJob J1 transferred from R1 to R3. This confirms the transfer, not delivery completion. Follow Job progress for current pickup and delivery status.\n\nResponse state\napproved\nExecution outcome\nsucceeded\nAudit committed\nYes\nExecution attempted this call\nYes\n\nLatest stored status: approved · execution succeeded\n\nRefresh stored status\nServer response\nRobot fleet 5 robots\nJob progress 0 open jobs\nJob progress\n\nApproval transfers the assignment. Delivery is confirmed only when Go reports it.\n\nJob\tAssigned robot\tPickup → delivery\tProgress\nJ1\tR3\t(4, 4) → (6, 4)\tDelivered\nLast received 9:28:45 PM\nLLM proposes. Go validates. Human approves. Go executes."
+    },
+    {
+      "scenario": "routine-charging",
+      "tick": "1000",
+      "initial": "Warehouse\n20 × 12\nSimulation tick\n1000\nAwaiting Decision\nPlay\nStep Forward\nSpeed\n0.5×\n1×\n2×\nAwaiting the human decision. Approve or reject the proposal before advancing time.\n0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\nS1\nS2\nR1\nR2\nR3\nR4\nR5\nR6\nSelect a robot to inspect.\nMap key & coordinates\nActive incidents\n0 active\n\nNo active incidents in this snapshot.\n\nHuman decision\nRefresh inbox\n\nStart charging in place\n\nR1 → S1\n\nAt the robot’s current station.\n\npending\n\nDeterministic local adapter · not a live LLM.\n\nApprove\nReject\nHuman decision required · Go revalidates before execution\nEvidence, expiry & validation\nRobot fleet 6 robots\nJob progress 0 open jobs\nLast received 9:29:07 PM\nLLM proposes. Go validates. Human approves. Go executes.",
+      "oldReceipts": 0
+    },
+    {
+      "scenario": "routine-charging",
+      "tick": "1002",
+      "outcome": "Warehouse\n20 × 12\nSimulation tick\n1002\nPaused\nPlay\nStep Forward\nSpeed\n0.5×\n1×\n2×\nCharging changes battery through subsequent simulator ticks; it provides no navigation.\n0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\nS1\nS2\nR1\nR2\nR3\nR4\nR5\nR6\nR1 selected · charging · (0, 0) · Battery 54% · Job none\nClear robot selection\nMap key & coordinates\nActive incidents\n0 active\n\nNo active incidents in this snapshot.\n\nHuman decision\nRefresh inbox\n\nNo pending proposals in this runtime.\n\n03 / GO EXECUTION RECEIPT\n\nDecision recorded\nP252824726d3a2d0615776f9840f3a022\n\nSetCharging · R1 → S1\n\nCharging started for R1 at S1.\n\nResponse state\napproved\nExecution outcome\nsucceeded\nAudit committed\nYes\nExecution attempted this call\nYes\n\nLatest stored status: approved · execution succeeded\n\nRefresh stored status\nServer response\nRobot fleet 6 robots\nJob progress 0 open jobs\nLast received 9:29:40 PM\nLLM proposes. Go validates. Human approves. Go executes."
+    },
+    {
+      "scenario": "healthy-operations",
+      "tick": "0",
+      "initial": "Warehouse\n20 × 12\nSimulation tick\n0\nPaused\nPlay\nStep Forward\nSpeed\n0.5×\n1×\n2×\nControls advance real warehouse operations. No recovery action is submitted in this scenario.\n0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\nS1\nS2\nR1\nR2\nR3\nR4\nR5\nR6\nSelect a robot to inspect.\nMap key & coordinates\nActive incidents\n0 active\n\nNo active incidents in this snapshot.\n\nHuman decision\nRefresh inbox\n\nNo pending proposals in this runtime.\n\nRobot fleet 6 robots\nJob progress 8 open jobs\nLast received 9:30:07 PM\nLLM proposes. Go validates. Human approves. Go executes.",
+      "oldReceipts": 0,
+      "approvalButtons": 0
+    },
+    {
+      "scenario": "healthy-operations",
+      "tick": "36",
+      "observed": "Warehouse\n20 × 12\nSimulation tick\n36\nPaused\nPlay\nStep Forward\nSpeed\n0.5×\n1×\n2×\nControls advance real warehouse operations. No recovery action is submitted in this scenario.\n0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\nS1\nS2\nR1\nJ8\nR2\nJ7\nR3\nJ6\nR4\nJ4\nR5\nJ2\nR6\nJ1\nSelect a robot to inspect.\nMap key & coordinates\nActive incidents\n0 active\n\nNo active incidents in this snapshot.\n\nHuman decision\nRefresh inbox\n\nNo pending proposals in this runtime.\n\nRobot fleet 6 robots\nJob progress 9 open jobs\nLast received 9:30:53 PM\nLLM proposes. Go validates. Human approves. Go executes."
+    },
+    {
+      "scenario": "blocked-no-candidate",
+      "tick": "42",
+      "initial": "Warehouse\n8 × 8\nSimulation tick\n42\nPaused\nPlay\nStep Forward\nSpeed\n0.5×\n1×\n2×\nControls advance real warehouse operations. No recovery action is submitted in this scenario.\n0\n1\n2\n3\n4\n5\n6\n7\n0\n1\n2\n3\n4\n5\n6\n7\nS1\nR1\nJ1\n!\nR2\n×\nR3\nR4\nR5\nSelect a robot to inspect.\nMap key & coordinates\nActive incidents\n2 active\nR1 · Traffic blocked\nHigh severity\n\nJob J1 · waiting 42 ticks\n\nTelemetry and context\nLocate R1\nR2 · Robot offline\nHigh severity\n\nJob none · waiting 0 ticks\n\nTelemetry and context\nLocate R2\nHuman decision\nRefresh inbox\n\nNo pending proposals in this runtime.\n\nRobot fleet 5 robots\nJob progress 1 open jobs\nLast received 9:31:03 PM\nLLM proposes. Go validates. Human approves. Go executes.",
+      "approvalButtons": 0
+    },
+    {
+      "scenario": "blocked-no-candidate",
+      "restartTick": "42",
+      "restartReceiptCount": 0
+    }
+  ],
+  "desktopMetrics": {
+    "clientWidth": 1265,
+    "height": 720,
+    "rail": {
+      "bottom": 932.9875030517578,
+      "height": 804.1875,
+      "left": 843.2000122070312,
+      "right": 1264.8000183105469,
+      "top": 128.8000030517578,
+      "width": 421.6000061035156,
+      "x": 843.2000122070312,
+      "y": 128.8000030517578
+    },
+    "scrollWidth": 1265,
+    "warehouse": {
+      "bottom": 719.8000030517578,
+      "height": 591,
+      "left": 0,
+      "right": 843.2000122070312,
+      "top": 128.8000030517578,
+      "width": 843.2000122070312,
+      "x": 0,
+      "y": 128.8000030517578
+    },
+    "width": 1280
+  },
+  "mobileMetrics": {
+    "clientWidth": 375,
+    "height": 844,
+    "scrollWidth": 375,
+    "select": {
+      "bottom": 146.8000030517578,
+      "height": 44,
+      "left": 71.20000457763672,
+      "right": 236.00000762939453,
+      "top": 102.8000030517578,
+      "width": 164.8000030517578,
+      "x": 71.20000457763672,
+      "y": 102.8000030517578
+    },
+    "width": 390
+  },
+  "finalLogs": []
+}

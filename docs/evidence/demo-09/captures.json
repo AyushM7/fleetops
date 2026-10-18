@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-17",
+  "cssViewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 720
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844
+    }
+  },
+  "note": "Starting-state captures refreshed from final production bundle; earlier progression captures precede only initial-setup wording clarification. Raster dimensions differ from CSS viewport; tick-43 blocked capture is full-page.",
+  "captures": [
+    {
+      "file": "blocked-tick-42-desktop.jpg",
+      "width": 1265,
+      "height": 712,
+      "bytes": 67320,
+      "sha256": "bd6f908bb0fc2f5b204dcafc00d251ff402c062da77b8007e4134834ee1a3eea",
+      "source": "genuine unedited in-app browser capture of local Go/PostgreSQL demo"
+    },
+    {
+      "file": "blocked-tick-42-mobile.jpg",
+      "width": 375,
+      "height": 811,
+      "bytes": 33020,
+      "sha256": "ae4cb70e60875f0009887baea16da69d410bcb3c2cdb0b7b1d5767e33ed87aac",
+      "source": "genuine unedited in-app browser capture of local Go/PostgreSQL demo"
+    },
+    {
+      "file": "blocked-tick-43-desktop.jpg",
+      "width": 1264,
+      "height": 1143,
+      "bytes": 89652,
+      "sha256": "812a51e9e950f33e0f384b1ef0277f892c522431a26f088e0f51ebd5011e6947",
+      "source": "genuine unedited in-app browser capture of local Go/PostgreSQL demo"
+    },
+    {
+      "file": "blocked-tick-45-delivered-desktop.jpg",
+      "width": 1265,
+      "height": 712,
+      "bytes": 59615,
+      "sha256": "1d5901bf6601065f5950ce0983ef12031e31d5c4ce3c2aa215635032778fe7fd",
+      "source": "genuine unedited in-app browser capture of local Go/PostgreSQL demo"
+    },
+    {
+      "file": "charging-tick-1000-desktop.jpg",
+      "width": 1265,
+      "height": 712,
+      "bytes": 72074,
+      "sha256": "5834db44f84e56f2c6938206b99913b3bdabdea5305de156b8f83751879341b5",
+      "source": "genuine unedited in-app browser capture of local Go/PostgreSQL demo"
+    },
+    {
+      "file": "charging-tick-1000-mobile.jpg",
+      "width": 375,
+      "height": 811,
+      "bytes": 36249,
+      "sha256": "d618dd5cfbf91e8c05fa97ee34d7f3aee0e3e4d6235b9e6c77c52dd962052bdc",
+      "source": "genuine unedited in-app browser capture of local Go/PostgreSQL demo"
+    },
+    {
+      "file": "charging-tick-1002-desktop.jpg",
+      "width": 1265,
+      "height": 712,
+      "bytes": 74280,
+      "sha256": "cc37a6dfc0e5f900b8f4d1a9eb5206bf53d946311564737e48f490a89402308f",
+      "source": "genuine unedited in-app browser capture of local Go/PostgreSQL demo"
+    },
+    {
+      "file": "healthy-tick-0-desktop.jpg",
+      "width": 1265,
+      "height": 712,
+      "bytes": 62240,
+      "sha256": "3e775ad845d02e71e333a08620cf0abba1ceffa251da745714fe7811d0b3be34",
+      "source": "genuine unedited in-app browser capture of local Go/PostgreSQL demo"
+    },
+    {
+      "file": "healthy-tick-0-mobile.jpg",
+      "width": 375,
+      "height": 811,
+      "bytes": 36485,
+      "sha256": "142b7e947481dc2b30fdfd3d223f350c40331de3ba6fb117e82e500075034b8a",
+      "source": "genuine unedited in-app browser capture of local Go/PostgreSQL demo"
+    },
+    {
+      "file": "healthy-tick-1-mobile.jpg",
+      "width": 375,
+      "height": 811,
+      "bytes": 36573,
+      "sha256": "eed5b602f3aff0c5450cada6272bf6295e396f8fa77035c449222b8fbaeba0e6",
+      "source": "genuine unedited in-app browser capture of local Go/PostgreSQL demo"
+    },
+    {
+      "file": "healthy-tick-36-desktop.jpg",
+      "width": 1265,
+      "height": 712,
+      "bytes": 62590,
+      "sha256": "61eef406d01da05f6362c8211dedfbe26c88807718be6ea30182b666f8d6bb13",
+      "source": "genuine unedited in-app browser capture of local Go/PostgreSQL demo"
+    },
+    {
+      "file": "no-candidate-tick-42-desktop.jpg",
+      "width": 1265,
+      "height": 712,
+      "bytes": 63288,
+      "sha256": "d02c0b7a88f3a3f29f94c24fcd0bc45ca7a9fc501a15f4c92f4401f15a015fa0",
+      "source": "genuine unedited in-app browser capture of local Go/PostgreSQL demo"
+    },
+    {
+      "file": "no-candidate-tick-42-mobile.jpg",
+      "width": 375,
+      "height": 811,
+      "bytes": 35284,
+      "sha256": "4248184e9a974f873f3f3b412773135d9a6869ab208783d83fe3bc412474382f",
+      "source": "genuine unedited in-app browser capture of local Go/PostgreSQL demo"
+    },
+    {
+      "file": "no-candidate-tick-43-mobile.jpg",
+      "width": 375,
+      "height": 811,
+      "bytes": 34553,
+      "sha256": "657dd209454a7eca291ae5e3fe3eff940711a7cd3a8068bfe44bbf6c972a7690",
+      "source": "genuine unedited in-app browser capture of local Go/PostgreSQL demo"
+    }
+  ]
+}
