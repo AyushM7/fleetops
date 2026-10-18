@@ -2,6 +2,7 @@ import { Agent } from "@mastra/core/agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runLive, runOffline } from "./agent.js";
 import { validateReasoning, validateSnapshot } from "./reasoning.js";
+import { createFleetTools } from "./tools.js";
 import { chargingReasoningFixture, fleetFixture, pendingFixture, reasoningFixture } from "./fixtures.js";
 import type { AIReasoning, FleetState } from "./contracts.js";
 
@@ -95,6 +96,21 @@ describe("snapshot-scoped grounding", () => {
   });
 });
 describe("validated actions and fresh-state submission", () => {
+  it("keeps charging restricted to the deterministic selection when another robot is also eligible", async () => {
+    const state = fleetFixture(50);
+    state.robots.push({ ...state.robots[0], id: "R2", x: 1 });
+    state.stations.push({ ...state.stations[0], id: "S2", x: 1 });
+    const alternative = chargingReasoningFixture({ ...state, robots: [state.robots[1], state.robots[0]], stations: [state.stations[1], state.stations[0]] });
+    expect(() => validateReasoning(alternative, state)).toThrow("grounding");
+    const api = apiFixture(state);
+    const expiresAt = "2026-10-16T12:01:00Z";
+    expect(await createFleetTools(api, true).submit({ robotId: "R2", stationId: "S2", expiresAt })).toEqual({ status: "not_requested" });
+    expect(api.submitCharging).not.toHaveBeenCalled();
+    expect(validateReasoning(chargingReasoningFixture(state), state)).toEqual(chargingReasoningFixture(state));
+    expect((await createFleetTools(api, true).submit({ robotId: "R1", stationId: "S1", expiresAt })).status).toBe("pending_approval");
+    expect(api.submitCharging).toHaveBeenCalledExactlyOnceWith({ robotId: "R1", stationId: "S1", expiresAt });
+    expect(api.submitReassignment).not.toHaveBeenCalled();
+  });
   it("validates telemetry evidence, explicit demo intent and supported commands", () => {
     const state = fleetFixture(50); const valid = chargingReasoningFixture(state);
     expect(validateReasoning(valid, state)).toEqual(valid);

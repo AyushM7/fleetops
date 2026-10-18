@@ -15,13 +15,14 @@ export function createFleetTools(api: FleetAPI, allowSubmit = false, demo?: { ro
   }
   async function performSubmit(input: ChargingInput | ReassignmentInput): Promise<ProposalStatus> {
     try {
-      // Limit proposals to the host's supported recommendation; Go still validates eligibility.
-      const recommendation = observeFleet(validateSnapshot(await api.readFleet()), demo).recommendedAction;
-      if (!recommendation) return proposal;
+      const snapshot = validateSnapshot(await api.readFleet());
       if ("jobId" in input) {
-        if (recommendation.action !== "ReassignUnstartedJob" || recommendation.jobId !== input.jobId ||
-            recommendation.fromRobotId !== input.fromRobotId || recommendation.toRobotId !== input.toRobotId) return proposal;
-      } else if (recommendation.action !== "SetCharging" || recommendation.robotId !== input.robotId || recommendation.stationId !== input.stationId) return proposal;
+        if (snapshot.poisoned || demo || !snapshot.reassignmentCandidates.some(c => c.jobId === input.jobId &&
+            c.fromRobotId === input.fromRobotId && c.toRobotId === input.toRobotId)) return proposal;
+      } else {
+        const recommendation = observeFleet(snapshot, demo).recommendedAction;
+        if (!recommendation || recommendation.action !== "SetCharging" || recommendation.robotId !== input.robotId || recommendation.stationId !== input.stationId) return proposal;
+      }
       // A failed transport may follow a committed mutation. Never retry automatically.
       proposal = { status: "unknown" };
       const result = "jobId" in input ? await api.submitReassignment(input) : await api.submitCharging(input);

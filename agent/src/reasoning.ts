@@ -71,18 +71,19 @@ export function validateReasoning(input: unknown, state: FleetState, demo?: { ro
   if (!reasoningTextGrounded(reasoning, snapshot)) throw new GroundingError();
   const action = reasoning.proposedAction;
   if (!action) return reasoning;
-  const supported = observeFleet(snapshot, demo).recommendedAction;
-  if (!supported || action.action !== supported.action || action.evidence.tick !== snapshot.tick) throw new GroundingError();
+  if (action.evidence.tick !== snapshot.tick) throw new GroundingError();
   if (action.action === "ReassignUnstartedJob") {
-    if (supported.action !== action.action || action.jobId !== supported.jobId || action.fromRobotId !== supported.fromRobotId || action.toRobotId !== supported.toRobotId ||
+    const candidate = snapshot.reassignmentCandidates.find(c => c.jobId === action.jobId && c.fromRobotId === action.fromRobotId && c.toRobotId === action.toRobotId);
+    if (snapshot.poisoned || demo || !candidate ||
         !sameFacts(action.evidence.source, snapshot.robots.find(r => r.id === action.fromRobotId)) ||
         !sameFacts(action.evidence.recipient, snapshot.robots.find(r => r.id === action.toRobotId)) ||
         !sameFacts(action.evidence.job, snapshot.jobs.find(j => j.id === action.jobId)) ||
-        !sameFacts(action.evidence.candidate, snapshot.reassignmentCandidates.find(c => c.jobId === action.jobId && c.fromRobotId === action.fromRobotId && c.toRobotId === action.toRobotId)) ||
+        !sameFacts(action.evidence.candidate, candidate) ||
         !snapshot.activeIncidents.some(i => i.type === "traffic_blocked" && i.robotId === action.fromRobotId && sameFacts(snapshotReference(snapshot, i), action.evidence.reference))) throw new GroundingError();
     return reasoning;
   }
-  if (supported.action !== "SetCharging" || action.robotId !== supported.robotId || action.stationId !== supported.stationId ||
+  const supported = observeFleet(snapshot, demo).recommendedAction;
+  if (!supported || supported.action !== "SetCharging" || action.robotId !== supported.robotId || action.stationId !== supported.stationId ||
       action.purpose !== (demo ? "demonstration" : "routine_charging") || action.evidence.tick !== snapshot.tick ||
       !sameFacts(action.evidence.robot, snapshot.robots.find(r => r.id === action.robotId)) ||
       !sameFacts(action.evidence.station, snapshot.stations.find(s => s.id === action.stationId))) throw new GroundingError();
