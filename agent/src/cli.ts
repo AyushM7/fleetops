@@ -6,7 +6,7 @@ import { runRecoveryDecision } from "./decision-agent.js";
 async function main(): Promise<void> {
   const config = readConfig(process.env, process.argv.slice(2));
   const api = createFleetClient(config.endpoint, config.token);
-  if (config.live) console.error(`Live model mode sends fleet data to the configured provider and may incur charges (one model step, up to ${config.decisionObjective ? 6000 : 2400} output tokens).`);
+  if (config.live) console.error(`Live model mode sends fleet data to the configured provider and may incur charges (${config.decisionObjective ? "up to six requests, eight read tools, 30 seconds, 6000 output tokens per request, 12000 aggregate output tokens and 44000 aggregate total tokens" : "one model step, up to 2400 output tokens"}).`);
   const result = config.decisionObjective
     ? await runRecoveryDecision(api, { enabled: true, model: config.model!, objective: config.decisionObjective, allowSubmit: config.allowSubmit })
     : config.live
