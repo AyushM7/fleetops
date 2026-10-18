@@ -108,7 +108,7 @@ describe("validated actions and fresh-state submission", () => {
     expect(api.submitCharging).not.toHaveBeenCalled();
     expect(validateReasoning(chargingReasoningFixture(state), state)).toEqual(chargingReasoningFixture(state));
     expect((await createFleetTools(api, true).submit({ robotId: "R1", stationId: "S1", expiresAt })).status).toBe("pending_approval");
-    expect(api.submitCharging).toHaveBeenCalledExactlyOnceWith({ robotId: "R1", stationId: "S1", expiresAt });
+    expect(api.submitCharging).toHaveBeenCalledExactlyOnceWith({ robotId: "R1", stationId: "S1", expiresAt, expectedObservationId: state.observationId });
     expect(api.submitReassignment).not.toHaveBeenCalled();
   });
   it("validates telemetry evidence, explicit demo intent and supported commands", () => {
@@ -152,6 +152,7 @@ describe("validated actions and fresh-state submission", () => {
     expect(api.readFleet).toHaveBeenCalledTimes(3);
   });
   it.each([
+    ["same telemetry from another runtime", (s: FleetState) => { s.observationId = "b".repeat(64); }],
     ["new tick", (s: FleetState) => { s.tick++; }],
     ["same-tick battery change", (s: FleetState) => { s.robots[0].battery = 29; }],
     ["same-tick station change", (s: FleetState) => { s.stations[0].occupiedBy = "R2"; }],

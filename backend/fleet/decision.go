@@ -121,6 +121,10 @@ func deniedResult(p proposal.Proposal, attempt proposal.Attempt, operator propos
 }
 
 func (s *Service) executeCommand(p proposal.Proposal) error {
+	// Invalidate before the command, including failures that may have changed state.
+	if err := s.advanceRevision(); err != nil {
+		return err
+	}
 	switch p.Action {
 	case proposal.SetCharging:
 		return s.commander.SetCharging(p.Request.RobotID, p.Request.StationID)

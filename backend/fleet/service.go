@@ -26,6 +26,7 @@ var (
 	ErrExecution        = errors.New("command execution failed")
 	ErrForeignRuntime   = errors.New("proposal belongs to another simulator runtime")
 	ErrProposalMismatch = errors.New("stored proposal differs from the canonical runtime record")
+	ErrObservation      = errors.New("observation is missing, stale, or from another runtime")
 )
 
 type Execution string
@@ -61,6 +62,7 @@ type Service struct {
 	authorize Authorizer
 	at        time.Time
 	runtimeID string
+	revision  uint64
 	canonical map[string]proposal.Proposal
 	poisoned  bool
 	layout    LayoutView
@@ -111,22 +113,26 @@ func (s *Service) Poisoned() bool {
 func (s *Service) Tick() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	defer s.poisonOnPanic()
 	if s.poisoned {
 		return ErrPoisoned
+	}
+	if err := s.advanceRevision(); err != nil {
+		return err
 	}
 	s.tick()
 	return nil
 }
 
-func (s *Service) Submit(ctx context.Context, request safety.SetChargingRequest, expiresAt time.Time) (Result, error) {
-	return s.submit(ctx, proposal.Proposal{Action: proposal.SetCharging, Request: request, ExpiresAt: expiresAt.UTC()})
+func (s *Service) Submit(ctx context.Context, request safety.SetChargingRequest, expiresAt time.Time, expectedObservation ...string) (Result, error) {
+	return s.submit(ctx, proposal.Proposal{Action: proposal.SetCharging, Request: request, ExpiresAt: expiresAt.UTC()}, expectedObservation)
 }
 
-func (s *Service) SubmitReassignment(ctx context.Context, request safety.ReassignUnstartedJobRequest, expiresAt time.Time) (Result, error) {
-	return s.submit(ctx, proposal.Proposal{Action: proposal.ReassignUnstartedJob, Reassignment: request, ExpiresAt: expiresAt.UTC()})
+func (s *Service) SubmitReassignment(ctx context.Context, request safety.ReassignUnstartedJobRequest, expiresAt time.Time, expectedObservation ...string) (Result, error) {
+	return s.submit(ctx, proposal.Proposal{Action: proposal.ReassignUnstartedJob, Reassignment: request, ExpiresAt: expiresAt.UTC()}, expectedObservation)
 }
 
-func (s *Service) submit(ctx context.Context, p proposal.Proposal) (Result, error) {
+func (s *Service) submit(ctx context.Context, p proposal.Proposal, expectedObservation []string) (Result, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	defer s.poisonOnPanic()
@@ -145,6 +151,8 @@ func (s *Service) submit(ctx context.Context, p proposal.Proposal) (Result, erro
 			candidate = deniedResult(p, proposal.AttemptCreate, proposal.OperatorIdentity{Subject: principal.Subject}, s.at, denied)
 		} else if s.poisoned {
 			denied = ErrPoisoned
+			candidate = deniedResult(p, proposal.AttemptCreate, proposal.OperatorIdentity{}, s.at, denied)
+		} else if denied = s.checkObservation(expectedObservation, authenticated && principal.Role == auth.Proposer); denied != nil {
 			candidate = deniedResult(p, proposal.AttemptCreate, proposal.OperatorIdentity{}, s.at, denied)
 		} else {
 			if p.Action == proposal.ReassignUnstartedJob {

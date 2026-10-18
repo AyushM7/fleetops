@@ -13,7 +13,7 @@ const observations = JSON.parse(readFileSync(new URL("../../docs/evidence/demo-0
 type RecoveryAction = Extract<NonNullable<AIReasoning["proposedAction"]>, { action: "ReassignUnstartedJob" }>;
 
 function recoverySnapshot(): FleetState {
-  return validateSnapshot(observations.find(o => o.id === "blocked-reassignment")?.snapshot);
+  return { ...validateSnapshot(observations.find(o => o.id === "blocked-reassignment")?.snapshot), observationId: "a".repeat(64) };
 }
 function recoveryReasoning(state = recoverySnapshot(), toRobotId = "R3"): AIReasoning & { proposedAction: RecoveryAction } {
   const candidate = state.reassignmentCandidates.find(c => c.toRobotId === toRobotId);
@@ -91,7 +91,7 @@ it.each(["R3", "R4", "R5"])("accepts grounded %s reasoning and submits that exac
   expect(result.aiAnalysis.status).toBe("accepted"); expect(result.proposal.status).toBe("pending_approval");
   expect(result.submissionCheck).toBe("current");
   expect(result.recommendedAction).toEqual({ action: "ReassignUnstartedJob", jobId: "J1", fromRobotId: "R1", toRobotId: recipient });
-  expect(api.submitReassignment).toHaveBeenCalledExactlyOnceWith({ jobId: "J1", fromRobotId: "R1", toRobotId: recipient, expiresAt: expect.any(String) });
+  expect(api.submitReassignment).toHaveBeenCalledExactlyOnceWith({ jobId: "J1", fromRobotId: "R1", toRobotId: recipient, expiresAt: expect.any(String), expectedObservationId: state.observationId });
   expect(api.readFleet).toHaveBeenCalledTimes(2); expect(generate).toHaveBeenCalledTimes(1);
   expect(api.submitCharging).not.toHaveBeenCalled();
 });
@@ -110,7 +110,7 @@ it.each(["R3", "R4", "R5"])("admits %s through the submission tool's fresh candi
   const input = { jobId: "J1", fromRobotId: "R1", toRobotId: recipient, expiresAt: "2026-10-16T12:01:00Z" };
   expect(await session.submit(input)).toEqual({ status: "pending_approval", proposalId: pendingFixture.proposalId });
   expect(api.readFleet).toHaveBeenCalledTimes(1);
-  expect(api.submitReassignment).toHaveBeenCalledExactlyOnceWith(input);
+  expect(api.submitReassignment).toHaveBeenCalledExactlyOnceWith({ ...input, expectedObservationId: recoverySnapshot().observationId });
 });
 it.each(["removed", "fabricated", "wrong job", "wrong source", "poisoned", "unavailable"])("blocks reassignment at the submission boundary: %s", async mode => {
   const state = recoverySnapshot(); const api = apiFixture(state);
@@ -169,12 +169,22 @@ it("does not retry an uncertain non-first submission, including concurrent and l
   const input = { jobId: "J1", fromRobotId: "R1", toRobotId: "R5", expiresAt: "2026-10-16T12:01:00Z" };
   expect(await Promise.all([session.submit(input), session.submit(input)])).toEqual([{ status: "unknown" }, { status: "unknown" }]);
   expect(await session.submit(input)).toEqual({ status: "unknown" });
-  expect(api.readFleet).toHaveBeenCalledTimes(1); expect(api.submitReassignment).toHaveBeenCalledExactlyOnceWith(input);
+  expect(api.readFleet).toHaveBeenCalledTimes(1); expect(api.submitReassignment).toHaveBeenCalledExactlyOnceWith({ ...input, expectedObservationId: recoverySnapshot().observationId });
   expect(JSON.stringify(session.status())).not.toContain("private"); expect(api.submitCharging).not.toHaveBeenCalled();
+});
+it("preserves a Go stale-observation denial after the final read without retrying", async () => {
+  const state = recoverySnapshot(); const api = apiFixture(state);
+  api.submitReassignment.mockResolvedValue({ ...pendingFixture, state: "", error: "observation is missing or stale; request a new analysis" });
+  vi.stubEnv("OPENAI_API_KEY", "test-only-private-key");
+  vi.spyOn(Agent.prototype, "generate").mockResolvedValue({ object: recoveryReasoning(state, "R4") } as never);
+  const result = await runLive(api, { enabled: true, model: "openai/test", allowSubmit: true });
+  expect(result.aiAnalysis.status).toBe("accepted"); expect(result.proposal.status).toBe("rejected");
+  expect(api.submitReassignment).toHaveBeenCalledExactlyOnceWith({ jobId: "J1", fromRobotId: "R1", toRobotId: "R4", expiresAt: expect.any(String), expectedObservationId: state.observationId });
+  expect(api.readFleet).toHaveBeenCalledTimes(2); expect(api.submitCharging).not.toHaveBeenCalled();
 });
 it("uses only the typed GraphQL submission operation", async () => {
   const transport = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { submitReassignment: pendingFixture } }), { status: 200 }));
   const client = createFleetClient("http://127.0.0.1/graphql", "a".repeat(32), transport);
-  expect(await client.submitReassignment({ jobId: "J1", fromRobotId: "R1", toRobotId: "R3", expiresAt: "2026-10-16T12:01:00Z" })).toEqual(pendingFixture);
+  expect(await client.submitReassignment({ jobId: "J1", fromRobotId: "R1", toRobotId: "R3", expiresAt: "2026-10-16T12:01:00Z", expectedObservationId: recoverySnapshot().observationId! })).toEqual(pendingFixture);
   const body = JSON.parse(transport.mock.calls[0][1].body); expect(body.query).toContain("submitReassignment"); expect(body.query).not.toMatch(/approve|reject|tick|inject/i);
 });

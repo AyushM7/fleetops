@@ -16,6 +16,7 @@ export function createFleetTools(api: FleetAPI, allowSubmit = false, demo?: { ro
   async function performSubmit(input: ChargingInput | ReassignmentInput): Promise<ProposalStatus> {
     try {
       const snapshot = validateSnapshot(await api.readFleet());
+      if (!snapshot.observationId) return proposal;
       if ("jobId" in input) {
         if (snapshot.poisoned || demo || !snapshot.reassignmentCandidates.some(c => c.jobId === input.jobId &&
             c.fromRobotId === input.fromRobotId && c.toRobotId === input.toRobotId)) return proposal;
@@ -25,7 +26,8 @@ export function createFleetTools(api: FleetAPI, allowSubmit = false, demo?: { ro
       }
       // A failed transport may follow a committed mutation. Never retry automatically.
       proposal = { status: "unknown" };
-      const result = "jobId" in input ? await api.submitReassignment(input) : await api.submitCharging(input);
+      const expectedObservationId = snapshot.observationId;
+      const result = "jobId" in input ? await api.submitReassignment({ ...input, expectedObservationId }) : await api.submitCharging({ ...input, expectedObservationId });
       const pending = !result.error && result.auditCommitted && !result.executionAttempted &&
         result.execution === "none" && result.state === "pending" && result.proposalId !== "";
       proposal = {

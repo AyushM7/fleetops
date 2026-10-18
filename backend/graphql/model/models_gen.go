@@ -14,6 +14,7 @@ type ActiveIncident struct {
 }
 
 type FleetState struct {
+	ObservationID          string                   `json:"observationId"`
 	Layout                 *WarehouseLayout         `json:"layout"`
 	Tick                   int                      `json:"tick"`
 	Robots                 []*Robot                 `json:"robots"`
@@ -66,10 +67,11 @@ type Query struct {
 }
 
 type ReassignUnstartedJobInput struct {
-	JobID       string    `json:"jobId"`
-	FromRobotID string    `json:"fromRobotId"`
-	ToRobotID   string    `json:"toRobotId"`
-	ExpiresAt   time.Time `json:"expiresAt"`
+	JobID                 string    `json:"jobId"`
+	FromRobotID           string    `json:"fromRobotId"`
+	ToRobotID             string    `json:"toRobotId"`
+	ExpiresAt             time.Time `json:"expiresAt"`
+	ExpectedObservationID *string   `json:"expectedObservationId,omitempty"`
 }
 
 type ReassignmentCandidate struct {
@@ -94,9 +96,10 @@ type Robot struct {
 }
 
 type SetChargingInput struct {
-	RobotID   string    `json:"robotId"`
-	StationID string    `json:"stationId"`
-	ExpiresAt time.Time `json:"expiresAt"`
+	RobotID               string    `json:"robotId"`
+	StationID             string    `json:"stationId"`
+	ExpiresAt             time.Time `json:"expiresAt"`
+	ExpectedObservationID *string   `json:"expectedObservationId,omitempty"`
 }
 
 type Station struct {

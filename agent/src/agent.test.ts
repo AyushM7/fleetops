@@ -43,7 +43,7 @@ describe("agent boundaries", () => {
     expect(result.explanation).toContain("demonstration");
     expect(result.potentialIssues).toEqual([]);
     expect(result.proposal).toEqual({ status: "pending_approval", proposalId: "p1" });
-    expect(api.submitCharging).toHaveBeenCalledWith({ ...input, expiresAt: "2026-10-16T12:01:00.000Z" });
+    expect(api.submitCharging).toHaveBeenCalledWith({ ...input, expiresAt: "2026-10-16T12:01:00.000Z", expectedObservationId: fleetFixture().observationId });
   });
   it.each([
     [{ ...pendingFixture, error: "denied", state: "", auditCommitted: true }, "rejected"],
@@ -60,6 +60,21 @@ describe("agent boundaries", () => {
     const session = createFleetTools(api, true);
     expect(await Promise.all([session.submit(input), session.submit(input)])).toEqual([{ status: "unknown" }, { status: "unknown" }]);
     expect(api.submitCharging).toHaveBeenCalledTimes(1);
+  });
+  it("keeps archived observations readable but refuses to submit without a live identity", async () => {
+    const archived = fleetFixture(50); delete archived.observationId;
+    const api = apiFixture(50); api.readFleet.mockResolvedValue(archived);
+    expect((await runOffline(api)).recommendedAction?.action).toBe("SetCharging");
+    const result = await runOffline(api, { allowSubmit: true });
+    expect(result.submissionCheck).toBe("unavailable"); expect(result.proposal.status).toBe("not_requested");
+    const session = createFleetTools(api, true);
+    expect(await session.submit(input)).toEqual({ status: "not_requested" });
+    expect(api.submitCharging).not.toHaveBeenCalled(); expect(api.submitReassignment).not.toHaveBeenCalled();
+  });
+  it("binds the host's observation rather than accepting an identity supplied in tool input", async () => {
+    const api = apiFixture(50); const session = createFleetTools(api, true);
+    await session.submit({ ...input, expectedObservationId: "b".repeat(64) } as never);
+    expect(api.submitCharging).toHaveBeenCalledExactlyOnceWith({ ...input, expectedObservationId: fleetFixture().observationId });
   });
   it("does not classify incidents in TypeScript and reports poisoned runtime separately", () => {
     const state = fleetFixture(29); state.robots[0].blocked = true;

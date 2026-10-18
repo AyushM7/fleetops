@@ -29,6 +29,8 @@ func mutationResult(result fleet.Result, err error) *model.MutationResult {
 			message = "unauthorized"
 		case errors.Is(err, fleet.ErrSelfApproval):
 			message = "self approval forbidden"
+		case errors.Is(err, fleet.ErrObservation):
+			message = "observation is missing or stale; request a new analysis"
 		case errors.Is(err, fleet.ErrForeignRuntime):
 			message = "proposal belongs to a prior runtime"
 		case errors.Is(err, proposal.ErrExpired):

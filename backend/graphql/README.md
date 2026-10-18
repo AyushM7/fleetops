@@ -1,5 +1,17 @@
 # Charging GraphQL API (P3-05)
 
+`fleetState.observationId` is an opaque runtime/revision identity. Authenticated
+proposers must send it as `expectedObservationId` on both submission inputs.
+Omission, null, fabrication, a prior runtime, or a changed simulator revision is
+an audited creation denial. This check runs inside the production fleet service
+lock alongside safety admission and persistence; it does not depend on the demo
+gateway. An identity grants no authentication, approval, or execution authority.
+
+The input field remains optional for existing authenticated operator workflows.
+Supplying it opts those workflows into the same check; proposers cannot omit it.
+The TypeScript agent requires identities on live reads and transport submissions.
+Historical snapshots without identities remain usable for offline evaluation only.
+
 ## P4-03 job recovery
 
 `fleetState.jobs` and `fleetState.reassignmentCandidates` are detached read-only

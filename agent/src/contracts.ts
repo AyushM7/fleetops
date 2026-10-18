@@ -16,7 +16,9 @@ export const jobSchema = z.object({ id: z.string().min(1), status: z.string(), a
 export const candidateSchema = z.object({ jobId: z.string().min(1), fromRobotId: z.string().min(1), toRobotId: z.string().min(1),
   pickupSteps: z.number().int().nonnegative(), deliverySteps: z.number().int().nonnegative(),
   chargingExitSteps: z.number().int().nonnegative(), requiredBattery: z.number().int().nonnegative() });
+export const observationIdSchema = z.string().regex(/^[a-f0-9]{64}$/);
 export const fleetSchema = z.object({
+  observationId: observationIdSchema.optional(),
   tick: z.number().int().nonnegative(), poisoned: z.boolean(),
   robots: z.array(robotSchema), activeIncidents: z.array(incidentSchema),
   stations: z.array(stationSchema),
@@ -30,6 +32,10 @@ export type ChargingInput = z.infer<typeof chargingSchema>;
 export const reassignmentSchema = z.object({ jobId: z.string().min(1).max(128), fromRobotId: z.string().min(1).max(128),
   toRobotId: z.string().min(1).max(128), expiresAt: z.iso.datetime({ offset: true }) });
 export type ReassignmentInput = z.infer<typeof reassignmentSchema>;
+export const boundChargingSchema = chargingSchema.extend({ expectedObservationId: observationIdSchema });
+export const boundReassignmentSchema = reassignmentSchema.extend({ expectedObservationId: observationIdSchema });
+export type BoundChargingInput = z.infer<typeof boundChargingSchema>;
+export type BoundReassignmentInput = z.infer<typeof boundReassignmentSchema>;
 const recommendedActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("SetCharging"), robotId: z.string(), stationId: z.string() }),
   z.object({ action: z.literal("ReassignUnstartedJob"), jobId: z.string(), fromRobotId: z.string(), toRobotId: z.string() }),
