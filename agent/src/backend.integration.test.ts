@@ -3,7 +3,8 @@ import { Agent } from "@mastra/core/agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFleetClient } from "./graphql.js";
 import { runLive, runOffline } from "./agent.js";
-import { chargingReasoningFixture } from "./fixtures.js";
+import { chargingReasoningFixture, offlineModelFixture, recoveryDecisionFixture } from "./fixtures.js";
+import { runRecoveryDecision } from "./decision-agent.js";
 
 // This suite deliberately fails without an isolated, station-ready real backend.
 const endpoint = process.env.FLEETOPS_TEST_GRAPHQL_URL;
@@ -13,6 +14,14 @@ if (!endpoint || !token || !viewer) throw new Error("Run scripts/verify-integrat
 const api = createFleetClient(endpoint, token);
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 describe("real Go GraphQL + PostgreSQL integration (no model)", () => {
+  it("finalizes v2 abstention against a real observation using a credential-free local model adapter", async () => {
+    const state = await api.readFleet(), call = vi.fn();
+    const output = recoveryDecisionFixture(state, "compare_tradeoffs", null);
+    const result = await runRecoveryDecision(api, { enabled: true, model: offlineModelFixture(output, call), objective: "compare_tradeoffs", allowSubmit: true });
+    expect(result.aiAnalysis).toEqual({ status: "accepted", decision: output });
+    expect(result.proposal.status).toBe("not_requested"); expect(call).toHaveBeenCalledTimes(2);
+    expect(await api.readFleet()).toEqual(state);
+  });
   it("reads real state using authenticated proposer access", async () => {
     const state = await api.readFleet();
     expect(state.poisoned).toBe(false);

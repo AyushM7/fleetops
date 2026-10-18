@@ -2,7 +2,7 @@
 
 LLM proposes. Go validates. Human approves. Go executes.
 
-## AGENT-03: recovery-decision-v2
+## AGENT-04: tool investigation with recovery-decision-v2
 
 The opt-in `--live --decision-v2` path uses a separate recovery-only schema,
 prompt and validator. Legacy `--live`, charging demonstrations, deterministic
@@ -19,8 +19,22 @@ best. A `pickup_cost` or `battery_headroom` basis still requires the correspondi
 extremum. A `tradeoff` basis requires actual advantages and disadvantages in
 verified comparisons; `admitted_option` claims eligibility only.
 
-The v2 prompt contains facts, eligible alternatives and the objective, with no
+The initial v2 prompt contains observation identity, tick, poison status, incident
+references/severities and the objective. It contains no telemetry, candidate list,
 `supportedAction`, preferred candidate or `reasoningStatements` catalog.
+The model investigates through four actual Mastra tools: `readIncident`,
+`listRecoveryCandidates`, `readRobots` and `readJobs`. Each reads a private copy of
+one validated Go observation; tools cannot change the endpoint, runtime or credentials.
+ID batches contain 1–64 unique IDs. Unknown references, names, extra arguments or
+IDs stop the investigation. Candidate listing returns every relevant Go-admitted
+candidate, in Go order, with no ranking or host selection.
+
+The host requires successful incident and candidate-list reads for every incident,
+plus robot and job reads for every candidate. A model cannot skip investigation
+by supplying a plausible final answer. Executed results must match the host trace
+before the next request; failures stop the run with no deterministic fallback.
+Structured finalization receives the actual Mastra conversation and tool results,
+with all tools disabled. The original AGENT-03 validator then checks every claim.
 Every candidate must be considered exactly once, with exact source, recipient,
 job and blocked-incident evidence. Output copies all Go incident evidence and
 acknowledges operator attention. Every selected candidate must be compared with
@@ -43,10 +57,35 @@ requires trade-off mode and a conflict where no candidate attains both minimum
 pickup steps and maximum admission headroom. A tie alone does not justify it.
 All decisions include snapshot/route/delivery/approval/optimality limitations.
 
-This remains one generation step with no model tools, a 30-second deadline,
-6,000 output-token cap and no automatic retries. `--submit` is a separate host
-opt-in. Tool investigation is AGENT-04; no inference was paid for in AGENT-03 tests.
-The programmatic entry point is `runRecoveryDecision`; legacy `runLive` is unchanged.
+Investigation allows five single-step Mastra generations and reserves one request
+for finalization: at most six actual model requests and eight executed read tools.
+Mastra tool concurrency is one; the application also rejects overlapping executions.
+The shared 30-second deadline aborts the provider and races noncooperating promises.
+Host callers can also cancel with an `AbortSignal`. Each request permits at most
+6,000 output tokens, with aggregate limits of 32,000 input, 12,000 output and
+44,000 total tokens. The application conservatively checks serialized prompt/tool/
+response-schema UTF-8 bytes against remaining input capacity, reserves output
+capacity and verifies reported usage (including total tokens) when consuming the
+provider result. Missing or excessive usage rejects the investigation. These are
+engineering guards using provider reporting, not an independently measured billing guarantee.
+
+The pinned Mastra 1.75.0 router normalizes its supported providers to a v2 streaming
+adapter. A wrapper counts each underlying adapter request, including unexpected
+extra framework calls; exhausted/failed runs cannot invoke it again. Agent and
+model retries are zero and default error processors are disabled. The router's
+`doGenerate` directly delegates to the provider adapter; no application transport
+retry is installed. Each host generation uses `maxSteps: 1`; this setting alone
+is not used as a budget. Future SDK/provider upgrades need these contract tests rerun.
+
+`--submit` remains a separate host opt-in, followed by the existing fresh read,
+AGENT-01 membership checks and AGENT-02 Go observation precondition under the Go
+lock. Unknown submission outcomes never retry. Go validates independently and an
+independent operator must approve before Go executes. No backend or frozen safety
+rule changes are needed. `runRecoveryDecision` accepts trusted host model adapters
+for offline tests; CLI live model strings still require explicit opt-in and provider
+configuration. Tests use local scripted adapters with no provider credentials or
+network inference. `investigation` in the result records actual request/usage counts
+and executed tool inputs/results. Legacy `runLive` is unchanged.
 
 From `evals/`, `node scripts/run.mjs --decision-eval` runs 17 scripted validation
 cases, including non-first minima, route/battery trade-offs, ties, abstention,
