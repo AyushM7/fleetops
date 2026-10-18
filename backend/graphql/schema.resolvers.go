@@ -46,6 +46,16 @@ func (r *mutationResolver) RejectProposal(ctx context.Context, id string) (*mode
 	return r.decide(ctx, id, proposal.Reject)
 }
 
+// StartAgentRun is the resolver for the startAgentRun field.
+func (r *mutationResolver) StartAgentRun(ctx context.Context, expectedObservationID string, metadata string) (*model.AgentRun, error) {
+	return r.startAgentRun(ctx, expectedObservationID, metadata)
+}
+
+// FinishAgentRun is the resolver for the finishAgentRun field.
+func (r *mutationResolver) FinishAgentRun(ctx context.Context, id string, completion string) (*model.AgentRunReceipt, error) {
+	return r.finishAgentRun(ctx, id, completion)
+}
+
 // FleetState is the resolver for the fleetState field.
 func (r *queryResolver) FleetState(ctx context.Context) (*model.FleetState, error) {
 	state, err := r.Service.ReadState(ctx)
@@ -106,6 +116,20 @@ func (r *queryResolver) PendingProposals(ctx context.Context) ([]*model.Proposal
 		result = append(result, proposalModel(&rows[i]))
 	}
 	return result, nil
+}
+
+// AgentRun is the resolver for the agentRun field.
+func (r *queryResolver) AgentRun(ctx context.Context, id string) (*model.AgentRun, error) {
+	rows, err := r.agentRuns(ctx, id, 1)
+	if err != nil || len(rows) == 0 {
+		return nil, err
+	}
+	return rows[0], nil
+}
+
+// AgentRuns is the resolver for the agentRuns field.
+func (r *queryResolver) AgentRuns(ctx context.Context, limit int) ([]*model.AgentRun, error) {
+	return r.agentRuns(ctx, "", limit)
 }
 
 // Mutation returns MutationResolver implementation.

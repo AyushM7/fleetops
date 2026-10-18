@@ -74,7 +74,7 @@ func TestHTTPBoundaryAndLimits(t *testing.T) {
 		t.Fatal("unsafe request reached service", fixture.calls)
 	}
 	schema := NewExecutableSchema(Config{Resolvers: &Resolver{Service: fixture}}).Schema()
-	if len(schema.Mutation.Fields) != 4 || schema.Mutation.Fields.ForName("submitReassignment") == nil || schema.Mutation.Fields.ForName("submitProposal") == nil || schema.Mutation.Fields.ForName("approveProposal") == nil || schema.Mutation.Fields.ForName("rejectProposal") == nil {
+	if len(schema.Mutation.Fields) != 6 || schema.Mutation.Fields.ForName("startAgentRun") == nil || schema.Mutation.Fields.ForName("finishAgentRun") == nil || schema.Mutation.Fields.ForName("submitReassignment") == nil || schema.Mutation.Fields.ForName("submitProposal") == nil || schema.Mutation.Fields.ForName("approveProposal") == nil || schema.Mutation.Fields.ForName("rejectProposal") == nil {
 		t.Fatal("mutation surface changed")
 	}
 	readFields := 0
@@ -83,7 +83,7 @@ func TestHTTPBoundaryAndLimits(t *testing.T) {
 			readFields++
 		}
 	}
-	if readFields != 3 || schema.Query.Fields.ForName("pendingProposals") == nil {
+	if readFields != 5 || schema.Query.Fields.ForName("pendingProposals") == nil || schema.Query.Fields.ForName("agentRun") == nil || schema.Query.Fields.ForName("agentRuns") == nil {
 		t.Fatal("read surface changed")
 	}
 }

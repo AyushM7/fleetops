@@ -102,6 +102,10 @@ type ProposalView struct {
 func (s *Service) ReadState(context.Context) (StateView, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.readStateLocked()
+}
+
+func (s *Service) readStateLocked() (StateView, error) {
 	snapshot := s.commander.Snapshot()
 	incidents, err := currentIncidents(snapshot)
 	if err != nil {

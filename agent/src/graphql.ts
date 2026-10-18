@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agentRunHandleSchema, agentReceiptSchema, type AgentRunMetadata, type AgentRunHandle, type AgentRunFinish, type AgentRunReceipt } from "./agent-run.js";
 import { boundChargingSchema, boundReassignmentSchema, fleetSchema, observationIdSchema, mutationSchema, type BoundChargingInput, type BoundReassignmentInput, type FleetState, type MutationResult } from "./contracts.js";
 
 export const fleetQuery = `query FleetState { fleetState {
@@ -20,6 +21,8 @@ export class FleetError extends Error {
   }
 }
 export interface FleetAPI {
+  startAgentRun?(observationId: string, metadata: AgentRunMetadata): Promise<AgentRunHandle>;
+  finishAgentRun?(id: string, completion: AgentRunFinish): Promise<AgentRunReceipt>;
   readFleet(): Promise<FleetState>;
   submitCharging(input: BoundChargingInput): Promise<MutationResult>;
   submitReassignment(input: BoundReassignmentInput): Promise<MutationResult>;
@@ -52,6 +55,16 @@ export function createFleetClient(endpoint: string, token: string, transport: ty
     return parsed.data;
   }
   return {
+    async startAgentRun(observationId, metadata) {
+      return (await request(`mutation StartAgentRun($observation: String!, $metadata: String!) {
+        startAgentRun(expectedObservationId: $observation, metadata: $metadata) { id runtimeId observationId }
+      }`, { observation: observationId, metadata: JSON.stringify(metadata) }, z.object({ startAgentRun: agentRunHandleSchema }))).startAgentRun;
+    },
+    async finishAgentRun(id, completion) {
+      return (await request(`mutation FinishAgentRun($id: ID!, $completion: String!) {
+        finishAgentRun(id: $id, completion: $completion) { runId recorded denial proposalResult { proposalId state execution auditCommitted executionAttempted error } }
+      }`, { id, completion: JSON.stringify(completion) }, z.object({ finishAgentRun: agentReceiptSchema }))).finishAgentRun;
+    },
     async readFleet() { return (await request(fleetQuery, {}, z.object({ fleetState: fleetSchema.extend({ observationId: observationIdSchema }) }))).fleetState; },
     async submitCharging(input) {
       const parsed = boundChargingSchema.safeParse(input);

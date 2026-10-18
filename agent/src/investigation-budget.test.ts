@@ -71,6 +71,15 @@ it("rejects missing usage/finish metadata", async () => {
   try { await expect(consume(budget.model(streamModel({}, false), () => {}))).rejects.toThrow(); }
   finally { budget.close(); }
 });
+it("captures actual reported model identity separately from the requested adapter identity", async () => {
+  const budget = new InvestigationBudget(), model = streamModel({ inputTokens: 1, outputTokens: 1, totalTokens: 2 });
+  model.doGenerate = async () => ({ stream: new ReadableStream({ start(controller) {
+    controller.enqueue({ type: "response-metadata", modelId: "actual-v1", id: "response", timestamp: new Date() });
+    controller.enqueue({ type: "finish", finishReason: "stop", usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } }); controller.close();
+  } }) });
+  try { await consume(budget.model(model, () => {})); expect(budget.trace.reportedActualModel).toBe("offline-budget/actual-v1"); expect(model.modelId).toBe("budget"); }
+  finally { budget.close(); }
+});
 it.each(["unknown usage", "excessive usage"])("never submits after %s from an actual Mastra model response", async mode => {
   const base = offlineModelFixture(null), model = { ...base, async doGenerate() {
     const result = await base.doGenerate();
@@ -78,8 +87,10 @@ it.each(["unknown usage", "excessive usage"])("never submits after %s from an ac
       : { inputTokens: 33_000, outputTokens: 1, totalTokens: 33_001 } };
   } };
   const api = { readFleet: vi.fn().mockResolvedValue(recoveryDecisionState()), submitCharging: vi.fn().mockResolvedValue(pendingFixture),
-    submitReassignment: vi.fn().mockResolvedValue(pendingFixture) };
-  const result = await runRecoveryDecision(api, { enabled: true, model, objective: "compare_tradeoffs", allowSubmit: true });
+    submitReassignment: vi.fn().mockResolvedValue(pendingFixture),
+    startAgentRun: vi.fn(async (observationId: string) => ({ id: "Arun", runtimeId: "runtime", observationId })),
+    finishAgentRun: vi.fn(async (id: string) => ({ runId: id, recorded: true as const, denial: "", proposalResult: null })) };
+  const result = await runRecoveryDecision(api, { enabled: true, model, source: "mocked", objective: "compare_tradeoffs", allowSubmit: true });
   expect(result.aiAnalysis.status).toBe("failed"); expect(result.aiAnalysis.decision).toBeNull(); expect(api.submitReassignment).not.toHaveBeenCalled();
   expect(investigationLimits.requests).toBe(6);
 });

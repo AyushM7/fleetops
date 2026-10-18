@@ -144,32 +144,10 @@ func (s *Service) submit(ctx context.Context, p proposal.Proposal, expectedObser
 	p.ID, p.CreatedAt = id, s.at
 	var candidate proposal.Result
 	var denied error
-	principal, authenticated := auth.FromContext(ctx)
 	err = s.transact(ctx, func(tx *db.Tx) error {
-		if authenticated && principal.Role != auth.Proposer && principal.Role != auth.Operator {
-			denied = ErrUnauthorized
-			candidate = deniedResult(p, proposal.AttemptCreate, proposal.OperatorIdentity{Subject: principal.Subject}, s.at, denied)
-		} else if s.poisoned {
-			denied = ErrPoisoned
-			candidate = deniedResult(p, proposal.AttemptCreate, proposal.OperatorIdentity{}, s.at, denied)
-		} else if denied = s.checkObservation(expectedObservation, authenticated && principal.Role == auth.Proposer); denied != nil {
-			candidate = deniedResult(p, proposal.AttemptCreate, proposal.OperatorIdentity{}, s.at, denied)
-		} else {
-			if p.Action == proposal.ReassignUnstartedJob {
-				candidate, denied = s.lifecycle.CreateReassignment(id, p.Reassignment, p.ExpiresAt)
-			} else {
-				candidate, denied = s.lifecycle.Create(id, p.Request, p.ExpiresAt)
-			}
-		}
-		if authenticated {
-			candidate.Event.Operator.Subject = principal.Subject
-		}
-		if denied == nil {
-			if err := s.insert(tx, candidate.Proposal, principal.Subject); err != nil {
-				return err
-			}
-		}
-		return s.audit(tx, candidate.Event)
+		var storageErr error
+		candidate, denied, storageErr = s.createProposal(tx, p, expectedObservation)
+		return storageErr
 	})
 	if err != nil {
 		return s.persistenceFailure(id, false)
@@ -224,4 +202,35 @@ func newID() (string, error) {
 		return "", ErrConfig
 	}
 	return "P" + hex.EncodeToString(bytes[:]), nil
+}
+
+// createProposal retains the existing admission and audit gates inside its caller's transaction and lock.
+func (s *Service) createProposal(tx *db.Tx, p proposal.Proposal, expectedObservation []string) (proposal.Result, error, error) {
+	principal, authenticated := auth.FromContext(tx.Context())
+	var candidate proposal.Result
+	var denied error
+	if authenticated && principal.Role != auth.Proposer && principal.Role != auth.Operator {
+		denied = ErrUnauthorized
+		candidate = deniedResult(p, proposal.AttemptCreate, proposal.OperatorIdentity{Subject: principal.Subject}, s.at, denied)
+	} else if s.poisoned {
+		denied = ErrPoisoned
+		candidate = deniedResult(p, proposal.AttemptCreate, proposal.OperatorIdentity{}, s.at, denied)
+	} else if denied = s.checkObservation(expectedObservation, authenticated && principal.Role == auth.Proposer); denied != nil {
+		candidate = deniedResult(p, proposal.AttemptCreate, proposal.OperatorIdentity{}, s.at, denied)
+	} else {
+		if p.Action == proposal.ReassignUnstartedJob {
+			candidate, denied = s.lifecycle.CreateReassignment(p.ID, p.Reassignment, p.ExpiresAt)
+		} else {
+			candidate, denied = s.lifecycle.Create(p.ID, p.Request, p.ExpiresAt)
+		}
+	}
+	if authenticated {
+		candidate.Event.Operator.Subject = principal.Subject
+	}
+	if denied == nil {
+		if err := s.insert(tx, candidate.Proposal, principal.Subject); err != nil {
+			return candidate, denied, err
+		}
+	}
+	return candidate, denied, s.audit(tx, candidate.Event)
 }

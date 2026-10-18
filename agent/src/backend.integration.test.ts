@@ -17,7 +17,7 @@ describe("real Go GraphQL + PostgreSQL integration (no model)", () => {
   it("finalizes v2 abstention against a real observation using a credential-free local model adapter", async () => {
     const state = await api.readFleet(), call = vi.fn();
     const output = recoveryDecisionFixture(state, "compare_tradeoffs", null);
-    const result = await runRecoveryDecision(api, { enabled: true, model: offlineModelFixture(output, call), objective: "compare_tradeoffs", allowSubmit: true });
+    const result = await runRecoveryDecision(api, { enabled: true, model: offlineModelFixture(output, call), source: "mocked", objective: "compare_tradeoffs", allowSubmit: true });
     expect(result.aiAnalysis).toEqual({ status: "accepted", decision: output });
     expect(result.proposal.status).toBe("not_requested"); expect(call).toHaveBeenCalledTimes(2);
     expect(await api.readFleet()).toEqual(state);

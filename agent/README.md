@@ -2,13 +2,25 @@
 
 LLM proposes. Go validates. Human approves. Go executes.
 
+## AGENT-05: durable v2 provenance
+
+The v2 runner now requires the production `startAgentRun` / `finishAgentRun`
+protocol. Go binds a run to the authenticated proposer, runtime and observation
+before inference. Completion stores a bounded decision/activity projection and
+creates any opted-in proposal in the same transaction as its run association and
+audit. No raw prompts, tool outputs or provider exceptions are persisted.
+Usage/model claims remain explicitly agent-reported; missing usage and estimated
+cost remain unavailable. Unknown acknowledgements never trigger automatic retries.
+Read-only `agentRun` and bounded `agentRuns` queries expose authorized current-runtime
+records and associated proposals. See [the versioned contract and compatibility notes](../docs/agent-05-provenance.md).
+
 ## AGENT-04: tool investigation with recovery-decision-v2
 
 The opt-in `--live --decision-v2` path uses a separate recovery-only schema,
 prompt and validator. Legacy `--live`, charging demonstrations, deterministic
 offline mode and archived evaluation scoring retain their existing contracts.
 Both submission paths retain AGENT-02's live observation identity and fresh read.
-No Go, GraphQL, command, approval or persistence change is required for v2.
+AGENT-05 adds Go/GraphQL provenance persistence while preserving command and approval boundaries.
 
 Set `FLEETOPS_DECISION_OBJECTIVE` to `compare_tradeoffs` (default),
 `minimize_pickup_steps`, or `preserve_battery_headroom`. The objective is trusted
@@ -80,8 +92,8 @@ is not used as a budget. Future SDK/provider upgrades need these contract tests 
 `--submit` remains a separate host opt-in, followed by the existing fresh read,
 AGENT-01 membership checks and AGENT-02 Go observation precondition under the Go
 lock. Unknown submission outcomes never retry. Go validates independently and an
-independent operator must approve before Go executes. No backend or frozen safety
-rule changes are needed. `runRecoveryDecision` accepts trusted host model adapters
+independent operator must approve before Go executes. The AGENT-05 additions leave frozen safety
+rules unchanged. `runRecoveryDecision` accepts trusted host model adapters
 for offline tests; CLI live model strings still require explicit opt-in and provider
 configuration. Tests use local scripted adapters with no provider credentials or
 network inference. `investigation` in the result records actual request/usage counts
