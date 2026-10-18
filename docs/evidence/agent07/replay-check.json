@@ -1,0 +1,14 @@
+{
+  "version": "agent07-replay-v1",
+  "baseRevision": "a61faa1f512f39cd5d15c0c0833a05b6d709dfbc",
+  "baseRevisionProvenance": "User supplied; not queried or independently verified with Git",
+  "sourceDigest": "7c81b43e96b513e4bb4830ebb50aa748f2b4c70f64bc6f07f6100b459dc0ada8",
+  "datasetSHA256": "1c1824a719664f967edea577424914f876fdea8e48fb5fda9abfc06df8b9b57f",
+  "runs": 2,
+  "scenariosPerRun": 12,
+  "branchesPerRun": 44,
+  "allScientificResultsEqual": true,
+  "scientificResultsSHA256": "2189d8eea188bcb271e370fbc93b72db2d7dddf9ea4d1ed6a611644be38da3b9",
+  "retained": "Initial simulator states/hashes, sources, decisions, comparisons, quality, request/tool counts, reported mock usage, grounding/Go results, persisted metadata/evidence/completion, approval labels, executions and all measured outcomes",
+  "excluded": "Random opaque runtime/observation/run/proposal IDs; start/completion timestamps and host/server latency. They remain in the individual reports and are not expected to replay identically."
+}

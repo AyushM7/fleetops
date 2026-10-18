@@ -1,0 +1,4926 @@
+{
+  "version": "agent07-v1",
+  "fixtureVersion": "agent07-fixtures-v1",
+  "datasetSHA256": "1c1824a719664f967edea577424914f876fdea8e48fb5fda9abfc06df8b9b57f",
+  "mode": "offline-synthetic-tool-contract",
+  "actualLLM": "not_measured",
+  "goAdmission": "not_measured",
+  "simulatorOutcomes": "not_measured",
+  "historicalResults": "Phase-5 assisted 11/12 and recovery-decision-eval-v2 17-case contract benchmark are separate, not pooled",
+  "plannedTrials": 39,
+  "notAttemptedTrials": 0,
+  "stoppedReason": null,
+  "rows": [
+    {
+      "scenarioId": "blocked-multiple",
+      "policy": "first-eligible",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "0c124919692b0cc01ec2ef3f12a6a25b32d2815f2dcc939ae0bc1a68b4493811",
+      "initialStateHash": "ab2c14e108ec3e22c19afbbe155c08d09c42640960a4d592d4cecc5ee0110d48",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": null,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "blocked-multiple",
+      "policy": "minimum-pickup",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "0c124919692b0cc01ec2ef3f12a6a25b32d2815f2dcc939ae0bc1a68b4493811",
+      "initialStateHash": "ab2c14e108ec3e22c19afbbe155c08d09c42640960a4d592d4cecc5ee0110d48",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": null,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "blocked-multiple",
+      "policy": "maximum-headroom",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "0c124919692b0cc01ec2ef3f12a6a25b32d2815f2dcc939ae0bc1a68b4493811",
+      "initialStateHash": "ab2c14e108ec3e22c19afbbe155c08d09c42640960a4d592d4cecc5ee0110d48",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": null,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "blocked-multiple",
+      "policy": "v2-investigation",
+      "objective": "compare_tradeoffs",
+      "source": "mocked",
+      "requestedModel": "offline-agent07/scripted",
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "0c124919692b0cc01ec2ef3f12a6a25b32d2815f2dcc939ae0bc1a68b4493811",
+      "initialStateHash": "ab2c14e108ec3e22c19afbbe155c08d09c42640960a4d592d4cecc5ee0110d48",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "accepted",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R5"
+      },
+      "abstention": null,
+      "completion": {
+        "steps": [
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readRobots"
+          },
+          {
+            "kind": "tool",
+            "tool": "readJobs"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          }
+        ],
+        "status": "accepted",
+        "failure": "none",
+        "latencyMs": 130,
+        "modelRequests": 4,
+        "toolExecutions": 6,
+        "reportedUsage": {
+          "status": "reported",
+          "inputTokens": 4,
+          "outputTokens": 4,
+          "totalTokens": 8
+        },
+        "reportedActualModel": "",
+        "submissionCheck": "disabled",
+        "decision": {
+          "kind": "select",
+          "selected": {
+            "jobId": "J1",
+            "fromRobotId": "R1",
+            "toRobotId": "R5"
+          },
+          "basis": "admitted_option",
+          "reason": "",
+          "comparisons": [
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "metric": "pickupSteps",
+              "leftValue": 4,
+              "relation": "greater",
+              "rightValue": 1
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "metric": "admissionHeadroom",
+              "leftValue": 50,
+              "relation": "equal",
+              "rightValue": 50
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "metric": "pickupSteps",
+              "leftValue": 4,
+              "relation": "less",
+              "rightValue": 6
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "metric": "admissionHeadroom",
+              "leftValue": 50,
+              "relation": "equal",
+              "rightValue": 50
+            }
+          ]
+        }
+      },
+      "latencyMs": 130,
+      "proposal": {
+        "status": "disabled"
+      },
+      "provenance": {
+        "runId": "synthetic-run",
+        "status": "recorded"
+      },
+      "groundingAccepted": true,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": null,
+        "dominated": true,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": {
+        "successfulExecutions": 6,
+        "countedExecutions": 6,
+        "evidenceComplete": true
+      },
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": 0,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "non-first-pickup",
+      "policy": "first-eligible",
+      "objective": "minimize_pickup_steps",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "8e2970b010238c16099f1db30334bd23a1767ee6f3099c394543281e89810572",
+      "initialStateHash": "3b5b7020a41760e168cc402b093d2337689ba878d3cd411cb5187a3f93623fe5",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": false,
+      "quality": {
+        "admitted": true,
+        "regret": 5,
+        "dominated": true,
+        "objectiveMet": false
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "non-first-pickup",
+      "policy": "minimum-pickup",
+      "objective": "minimize_pickup_steps",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "8e2970b010238c16099f1db30334bd23a1767ee6f3099c394543281e89810572",
+      "initialStateHash": "3b5b7020a41760e168cc402b093d2337689ba878d3cd411cb5187a3f93623fe5",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R4"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": 0,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "non-first-pickup",
+      "policy": "maximum-headroom",
+      "objective": "minimize_pickup_steps",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "8e2970b010238c16099f1db30334bd23a1767ee6f3099c394543281e89810572",
+      "initialStateHash": "3b5b7020a41760e168cc402b093d2337689ba878d3cd411cb5187a3f93623fe5",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": false,
+      "quality": {
+        "admitted": true,
+        "regret": 5,
+        "dominated": true,
+        "objectiveMet": false
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "non-first-pickup",
+      "policy": "v2-investigation",
+      "objective": "minimize_pickup_steps",
+      "source": "mocked",
+      "requestedModel": "offline-agent07/scripted",
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "8e2970b010238c16099f1db30334bd23a1767ee6f3099c394543281e89810572",
+      "initialStateHash": "3b5b7020a41760e168cc402b093d2337689ba878d3cd411cb5187a3f93623fe5",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "accepted",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R4"
+      },
+      "abstention": null,
+      "completion": {
+        "steps": [
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readRobots"
+          },
+          {
+            "kind": "tool",
+            "tool": "readJobs"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          }
+        ],
+        "status": "accepted",
+        "failure": "none",
+        "latencyMs": 36,
+        "modelRequests": 4,
+        "toolExecutions": 6,
+        "reportedUsage": {
+          "status": "reported",
+          "inputTokens": 4,
+          "outputTokens": 4,
+          "totalTokens": 8
+        },
+        "reportedActualModel": "",
+        "submissionCheck": "disabled",
+        "decision": {
+          "kind": "select",
+          "selected": {
+            "jobId": "J1",
+            "fromRobotId": "R1",
+            "toRobotId": "R4"
+          },
+          "basis": "pickup_cost",
+          "reason": "",
+          "comparisons": [
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "metric": "pickupSteps",
+              "leftValue": 1,
+              "relation": "less",
+              "rightValue": 6
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "metric": "admissionHeadroom",
+              "leftValue": 50,
+              "relation": "equal",
+              "rightValue": 50
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "metric": "pickupSteps",
+              "leftValue": 1,
+              "relation": "less",
+              "rightValue": 4
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "metric": "admissionHeadroom",
+              "leftValue": 50,
+              "relation": "equal",
+              "rightValue": 50
+            }
+          ]
+        }
+      },
+      "latencyMs": 36,
+      "proposal": {
+        "status": "disabled"
+      },
+      "provenance": {
+        "runId": "synthetic-run",
+        "status": "recorded"
+      },
+      "groundingAccepted": true,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": 0,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": {
+        "successfulExecutions": 6,
+        "countedExecutions": 6,
+        "evidenceComplete": true
+      },
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": 0,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tradeoff-pickup",
+      "policy": "first-eligible",
+      "objective": "minimize_pickup_steps",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "7cfff4517c1eeb10bef7ef802ded63b14a52cd9eaa88209e3826a93009eb888d",
+      "initialStateHash": "51e0c55fa564e6d8ea4c2bfcdf317e634ec028af90ed5015700cc18b705d39be",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": 0,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tradeoff-pickup",
+      "policy": "minimum-pickup",
+      "objective": "minimize_pickup_steps",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "7cfff4517c1eeb10bef7ef802ded63b14a52cd9eaa88209e3826a93009eb888d",
+      "initialStateHash": "51e0c55fa564e6d8ea4c2bfcdf317e634ec028af90ed5015700cc18b705d39be",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": 0,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tradeoff-pickup",
+      "policy": "maximum-headroom",
+      "objective": "minimize_pickup_steps",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "7cfff4517c1eeb10bef7ef802ded63b14a52cd9eaa88209e3826a93009eb888d",
+      "initialStateHash": "51e0c55fa564e6d8ea4c2bfcdf317e634ec028af90ed5015700cc18b705d39be",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R4"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": false,
+      "quality": {
+        "admitted": true,
+        "regret": 5,
+        "dominated": false,
+        "objectiveMet": false
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tradeoff-pickup",
+      "policy": "v2-investigation",
+      "objective": "minimize_pickup_steps",
+      "source": "mocked",
+      "requestedModel": "offline-agent07/scripted",
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "7cfff4517c1eeb10bef7ef802ded63b14a52cd9eaa88209e3826a93009eb888d",
+      "initialStateHash": "51e0c55fa564e6d8ea4c2bfcdf317e634ec028af90ed5015700cc18b705d39be",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "accepted",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": {
+        "steps": [
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readRobots"
+          },
+          {
+            "kind": "tool",
+            "tool": "readJobs"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          }
+        ],
+        "status": "accepted",
+        "failure": "none",
+        "latencyMs": 29,
+        "modelRequests": 4,
+        "toolExecutions": 6,
+        "reportedUsage": {
+          "status": "reported",
+          "inputTokens": 4,
+          "outputTokens": 4,
+          "totalTokens": 8
+        },
+        "reportedActualModel": "",
+        "submissionCheck": "disabled",
+        "decision": {
+          "kind": "select",
+          "selected": {
+            "jobId": "J1",
+            "fromRobotId": "R1",
+            "toRobotId": "R3"
+          },
+          "basis": "pickup_cost",
+          "reason": "",
+          "comparisons": [
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "metric": "pickupSteps",
+              "leftValue": 1,
+              "relation": "less",
+              "rightValue": 6
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "metric": "admissionHeadroom",
+              "leftValue": 18,
+              "relation": "less",
+              "rightValue": 66
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "metric": "pickupSteps",
+              "leftValue": 1,
+              "relation": "less",
+              "rightValue": 4
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "metric": "admissionHeadroom",
+              "leftValue": 18,
+              "relation": "less",
+              "rightValue": 35
+            }
+          ]
+        }
+      },
+      "latencyMs": 30,
+      "proposal": {
+        "status": "disabled"
+      },
+      "provenance": {
+        "runId": "synthetic-run",
+        "status": "recorded"
+      },
+      "groundingAccepted": true,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": 0,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": {
+        "successfulExecutions": 6,
+        "countedExecutions": 6,
+        "evidenceComplete": true
+      },
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": 0,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tradeoff-headroom",
+      "policy": "first-eligible",
+      "objective": "preserve_battery_headroom",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "2fe95278bcd5d46cd51c3310b0b9d62a7140a3f9a269aab116bc8bb3631f69b6",
+      "initialStateHash": "51e0c55fa564e6d8ea4c2bfcdf317e634ec028af90ed5015700cc18b705d39be",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": false,
+      "quality": {
+        "admitted": true,
+        "regret": 48,
+        "dominated": false,
+        "objectiveMet": false
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tradeoff-headroom",
+      "policy": "minimum-pickup",
+      "objective": "preserve_battery_headroom",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "2fe95278bcd5d46cd51c3310b0b9d62a7140a3f9a269aab116bc8bb3631f69b6",
+      "initialStateHash": "51e0c55fa564e6d8ea4c2bfcdf317e634ec028af90ed5015700cc18b705d39be",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": false,
+      "quality": {
+        "admitted": true,
+        "regret": 48,
+        "dominated": false,
+        "objectiveMet": false
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tradeoff-headroom",
+      "policy": "maximum-headroom",
+      "objective": "preserve_battery_headroom",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "2fe95278bcd5d46cd51c3310b0b9d62a7140a3f9a269aab116bc8bb3631f69b6",
+      "initialStateHash": "51e0c55fa564e6d8ea4c2bfcdf317e634ec028af90ed5015700cc18b705d39be",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R4"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": 0,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tradeoff-headroom",
+      "policy": "v2-investigation",
+      "objective": "preserve_battery_headroom",
+      "source": "mocked",
+      "requestedModel": "offline-agent07/scripted",
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "2fe95278bcd5d46cd51c3310b0b9d62a7140a3f9a269aab116bc8bb3631f69b6",
+      "initialStateHash": "51e0c55fa564e6d8ea4c2bfcdf317e634ec028af90ed5015700cc18b705d39be",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "accepted",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R4"
+      },
+      "abstention": null,
+      "completion": {
+        "steps": [
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readRobots"
+          },
+          {
+            "kind": "tool",
+            "tool": "readJobs"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          }
+        ],
+        "status": "accepted",
+        "failure": "none",
+        "latencyMs": 35,
+        "modelRequests": 4,
+        "toolExecutions": 6,
+        "reportedUsage": {
+          "status": "reported",
+          "inputTokens": 4,
+          "outputTokens": 4,
+          "totalTokens": 8
+        },
+        "reportedActualModel": "",
+        "submissionCheck": "disabled",
+        "decision": {
+          "kind": "select",
+          "selected": {
+            "jobId": "J1",
+            "fromRobotId": "R1",
+            "toRobotId": "R4"
+          },
+          "basis": "battery_headroom",
+          "reason": "",
+          "comparisons": [
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "metric": "pickupSteps",
+              "leftValue": 6,
+              "relation": "greater",
+              "rightValue": 1
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "metric": "admissionHeadroom",
+              "leftValue": 66,
+              "relation": "greater",
+              "rightValue": 18
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "metric": "pickupSteps",
+              "leftValue": 6,
+              "relation": "greater",
+              "rightValue": 4
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "metric": "admissionHeadroom",
+              "leftValue": 66,
+              "relation": "greater",
+              "rightValue": 35
+            }
+          ]
+        }
+      },
+      "latencyMs": 35,
+      "proposal": {
+        "status": "disabled"
+      },
+      "provenance": {
+        "runId": "synthetic-run",
+        "status": "recorded"
+      },
+      "groundingAccepted": true,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": 0,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": {
+        "successfulExecutions": 6,
+        "countedExecutions": 6,
+        "evidenceComplete": true
+      },
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": 0,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tradeoff-compare",
+      "policy": "first-eligible",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "451128654764be24472e1eec0833fbf20436d0f658f5efe3350089f31608b30a",
+      "initialStateHash": "51e0c55fa564e6d8ea4c2bfcdf317e634ec028af90ed5015700cc18b705d39be",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": null,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tradeoff-compare",
+      "policy": "minimum-pickup",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "451128654764be24472e1eec0833fbf20436d0f658f5efe3350089f31608b30a",
+      "initialStateHash": "51e0c55fa564e6d8ea4c2bfcdf317e634ec028af90ed5015700cc18b705d39be",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": null,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tradeoff-compare",
+      "policy": "maximum-headroom",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "451128654764be24472e1eec0833fbf20436d0f658f5efe3350089f31608b30a",
+      "initialStateHash": "51e0c55fa564e6d8ea4c2bfcdf317e634ec028af90ed5015700cc18b705d39be",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R4"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": null,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tradeoff-compare",
+      "policy": "v2-investigation",
+      "objective": "compare_tradeoffs",
+      "source": "mocked",
+      "requestedModel": "offline-agent07/scripted",
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "451128654764be24472e1eec0833fbf20436d0f658f5efe3350089f31608b30a",
+      "initialStateHash": "51e0c55fa564e6d8ea4c2bfcdf317e634ec028af90ed5015700cc18b705d39be",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "accepted",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R5"
+      },
+      "abstention": null,
+      "completion": {
+        "steps": [
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readRobots"
+          },
+          {
+            "kind": "tool",
+            "tool": "readJobs"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          }
+        ],
+        "status": "accepted",
+        "failure": "none",
+        "latencyMs": 33,
+        "modelRequests": 4,
+        "toolExecutions": 6,
+        "reportedUsage": {
+          "status": "reported",
+          "inputTokens": 4,
+          "outputTokens": 4,
+          "totalTokens": 8
+        },
+        "reportedActualModel": "",
+        "submissionCheck": "disabled",
+        "decision": {
+          "kind": "select",
+          "selected": {
+            "jobId": "J1",
+            "fromRobotId": "R1",
+            "toRobotId": "R5"
+          },
+          "basis": "admitted_option",
+          "reason": "",
+          "comparisons": [
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "metric": "pickupSteps",
+              "leftValue": 4,
+              "relation": "greater",
+              "rightValue": 1
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "metric": "admissionHeadroom",
+              "leftValue": 35,
+              "relation": "greater",
+              "rightValue": 18
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "metric": "pickupSteps",
+              "leftValue": 4,
+              "relation": "less",
+              "rightValue": 6
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "metric": "admissionHeadroom",
+              "leftValue": 35,
+              "relation": "less",
+              "rightValue": 66
+            }
+          ]
+        }
+      },
+      "latencyMs": 33,
+      "proposal": {
+        "status": "disabled"
+      },
+      "provenance": {
+        "runId": "synthetic-run",
+        "status": "recorded"
+      },
+      "groundingAccepted": true,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": null,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": {
+        "successfulExecutions": 6,
+        "countedExecutions": 6,
+        "evidenceComplete": true
+      },
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": 0,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tied-pickup",
+      "policy": "first-eligible",
+      "objective": "minimize_pickup_steps",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "cee5d46b0f15575eda96a8bccf6de2998813c172c7d0313b3c14b346dc8cddff",
+      "initialStateHash": "e11dc670855d9f6b356c07f4765f0ca213c35f5dc30b6e942c52b4126db5f93c",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 3,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 15
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 3,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 15
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": 0,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tied-pickup",
+      "policy": "minimum-pickup",
+      "objective": "minimize_pickup_steps",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "cee5d46b0f15575eda96a8bccf6de2998813c172c7d0313b3c14b346dc8cddff",
+      "initialStateHash": "e11dc670855d9f6b356c07f4765f0ca213c35f5dc30b6e942c52b4126db5f93c",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 3,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 15
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 3,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 15
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": 0,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tied-pickup",
+      "policy": "maximum-headroom",
+      "objective": "minimize_pickup_steps",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "cee5d46b0f15575eda96a8bccf6de2998813c172c7d0313b3c14b346dc8cddff",
+      "initialStateHash": "e11dc670855d9f6b356c07f4765f0ca213c35f5dc30b6e942c52b4126db5f93c",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 3,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 15
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 3,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 15
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": 0,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "tied-pickup",
+      "policy": "v2-investigation",
+      "objective": "minimize_pickup_steps",
+      "source": "mocked",
+      "requestedModel": "offline-agent07/scripted",
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "cee5d46b0f15575eda96a8bccf6de2998813c172c7d0313b3c14b346dc8cddff",
+      "initialStateHash": "e11dc670855d9f6b356c07f4765f0ca213c35f5dc30b6e942c52b4126db5f93c",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 3,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 15
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 3,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 15
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "accepted",
+      "failure": null,
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": {
+        "steps": [
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readRobots"
+          },
+          {
+            "kind": "tool",
+            "tool": "readJobs"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          }
+        ],
+        "status": "accepted",
+        "failure": "none",
+        "latencyMs": 30,
+        "modelRequests": 4,
+        "toolExecutions": 6,
+        "reportedUsage": {
+          "status": "reported",
+          "inputTokens": 4,
+          "outputTokens": 4,
+          "totalTokens": 8
+        },
+        "reportedActualModel": "",
+        "submissionCheck": "disabled",
+        "decision": {
+          "kind": "select",
+          "selected": {
+            "jobId": "J1",
+            "fromRobotId": "R1",
+            "toRobotId": "R3"
+          },
+          "basis": "pickup_cost",
+          "reason": "",
+          "comparisons": [
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "metric": "pickupSteps",
+              "leftValue": 3,
+              "relation": "equal",
+              "rightValue": 3
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "metric": "admissionHeadroom",
+              "leftValue": 50,
+              "relation": "equal",
+              "rightValue": 50
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "metric": "pickupSteps",
+              "leftValue": 3,
+              "relation": "less",
+              "rightValue": 6
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "metric": "admissionHeadroom",
+              "leftValue": 50,
+              "relation": "equal",
+              "rightValue": 50
+            }
+          ]
+        }
+      },
+      "latencyMs": 30,
+      "proposal": {
+        "status": "disabled"
+      },
+      "provenance": {
+        "runId": "synthetic-run",
+        "status": "recorded"
+      },
+      "groundingAccepted": true,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": 0,
+        "dominated": false,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": {
+        "successfulExecutions": 6,
+        "countedExecutions": 6,
+        "evidenceComplete": true
+      },
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": 0,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "no-recipients",
+      "policy": "first-eligible",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "3b6ce839ec1f38618bf927a8b054e9719b22d3730b99622defdfa32b48aa1650",
+      "initialStateHash": "2e35a16e35a545c32235132998a2b1fa982c31622f02b29e381d525fa9160622",
+      "candidateFacts": [],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": null,
+      "abstention": "no_candidates",
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": false,
+        "regret": null,
+        "dominated": null,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "no-recipients",
+      "policy": "minimum-pickup",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "3b6ce839ec1f38618bf927a8b054e9719b22d3730b99622defdfa32b48aa1650",
+      "initialStateHash": "2e35a16e35a545c32235132998a2b1fa982c31622f02b29e381d525fa9160622",
+      "candidateFacts": [],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": null,
+      "abstention": "no_candidates",
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": false,
+        "regret": null,
+        "dominated": null,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "no-recipients",
+      "policy": "maximum-headroom",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "3b6ce839ec1f38618bf927a8b054e9719b22d3730b99622defdfa32b48aa1650",
+      "initialStateHash": "2e35a16e35a545c32235132998a2b1fa982c31622f02b29e381d525fa9160622",
+      "candidateFacts": [],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": null,
+      "abstention": "no_candidates",
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": false,
+        "regret": null,
+        "dominated": null,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "no-recipients",
+      "policy": "v2-investigation",
+      "objective": "compare_tradeoffs",
+      "source": "mocked",
+      "requestedModel": "offline-agent07/scripted",
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "3b6ce839ec1f38618bf927a8b054e9719b22d3730b99622defdfa32b48aa1650",
+      "initialStateHash": "2e35a16e35a545c32235132998a2b1fa982c31622f02b29e381d525fa9160622",
+      "candidateFacts": [],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "accepted",
+      "failure": null,
+      "selected": null,
+      "abstention": "no_candidates",
+      "completion": {
+        "steps": [
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          }
+        ],
+        "status": "accepted",
+        "failure": "none",
+        "latencyMs": 22,
+        "modelRequests": 3,
+        "toolExecutions": 4,
+        "reportedUsage": {
+          "status": "reported",
+          "inputTokens": 3,
+          "outputTokens": 3,
+          "totalTokens": 6
+        },
+        "reportedActualModel": "",
+        "submissionCheck": "disabled",
+        "decision": {
+          "kind": "abstain",
+          "selected": null,
+          "basis": "",
+          "reason": "no_candidates",
+          "comparisons": []
+        }
+      },
+      "latencyMs": 22,
+      "proposal": {
+        "status": "disabled"
+      },
+      "provenance": {
+        "runId": "synthetic-run",
+        "status": "recorded"
+      },
+      "groundingAccepted": true,
+      "expectationMet": true,
+      "quality": {
+        "admitted": false,
+        "regret": null,
+        "dominated": null,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": {
+        "successfulExecutions": 4,
+        "countedExecutions": 4,
+        "evidenceComplete": true
+      },
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": 0,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "healthy",
+      "policy": "first-eligible",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "602800ece7b17295985a55f079c072a618a8b3a3c38e031296229dd38a6d6d7b",
+      "initialStateHash": "0ad4e95e9f04ca69e681c820d87a1b5477eea09e5aa2eaed4346707ae4fc0326",
+      "candidateFacts": [],
+      "incidentFacts": [],
+      "status": "deterministic",
+      "failure": null,
+      "selected": null,
+      "abstention": "no_supported_incident",
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": false,
+        "regret": null,
+        "dominated": null,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "healthy",
+      "policy": "minimum-pickup",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "602800ece7b17295985a55f079c072a618a8b3a3c38e031296229dd38a6d6d7b",
+      "initialStateHash": "0ad4e95e9f04ca69e681c820d87a1b5477eea09e5aa2eaed4346707ae4fc0326",
+      "candidateFacts": [],
+      "incidentFacts": [],
+      "status": "deterministic",
+      "failure": null,
+      "selected": null,
+      "abstention": "no_supported_incident",
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": false,
+        "regret": null,
+        "dominated": null,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "healthy",
+      "policy": "maximum-headroom",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "602800ece7b17295985a55f079c072a618a8b3a3c38e031296229dd38a6d6d7b",
+      "initialStateHash": "0ad4e95e9f04ca69e681c820d87a1b5477eea09e5aa2eaed4346707ae4fc0326",
+      "candidateFacts": [],
+      "incidentFacts": [],
+      "status": "deterministic",
+      "failure": null,
+      "selected": null,
+      "abstention": "no_supported_incident",
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": false,
+        "regret": null,
+        "dominated": null,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "healthy",
+      "policy": "v2-investigation",
+      "objective": "compare_tradeoffs",
+      "source": "mocked",
+      "requestedModel": "offline-agent07/scripted",
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "602800ece7b17295985a55f079c072a618a8b3a3c38e031296229dd38a6d6d7b",
+      "initialStateHash": "0ad4e95e9f04ca69e681c820d87a1b5477eea09e5aa2eaed4346707ae4fc0326",
+      "candidateFacts": [],
+      "incidentFacts": [],
+      "status": "accepted",
+      "failure": null,
+      "selected": null,
+      "abstention": "no_supported_incident",
+      "completion": {
+        "steps": [
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          }
+        ],
+        "status": "accepted",
+        "failure": "none",
+        "latencyMs": 10,
+        "modelRequests": 2,
+        "toolExecutions": 0,
+        "reportedUsage": {
+          "status": "reported",
+          "inputTokens": 2,
+          "outputTokens": 2,
+          "totalTokens": 4
+        },
+        "reportedActualModel": "",
+        "submissionCheck": "disabled",
+        "decision": {
+          "kind": "abstain",
+          "selected": null,
+          "basis": "",
+          "reason": "no_supported_incident",
+          "comparisons": []
+        }
+      },
+      "latencyMs": 10,
+      "proposal": {
+        "status": "disabled"
+      },
+      "provenance": {
+        "runId": "synthetic-run",
+        "status": "recorded"
+      },
+      "groundingAccepted": true,
+      "expectationMet": true,
+      "quality": {
+        "admitted": false,
+        "regret": null,
+        "dominated": null,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": {
+        "successfulExecutions": 0,
+        "countedExecutions": 0,
+        "evidenceComplete": true
+      },
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": 0,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "poisoned",
+      "policy": "first-eligible",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "ba7bd664efb5841c89bc5ed560a2e404c1db13ebfb7b44424f5ed5abcb1253ae",
+      "initialStateHash": "8978e9b7786d8690f5b2f71cd23edda65c5c552c923b1316928bcc44a7c2f86a",
+      "candidateFacts": [],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": null,
+      "abstention": "runtime_poisoned",
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": false,
+        "regret": null,
+        "dominated": null,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "poisoned",
+      "policy": "minimum-pickup",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "ba7bd664efb5841c89bc5ed560a2e404c1db13ebfb7b44424f5ed5abcb1253ae",
+      "initialStateHash": "8978e9b7786d8690f5b2f71cd23edda65c5c552c923b1316928bcc44a7c2f86a",
+      "candidateFacts": [],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": null,
+      "abstention": "runtime_poisoned",
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": false,
+        "regret": null,
+        "dominated": null,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "poisoned",
+      "policy": "maximum-headroom",
+      "objective": "compare_tradeoffs",
+      "source": "deterministic",
+      "requestedModel": null,
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "ba7bd664efb5841c89bc5ed560a2e404c1db13ebfb7b44424f5ed5abcb1253ae",
+      "initialStateHash": "8978e9b7786d8690f5b2f71cd23edda65c5c552c923b1316928bcc44a7c2f86a",
+      "candidateFacts": [],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "deterministic",
+      "failure": null,
+      "selected": null,
+      "abstention": "runtime_poisoned",
+      "completion": null,
+      "latencyMs": 0,
+      "proposal": null,
+      "provenance": null,
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": false,
+        "regret": null,
+        "dominated": null,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": null,
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": null,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "poisoned",
+      "policy": "v2-investigation",
+      "objective": "compare_tradeoffs",
+      "source": "mocked",
+      "requestedModel": "offline-agent07/scripted",
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "ba7bd664efb5841c89bc5ed560a2e404c1db13ebfb7b44424f5ed5abcb1253ae",
+      "initialStateHash": "8978e9b7786d8690f5b2f71cd23edda65c5c552c923b1316928bcc44a7c2f86a",
+      "candidateFacts": [],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "accepted",
+      "failure": null,
+      "selected": null,
+      "abstention": "runtime_poisoned",
+      "completion": {
+        "steps": [
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          }
+        ],
+        "status": "accepted",
+        "failure": "none",
+        "latencyMs": 16,
+        "modelRequests": 3,
+        "toolExecutions": 4,
+        "reportedUsage": {
+          "status": "reported",
+          "inputTokens": 3,
+          "outputTokens": 3,
+          "totalTokens": 6
+        },
+        "reportedActualModel": "",
+        "submissionCheck": "disabled",
+        "decision": {
+          "kind": "abstain",
+          "selected": null,
+          "basis": "",
+          "reason": "runtime_poisoned",
+          "comparisons": []
+        }
+      },
+      "latencyMs": 16,
+      "proposal": {
+        "status": "disabled"
+      },
+      "provenance": {
+        "runId": "synthetic-run",
+        "status": "recorded"
+      },
+      "groundingAccepted": true,
+      "expectationMet": true,
+      "quality": {
+        "admitted": false,
+        "regret": null,
+        "dominated": null,
+        "objectiveMet": true
+      },
+      "submissionAttempts": 0,
+      "tools": {
+        "successfulExecutions": 4,
+        "countedExecutions": 4,
+        "evidenceComplete": true
+      },
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": 0,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "stale",
+      "policy": "v2-investigation",
+      "objective": "minimize_pickup_steps",
+      "source": "mocked",
+      "requestedModel": "offline-agent07/scripted",
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "2e2d9408488d163ed81f141290c4af6406cf2e652b9269908985247421b95062",
+      "initialStateHash": "ab2c14e108ec3e22c19afbbe155c08d09c42640960a4d592d4cecc5ee0110d48",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "accepted",
+      "failure": "snapshot_changed",
+      "selected": {
+        "jobId": "J1",
+        "fromRobotId": "R1",
+        "toRobotId": "R3"
+      },
+      "abstention": null,
+      "completion": {
+        "steps": [
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readRobots"
+          },
+          {
+            "kind": "tool",
+            "tool": "readJobs"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          }
+        ],
+        "status": "accepted",
+        "failure": "none",
+        "latencyMs": 26,
+        "modelRequests": 4,
+        "toolExecutions": 6,
+        "reportedUsage": {
+          "status": "reported",
+          "inputTokens": 4,
+          "outputTokens": 4,
+          "totalTokens": 8
+        },
+        "reportedActualModel": "",
+        "submissionCheck": "snapshot_changed",
+        "decision": {
+          "kind": "select",
+          "selected": {
+            "jobId": "J1",
+            "fromRobotId": "R1",
+            "toRobotId": "R3"
+          },
+          "basis": "pickup_cost",
+          "reason": "",
+          "comparisons": [
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "metric": "pickupSteps",
+              "leftValue": 1,
+              "relation": "less",
+              "rightValue": 6
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R4"
+              },
+              "metric": "admissionHeadroom",
+              "leftValue": 50,
+              "relation": "equal",
+              "rightValue": 50
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "metric": "pickupSteps",
+              "leftValue": 1,
+              "relation": "less",
+              "rightValue": 4
+            },
+            {
+              "left": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R3"
+              },
+              "right": {
+                "jobId": "J1",
+                "fromRobotId": "R1",
+                "toRobotId": "R5"
+              },
+              "metric": "admissionHeadroom",
+              "leftValue": 50,
+              "relation": "equal",
+              "rightValue": 50
+            }
+          ]
+        }
+      },
+      "latencyMs": 26,
+      "proposal": {
+        "status": "not_requested"
+      },
+      "provenance": {
+        "runId": "synthetic-run",
+        "status": "recorded"
+      },
+      "groundingAccepted": true,
+      "expectationMet": true,
+      "quality": {
+        "admitted": true,
+        "regret": null,
+        "dominated": false,
+        "objectiveMet": false
+      },
+      "submissionAttempts": 0,
+      "tools": {
+        "successfulExecutions": 6,
+        "countedExecutions": 6,
+        "evidenceComplete": true
+      },
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": 0,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "false-evidence",
+      "policy": "v2-investigation",
+      "objective": "minimize_pickup_steps",
+      "source": "mocked",
+      "requestedModel": "offline-agent07/scripted",
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "cfc560026a9b9c5c5b715d3adb64db98a8a7191f55cab866fbd6a754ea0dbda1",
+      "initialStateHash": "ab2c14e108ec3e22c19afbbe155c08d09c42640960a4d592d4cecc5ee0110d48",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "rejected",
+      "failure": "grounding_rejected",
+      "selected": null,
+      "abstention": null,
+      "completion": {
+        "steps": [
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "tool",
+            "tool": "readIncident"
+          },
+          {
+            "kind": "tool",
+            "tool": "listRecoveryCandidates"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "tool",
+            "tool": "readRobots"
+          },
+          {
+            "kind": "tool",
+            "tool": "readJobs"
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          },
+          {
+            "kind": "request",
+            "tool": ""
+          }
+        ],
+        "status": "rejected",
+        "failure": "grounding_rejected",
+        "latencyMs": 20,
+        "modelRequests": 4,
+        "toolExecutions": 6,
+        "reportedUsage": {
+          "status": "reported",
+          "inputTokens": 4,
+          "outputTokens": 4,
+          "totalTokens": 8
+        },
+        "reportedActualModel": "",
+        "submissionCheck": "disabled",
+        "decision": null
+      },
+      "latencyMs": 20,
+      "proposal": {
+        "status": "disabled"
+      },
+      "provenance": {
+        "runId": "synthetic-run",
+        "status": "recorded"
+      },
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": false,
+        "regret": null,
+        "dominated": null,
+        "objectiveMet": false
+      },
+      "submissionAttempts": 0,
+      "tools": {
+        "successfulExecutions": 6,
+        "countedExecutions": 6,
+        "evidenceComplete": true
+      },
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": 0,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    },
+    {
+      "scenarioId": "invalid-tool",
+      "policy": "v2-investigation",
+      "objective": "compare_tradeoffs",
+      "source": "mocked",
+      "requestedModel": "offline-agent07/scripted",
+      "observationProvenance": "synthetic-tool-contract-only",
+      "initialObservationId": "c1d22c637d4074a50cf984de5910056181024ab17359b016f26609b1685d6159",
+      "initialStateHash": "ab2c14e108ec3e22c19afbbe155c08d09c42640960a4d592d4cecc5ee0110d48",
+      "candidateFacts": [
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R3",
+          "pickupSteps": 1,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 13
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R4",
+          "pickupSteps": 6,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 18
+        },
+        {
+          "jobId": "J1",
+          "fromRobotId": "R1",
+          "toRobotId": "R5",
+          "pickupSteps": 4,
+          "deliverySteps": 2,
+          "chargingExitSteps": 5,
+          "requiredBattery": 16
+        }
+      ],
+      "incidentFacts": [
+        {
+          "robotId": "R1",
+          "type": "traffic_blocked",
+          "severity": "high",
+          "telemetry": {
+            "id": "R1",
+            "x": 0,
+            "y": 3,
+            "battery": 100,
+            "status": "moving",
+            "jobId": "J1",
+            "waitTicks": 42,
+            "blocked": true
+          }
+        },
+        {
+          "robotId": "R2",
+          "type": "robot_unresponsive",
+          "severity": "high",
+          "telemetry": {
+            "id": "R2",
+            "x": 2,
+            "y": 3,
+            "battery": 100,
+            "status": "offline",
+            "jobId": "",
+            "waitTicks": 0,
+            "blocked": false
+          }
+        }
+      ],
+      "status": "failed",
+      "failure": "invalid_tool",
+      "selected": null,
+      "abstention": null,
+      "completion": {
+        "steps": [
+          {
+            "kind": "request",
+            "tool": ""
+          }
+        ],
+        "status": "failed",
+        "failure": "invalid_tool",
+        "latencyMs": 4,
+        "modelRequests": 1,
+        "toolExecutions": 0,
+        "reportedUsage": {
+          "status": "unavailable",
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null
+        },
+        "reportedActualModel": "",
+        "submissionCheck": "disabled",
+        "decision": null
+      },
+      "latencyMs": 4,
+      "proposal": {
+        "status": "disabled"
+      },
+      "provenance": {
+        "runId": "synthetic-run",
+        "status": "recorded"
+      },
+      "groundingAccepted": false,
+      "expectationMet": true,
+      "quality": {
+        "admitted": false,
+        "regret": null,
+        "dominated": null,
+        "objectiveMet": false
+      },
+      "submissionAttempts": 0,
+      "tools": {
+        "successfulExecutions": 0,
+        "countedExecutions": 0,
+        "evidenceComplete": false
+      },
+      "cost": null,
+      "modelCalls": {
+        "localAdapterFailures": 0,
+        "providerHTTPAttempts": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null
+      }
+    }
+  ],
+  "aggregate": [
+    {
+      "policy": "first-eligible",
+      "attemptedTrials": 9,
+      "admittedSelections": {
+        "numerator": 6,
+        "denominator": 6
+      },
+      "groundingAccepted": {
+        "numerator": 0,
+        "denominator": 0
+      },
+      "appropriateAbstention": {
+        "numerator": 3,
+        "denominator": 3
+      },
+      "groundingFailures": 0,
+      "unsupportedToolAttempts": 0,
+      "budgetExhaustions": 0,
+      "modelCallFailures": {
+        "localAdapterFailures": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null,
+        "attemptedInvestigationTrials": 0,
+        "interpretation": "Direct adapter/HTTP observations only; framework, grounding and stream-finalization failures remain separate"
+      },
+      "failedOrUnknown": 0,
+      "toolBudgetCompliant": {
+        "numerator": 0,
+        "denominator": 0
+      },
+      "unknownCompletionReports": 0,
+      "toolExecutionsSuccessful": {
+        "numerator": 0,
+        "denominator": 0
+      },
+      "toolEvidenceComplete": {
+        "numerator": 0,
+        "denominator": 0
+      },
+      "objectiveMet": {
+        "numerator": 4,
+        "denominator": 6
+      },
+      "dominated": {
+        "numerator": 1,
+        "denominator": 6
+      },
+      "reportedUsage": {
+        "complete": 0,
+        "partial": 0,
+        "unavailable": 0,
+        "reportedTokens": null,
+        "label": "reported subtotal only; missing reports are unknown; mock values are not billing evidence"
+      },
+      "latencyMs": {
+        "minimum": 0,
+        "maximum": 0,
+        "reports": 9,
+        "attemptedTrials": 9
+      }
+    },
+    {
+      "policy": "minimum-pickup",
+      "attemptedTrials": 9,
+      "admittedSelections": {
+        "numerator": 6,
+        "denominator": 6
+      },
+      "groundingAccepted": {
+        "numerator": 0,
+        "denominator": 0
+      },
+      "appropriateAbstention": {
+        "numerator": 3,
+        "denominator": 3
+      },
+      "groundingFailures": 0,
+      "unsupportedToolAttempts": 0,
+      "budgetExhaustions": 0,
+      "modelCallFailures": {
+        "localAdapterFailures": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null,
+        "attemptedInvestigationTrials": 0,
+        "interpretation": "Direct adapter/HTTP observations only; framework, grounding and stream-finalization failures remain separate"
+      },
+      "failedOrUnknown": 0,
+      "toolBudgetCompliant": {
+        "numerator": 0,
+        "denominator": 0
+      },
+      "unknownCompletionReports": 0,
+      "toolExecutionsSuccessful": {
+        "numerator": 0,
+        "denominator": 0
+      },
+      "toolEvidenceComplete": {
+        "numerator": 0,
+        "denominator": 0
+      },
+      "objectiveMet": {
+        "numerator": 5,
+        "denominator": 6
+      },
+      "dominated": {
+        "numerator": 0,
+        "denominator": 6
+      },
+      "reportedUsage": {
+        "complete": 0,
+        "partial": 0,
+        "unavailable": 0,
+        "reportedTokens": null,
+        "label": "reported subtotal only; missing reports are unknown; mock values are not billing evidence"
+      },
+      "latencyMs": {
+        "minimum": 0,
+        "maximum": 0,
+        "reports": 9,
+        "attemptedTrials": 9
+      }
+    },
+    {
+      "policy": "maximum-headroom",
+      "attemptedTrials": 9,
+      "admittedSelections": {
+        "numerator": 6,
+        "denominator": 6
+      },
+      "groundingAccepted": {
+        "numerator": 0,
+        "denominator": 0
+      },
+      "appropriateAbstention": {
+        "numerator": 3,
+        "denominator": 3
+      },
+      "groundingFailures": 0,
+      "unsupportedToolAttempts": 0,
+      "budgetExhaustions": 0,
+      "modelCallFailures": {
+        "localAdapterFailures": null,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null,
+        "attemptedInvestigationTrials": 0,
+        "interpretation": "Direct adapter/HTTP observations only; framework, grounding and stream-finalization failures remain separate"
+      },
+      "failedOrUnknown": 0,
+      "toolBudgetCompliant": {
+        "numerator": 0,
+        "denominator": 0
+      },
+      "unknownCompletionReports": 0,
+      "toolExecutionsSuccessful": {
+        "numerator": 0,
+        "denominator": 0
+      },
+      "toolEvidenceComplete": {
+        "numerator": 0,
+        "denominator": 0
+      },
+      "objectiveMet": {
+        "numerator": 4,
+        "denominator": 6
+      },
+      "dominated": {
+        "numerator": 1,
+        "denominator": 6
+      },
+      "reportedUsage": {
+        "complete": 0,
+        "partial": 0,
+        "unavailable": 0,
+        "reportedTokens": null,
+        "label": "reported subtotal only; missing reports are unknown; mock values are not billing evidence"
+      },
+      "latencyMs": {
+        "minimum": 0,
+        "maximum": 0,
+        "reports": 9,
+        "attemptedTrials": 9
+      }
+    },
+    {
+      "policy": "v2-investigation",
+      "attemptedTrials": 12,
+      "admittedSelections": {
+        "numerator": 7,
+        "denominator": 7
+      },
+      "groundingAccepted": {
+        "numerator": 10,
+        "denominator": 12
+      },
+      "appropriateAbstention": {
+        "numerator": 3,
+        "denominator": 3
+      },
+      "groundingFailures": 1,
+      "unsupportedToolAttempts": 1,
+      "budgetExhaustions": 0,
+      "modelCallFailures": {
+        "localAdapterFailures": 0,
+        "failedHTTPResponses": null,
+        "uncertainHTTPResults": null,
+        "attemptedInvestigationTrials": 12,
+        "interpretation": "Direct adapter/HTTP observations only; framework, grounding and stream-finalization failures remain separate"
+      },
+      "failedOrUnknown": 1,
+      "toolBudgetCompliant": {
+        "numerator": 12,
+        "denominator": 12
+      },
+      "unknownCompletionReports": 0,
+      "toolExecutionsSuccessful": {
+        "numerator": 56,
+        "denominator": 56
+      },
+      "toolEvidenceComplete": {
+        "numerator": 11,
+        "denominator": 12
+      },
+      "objectiveMet": {
+        "numerator": 6,
+        "denominator": 6
+      },
+      "dominated": {
+        "numerator": 1,
+        "denominator": 7
+      },
+      "reportedUsage": {
+        "complete": 11,
+        "partial": 0,
+        "unavailable": 1,
+        "reportedTokens": 80,
+        "label": "reported subtotal only; missing reports are unknown; mock values are not billing evidence"
+      },
+      "latencyMs": {
+        "minimum": 4,
+        "maximum": 130,
+        "reports": 12,
+        "attemptedTrials": 12
+      }
+    }
+  ],
+  "estimatedCostUSD": null,
+  "actualBilledCostUSD": null,
+  "plan": {
+    "trials": 12,
+    "maximumModelRequests": 72,
+    "maximumOutputTokens": 432000,
+    "maximumElapsedMs": 600000,
+    "proposalSubmission": false,
+    "testHarnessApprovals": false,
+    "automaticRetries": 0,
+    "maximumToolsPerTrial": 8,
+    "providerRequests": 0,
+    "estimatedMaximumUSD": null,
+    "maximumInputTokens": null,
+    "perRequestUSD": null,
+    "priceReviewSHA256": null,
+    "planSHA256": "6f130c3a4b7730c6f6512998568d92c6202579f781e0aa949794f791d8ae1ce5",
+    "datasetSHA256": "1c1824a719664f967edea577424914f876fdea8e48fb5fda9abfc06df8b9b57f",
+    "sourceDigest": "7c81b43e96b513e4bb4830ebb50aa748f2b4c70f64bc6f07f6100b459dc0ada8",
+    "sourceRevision": "a61faa1f512f39cd5d15c0c0833a05b6d709dfbc",
+    "selectedScenarios": [
+      "blocked-multiple",
+      "non-first-pickup",
+      "tradeoff-pickup",
+      "tradeoff-headroom",
+      "tradeoff-compare",
+      "tied-pickup",
+      "no-recipients",
+      "healthy",
+      "poisoned",
+      "stale",
+      "false-evidence",
+      "invalid-tool"
+    ],
+    "requestedModel": null,
+    "provider": null,
+    "pricingCaveat": "Hash-reviewed operator acknowledgement, not a provider hard dollar cap. Actual billed cost requires authoritative evidence."
+  }
+}
