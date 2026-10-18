@@ -1,0 +1,165 @@
+{
+  "version": "agent07-verification-v1",
+  "sourceDigest": "7c81b43e96b513e4bb4830ebb50aa748f2b4c70f64bc6f07f6100b459dc0ada8",
+  "baseRevision": "a61faa1f512f39cd5d15c0c0833a05b6d709dfbc",
+  "suites": {
+    "evals": {
+      "passed": 281,
+      "failed": 0,
+      "skipped": 0,
+      "files": 11,
+      "typecheck": "passed"
+    },
+    "agent": {
+      "passed": 279,
+      "failed": 0,
+      "skipped": 0,
+      "files": 14,
+      "typecheck": "passed",
+      "build": "passed"
+    },
+    "frontend": {
+      "passed": 133,
+      "failed": 0,
+      "skipped": 0,
+      "files": 13,
+      "typecheck": "passed",
+      "build": "passed"
+    },
+    "existingAgentPostgresIntegration": {
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    "goNative": {
+      "includingSubtests": {
+        "pass": 1709,
+        "fail": 2,
+        "skip": 14
+      },
+      "topLevel": {
+        "pass": 361,
+        "fail": 2,
+        "skip": 14
+      },
+      "failures": [
+        "TestGoldenSnapshot",
+        "TestWarehouseGoldenSnapshot"
+      ],
+      "skips": [
+        {
+          "package": "github.com/AyushM7/fleetops/backend/fleet",
+          "test": "TestAgent07PairedEvaluation"
+        },
+        {
+          "package": "github.com/AyushM7/fleetops/backend/fleet",
+          "test": "TestDemo08ExportObservations"
+        },
+        {
+          "package": "github.com/AyushM7/fleetops/backend/sim",
+          "test": "TestStabilizationLegacyCompatibility"
+        },
+        {
+          "package": "github.com/AyushM7/fleetops/backend/sim",
+          "test": "TestStabilizationS1Diagnostics"
+        },
+        {
+          "package": "github.com/AyushM7/fleetops/backend/sim",
+          "test": "TestIdleBlockerS1Diagnostics"
+        },
+        {
+          "package": "github.com/AyushM7/fleetops/backend/sim",
+          "test": "TestIdleBlockerSeed42RelocationDiagnostics"
+        },
+        {
+          "package": "github.com/AyushM7/fleetops/backend/sim",
+          "test": "TestReliabilityDiagnosis"
+        },
+        {
+          "package": "github.com/AyushM7/fleetops/backend/sim",
+          "test": "TestReliabilityDiagnosisClassifier"
+        },
+        {
+          "package": "github.com/AyushM7/fleetops/backend/sim",
+          "test": "TestReliabilityDiagnosisProbes"
+        },
+        {
+          "package": "github.com/AyushM7/fleetops/backend/sim",
+          "test": "TestReliabilityDiagnosisAmendmentGap"
+        },
+        {
+          "package": "github.com/AyushM7/fleetops/backend/sim",
+          "test": "TestFinalAcceptanceResolutionDiagnostics"
+        },
+        {
+          "package": "github.com/AyushM7/fleetops/backend/sim",
+          "test": "TestFinalSeed99PreventiveClearanceProbe"
+        },
+        {
+          "package": "github.com/AyushM7/fleetops/backend/sim",
+          "test": "TestStabilizationReserveSweep"
+        },
+        {
+          "package": "github.com/AyushM7/fleetops/backend/sim",
+          "test": "TestApprovedTuningDiagnostics"
+        }
+      ],
+      "build": "passed"
+    },
+    "goRaceFleetGraphqlSafetyProposal": {
+      "includingSubtests": {
+        "pass": 235,
+        "fail": 0,
+        "skip": 1
+      },
+      "topLevel": {
+        "pass": 84,
+        "fail": 0,
+        "skip": 1
+      },
+      "skips": [
+        {
+          "package": "github.com/AyushM7/fleetops/backend/fleet",
+          "test": "TestDemo08ExportObservations"
+        }
+      ]
+    },
+    "goRaceNewSimFixtures": {
+      "includingSubtests": {
+        "pass": 9,
+        "fail": 0,
+        "skip": 0
+      },
+      "topLevel": {
+        "pass": 2,
+        "fail": 0,
+        "skip": 0
+      }
+    },
+    "goGoldenDisposableLFNormalization": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "trackedFixturesUnchanged": true
+    },
+    "pairedGo": {
+      "runs": 2,
+      "branchesPerRun": 44,
+      "investigationsPerRun": 12,
+      "failed": 0
+    },
+    "artifactReplay": {
+      "passed": 1,
+      "failed": 0
+    }
+  },
+  "environmentalNotes": [
+    "Two existing native Windows golden tests fail on CRLF; both pass in a disposable LF-normalized copy, without changing tracked fixtures.",
+    "Initial unchanged legacy Node contract checks had an ExperimentalWarning in CombinedOutput; NODE_NO_WARNINGS=1 resolves that diagnostic parsing issue.",
+    "Initial Docker fleet/graphql race build could not find cached Go modules with downloads disabled; corrected GOMODCACHE/GOPATH, then race suite passed.",
+    "Docker/PostgreSQL checks required sandbox escalation. No unresolved sandbox restriction remains. No dependencies were downloaded."
+  ],
+  "noPaidInference": true,
+  "realModelQuality": "not measured",
+  "actualHumanApproval": "not measured"
+}

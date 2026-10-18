@@ -1,0 +1,21 @@
+{
+  "version": "agent07-v1",
+  "fixtureVersion": "agent07-fixtures-v1",
+  "seed": 42,
+  "horizonTicks": 200,
+  "measurementFaults": [],
+  "scenarios": [
+    { "id": "blocked-multiple", "variant": "blocked", "objective": "compare_tradeoffs", "expected": "admitted", "quality": "pareto-only", "comparable": true },
+    { "id": "non-first-pickup", "variant": "non-first", "objective": "minimize_pickup_steps", "expected": "minimum-pickup", "quality": "pickup-regret", "comparable": true },
+    { "id": "tradeoff-pickup", "variant": "tradeoff", "objective": "minimize_pickup_steps", "expected": "minimum-pickup", "quality": "pickup-regret", "comparable": true },
+    { "id": "tradeoff-headroom", "variant": "tradeoff", "objective": "preserve_battery_headroom", "expected": "maximum-headroom", "quality": "headroom-regret", "comparable": true },
+    { "id": "tradeoff-compare", "variant": "tradeoff", "objective": "compare_tradeoffs", "expected": "admitted-or-tradeoff", "quality": "pareto-only", "comparable": true },
+    { "id": "tied-pickup", "variant": "tie", "objective": "minimize_pickup_steps", "expected": "minimum-pickup", "quality": "pickup-regret", "comparable": true },
+    { "id": "no-recipients", "variant": "none", "objective": "compare_tradeoffs", "expected": "no_candidates", "quality": "not-applicable", "comparable": true },
+    { "id": "healthy", "variant": "healthy", "objective": "compare_tradeoffs", "expected": "no_supported_incident", "quality": "not-applicable", "comparable": true },
+    { "id": "poisoned", "variant": "poisoned", "objective": "compare_tradeoffs", "expected": "runtime_poisoned", "quality": "not-applicable", "comparable": false },
+    { "id": "stale", "variant": "blocked", "objective": "minimize_pickup_steps", "expected": "stale-denial", "quality": "not-applicable", "comparable": false },
+    { "id": "false-evidence", "variant": "blocked", "objective": "minimize_pickup_steps", "expected": "grounding-rejection", "quality": "not-applicable", "comparable": false, "probe": "false-evidence" },
+    { "id": "invalid-tool", "variant": "blocked", "objective": "compare_tradeoffs", "expected": "invalid-tool-rejection", "quality": "not-applicable", "comparable": false, "probe": "invalid-tool" }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "version": "agent07-price-v1",
+  "provider": "openai",
+  "model": "",
+  "source": "https://developers.openai.com/api/docs/pricing",
+  "modelSource": "",
+  "reviewedAt": "",
+  "expiresAt": "",
+  "acknowledged": false,
+  "immutableModelAcknowledged": false,
+  "contextWindowTokens": 0,
+  "modelMaxOutputTokens": 0,
+  "inputUSDPerMillion": 0,
+  "outputUSDPerMillion": 0,
+  "ancillaryUSDPerRequest": 0,
+  "highestApplicableTierAcknowledged": false,
+  "outputCapIncludesReasoning": false,
+  "responsesOutputCapSupported": false,
+  "allFeesIncludedAcknowledged": false
+}

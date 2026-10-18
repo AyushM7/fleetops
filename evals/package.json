@@ -7,6 +7,7 @@
     "node": "24.21.0"
   },
   "scripts": {
+    "agent07": "node scripts/agent07.mjs",
     "test": "vitest run",
     "benchmark": "node scripts/run.mjs",
     "typecheck": "tsc --noEmit"

@@ -1,0 +1,31 @@
+{
+  "version": "agent07-v1",
+  "mode": "offline-plan-only",
+  "trials": 2,
+  "maximumModelRequests": 12,
+  "maximumOutputTokens": 72000,
+  "maximumElapsedMs": 600000,
+  "proposalSubmission": false,
+  "testHarnessApprovals": false,
+  "automaticRetries": 0,
+  "maximumToolsPerTrial": 8,
+  "providerRequests": 0,
+  "estimatedMaximumUSD": null,
+  "maximumInputTokens": null,
+  "perRequestUSD": null,
+  "priceReviewSHA256": null,
+  "planSHA256": "af94dd336f59af3e918039ec2cb93fc02f28b16c58f4466d30485a2d45e39d75",
+  "datasetSHA256": "1c1824a719664f967edea577424914f876fdea8e48fb5fda9abfc06df8b9b57f",
+  "sourceDigest": "7c81b43e96b513e4bb4830ebb50aa748f2b4c70f64bc6f07f6100b459dc0ada8",
+  "sourceRevision": "a61faa1f512f39cd5d15c0c0833a05b6d709dfbc",
+  "selectedScenarios": [
+    "non-first-pickup",
+    "tradeoff-headroom"
+  ],
+  "requestedModel": null,
+  "provider": null,
+  "pricingCaveat": "Hash-reviewed operator acknowledgement, not a provider hard dollar cap. Actual billed cost requires authoritative evidence.",
+  "draft": true,
+  "authorization": false,
+  "note": "Two scenarios, one trial each. Model/provider/pricing/cost ceiling remain unselected. This offline planning envelope is not an approved live plan; a reviewed live plan must be generated before any authorization."
+}

@@ -554,3 +554,49 @@ P5-04 should evaluate authorized actual-model choices on these same Go-derived
 inputs, separately from the conditional benefit of an approved command, and
 consider broader seeds, workloads and persisted approval/audit measurements.
 No P5-04 work or real LLM test is included here.
+
+## AGENT-07: independent v2 investigation and outcomes
+
+AGENT-07 is a separate `agent07-v1` benchmark. The historical assisted 11/12
+OpenAI result and existing 17 synthetic decision cases retain their original
+meaning and are not pooled into independent model accuracy.
+
+From this directory, with Node 24 and existing dependencies installed:
+
+```powershell
+npm run agent07 -- --offline --output dist/agent07-tool.json
+npm run agent07 -- --plan --scenario non-first-pickup,tradeoff-headroom
+```
+
+Default offline mode executes scripted local Mastra responses and actual read
+tools against explicitly synthetic observations. Its Go admission, cost and
+simulator outcomes are unmeasured. It never contacts a model provider.
+
+For authenticated Go observations, persisted agent evidence and paired simulator
+outcomes, explicitly configure a disposable localhost PostgreSQL database using
+`FLEETOPS_TEST_DATABASE_URL` (database name starts with `fleetops_agent07` or
+`fleetops_test`) and a compatible cached Go executable via `FLEETOPS_EVAL_GO`:
+
+```powershell
+npm run agent07 -- --offline --go --test-harness-approvals --output dist/agent07-go.json
+```
+
+The harness uses production GraphQL, safety and persistence behind test-tagged
+fixtures. Its independent test operator is labeled **test-harness approval;
+NOT actual human approval**. No model receives approval/execution tools. Default
+submission is disabled. Unknown results are not retried.
+
+`--live` requires an exact reviewed OpenAI model, manually acknowledged current
+pricing/context/all-fee bounds, finite budget, approved price and plan hashes,
+explicit scenarios, isolated Go database and server-side key. CI/test modes
+block generation. No model is selected by default. `--live --plan` can produce
+a reviewed cost envelope without a key or inference; the blank
+`fixtures/agent07-price-review.template.json` intentionally fails validation.
+Budgeting reserves the entire six-request investigation, including full repeated
+context and output/reasoning tokens, rather than one request per scenario.
+
+See [the implementation report](../docs/agent-07-evaluation.md) for exact files,
+verification counts, fairness controls, limitations and the live dry-run review
+procedure. [The offline comparison](../docs/evidence/agent07/offline-comparison.md)
+contains individual and aggregate measured results. Real-model quality and billed
+cost remain unmeasured. Do not run a paid pilot until separately authorized.
