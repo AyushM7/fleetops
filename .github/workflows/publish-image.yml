@@ -1,0 +1,47 @@
+name: Publish production image
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ghcr-${{ github.repository }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'AyushM7/fleetops' && github.ref == 'refs/heads/main' && github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      DOCKER_CONFIG: ${{ runner.temp }}/fleetops-docker
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Create CI BuildKit builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx create --name fleetops-publisher --driver docker-container --use
+          docker buildx inspect --bootstrap
+      - name: Authenticate to GHCR
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Build and publish SHA image
+        shell: bash
+        run: bash deploy/pub03/publish-image.sh
+      - name: Remove registry session
+        if: always()
+        shell: bash
+        run: docker logout ghcr.io
