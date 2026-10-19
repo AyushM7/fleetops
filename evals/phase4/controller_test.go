@@ -30,12 +30,24 @@ type demoRun struct {
 
 // Read-only local-demo provenance. This never authorizes a command.
 type demoExplanation struct {
-	Generation  string            `json:"generation"`
-	RuntimeID   string            `json:"runtimeId"`
-	ScenarioID  string            `json:"scenarioId"`
-	ProposalID  string            `json:"proposalId"`
-	Observation *model.FleetState `json:"observation"`
+	Generation     string             `json:"generation"`
+	RuntimeID      string             `json:"runtimeId"`
+	ScenarioID     string             `json:"scenarioId"`
+	ProposalID     string             `json:"proposalId"`
+	ProposalSource demoProposalSource `json:"proposalSource"`
+	Observation    *model.FleetState  `json:"observation"`
 }
+
+type demoProposalSource string
+
+const (
+	demoSourceGoScripted demoProposalSource = "go-scripted"
+	demoSourceMastra     demoProposalSource = "mastra-deterministic"
+	demoSourceRecorded   demoProposalSource = "recorded-model"
+	demoSourceLive       demoProposalSource = "live-model"
+	demoSourceNone       demoProposalSource = "none"
+	demoSourceUnknown    demoProposalSource = "unknown"
+)
 
 type demoStatus struct {
 	ScenarioID string            `json:"scenarioId,omitempty"`

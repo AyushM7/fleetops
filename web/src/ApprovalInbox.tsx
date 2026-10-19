@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type JSX } from "react";
 import { decideProposal, fetchProposal, pollPending, ProposalError, type Decision, type DecisionResult, type InboxFeed, type InboxPolling, type Proposal } from "./proposals";
 import { isLocalDemo } from "./demo";
-import { Evidence, type EvidenceContext } from "./Evidence";
+import { Evidence, proposalSourceLabel, type EvidenceContext } from "./Evidence";
 
 export interface Receipt {
   id: string; decision: Decision; result: DecisionResult | null;
@@ -63,7 +63,7 @@ export function InboxView({ feed, busy, receipt, runtimeAvailable, decide, refre
     {evidenceContext && feed.phase === "ready" && feed.proposals.length === 0 && <Evidence context={evidenceContext} proposal={receipt?.latest ?? receipt?.proposal} />}
     {feed.phase !== "forbidden" && feed.proposals.length > 0 && <ul className="proposal-list">{feed.proposals.map(p => <li className="proposal-card" key={p.id} data-proposal-id={p.id}>
       <div className="proposal-summary"><div>{p.action === "reassign_unstarted_job" ? <><p className="action-label">Reassign uncollected job</p><h3>Job {p.jobId}: {p.fromRobotId} <span>→ {p.toRobotId}</span></h3><p>Approval does not complete delivery.</p></> : <><p className="action-label">Start charging in place</p><h3>{p.robotId} <span>→ {p.stationId}</span></h3><p>At the robot’s current station.</p></>}</div><span className="status">{p.state}</span></div>
-      <p className="rationale">{isLocalDemo() ? "Deterministic local adapter · not a live LLM." : "No rationale recorded"}</p>
+      <p className="rationale">{isLocalDemo() ? proposalSourceLabel(evidenceContext?.available && evidenceContext.evidence?.proposalId === p.id && evidenceContext.evidence.generation === evidenceContext.generation ? evidenceContext.evidence.proposalSource : undefined) : "No rationale recorded"}</p>
       {!p.currentRuntime && <p className="decision-error">Prior runtime; decisions are disabled.</p>}
       {Date.parse(p.expiresAt) <= Date.now() && <p className="decision-error">Expiration time has passed. Go will recheck expiration before deciding.</p>}
       <div className="proposal-actions"><button className="approve-button" disabled={!allowed || !p.currentRuntime || p.state !== "pending" || Date.parse(p.expiresAt) <= Date.now()} onClick={() => decide(p, "approve")}>{busy === p.id ? "Processing…" : "Approve"}</button><button className="reject-button" disabled={!allowed || !p.currentRuntime || p.state !== "pending" || Date.parse(p.expiresAt) <= Date.now()} onClick={() => decide(p, "reject")}>Reject</button><span>Human decision required · Go revalidates before execution</span></div>
@@ -74,7 +74,7 @@ export function InboxView({ feed, busy, receipt, runtimeAvailable, decide, refre
         <code>{p.id}</code>
         <p className="proposal-meta">Submitted by {p.submittedBy || "Not recorded"} · Expires {new Date(p.expiresAt).toLocaleString()}</p>
         <p>Go rechecks authorization, current runtime, expiration and safety before execution. Compare proposal parameters with current fleet telemetry.</p>
-        {isLocalDemo() && <p>The recommendation uses scripted demo facts. No model-written rationale is recorded.</p>}
+        {isLocalDemo() && <p>No model-written rationale is inferred from proposal parameters. See the server-classified source when available.</p>}
       </details>
     </li>)}</ul>}
     {feed.proposals.length === 50 && <p className="inbox-message">The 50-result limit has been reached. Resolve proposals and refresh to see additional pending requests.</p>}

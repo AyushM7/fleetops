@@ -10,9 +10,10 @@ import type { Proposal } from "./proposals";
 const rows = JSON.parse(observations);
 const generation = "a".repeat(64);
 const p: Proposal = { id: "P-example", action: "reassign_unstarted_job", robotId: "", stationId: "", jobId: "J1", fromRobotId: "R1", toRobotId: "R3", state: "pending", execution: "none", submittedBy: "proposer", currentRuntime: true, createdAt: "2026-10-17T12:00:00Z", expiresAt: "2030-10-17T12:00:00Z" };
-function context(index = 0): EvidenceContext {
+function context(index = 0, proposalSource: unknown = "go-scripted"): EvidenceContext {
   const row = rows[index];
-  const evidence = parseEvidence({ generation, runtimeId: row.runtimeId, scenarioId: row.id, proposalId: index === 0 || index === 2 ? p.id : "", observation: row.snapshot },generation,row.id);
+  const source = index === 0 || index === 2 || proposalSource !== "go-scripted" ? proposalSource : "none";
+  const evidence = parseEvidence({ generation, runtimeId: row.runtimeId, scenarioId: row.id, proposalId: index === 0 || index === 2 ? p.id : "", proposalSource: source, observation: row.snapshot },generation,row.id);
   return { generation, scenarioId: row.id, evidence, current: row.snapshot, available: true };
 }
 const html = (c: EvidenceContext, proposal?: Proposal) => renderToString(<Evidence context={c} proposal={proposal} />).replace(/<!--.*?-->/g,"");
@@ -20,7 +21,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 it("grounds evidence in actual Go values and separates all seven stages", () => {
   const output = html(context(),p);
-  for (const text of ["traffic_blocked (high) at tick 42", "battery 100%", "waiting 42 ticks", "battery 98%", "position (4, 3)", "owner R1", "ReassignUnstartedJob", "J1", "R1 → R3", "The obstruction remains", "strict reasoning schema", "revalidated", "Independent operator approval", "No execution recorded", "No live LLM"]) expect(output).toContain(text);
+  for (const text of ["traffic_blocked (high) at tick 42", "battery 100%", "waiting 42 ticks", "battery 98%", "position (4, 3)", "owner R1", "ReassignUnstartedJob", "J1", "R1 → R3", "The obstruction remains", "No model inference", "revalidated", "Independent operator approval", "No execution recorded"]) expect(output).toContain(text);
   for (const stage of ["Go observation / classification", "Recommendation source", "Host grounding / policy", "Proposal / Go validation", "Human decision", "Recorded Go execution", "Observed simulator outcome"]) expect(output).toContain(stage);
   expect(output).not.toContain("GPT"); expect(output).not.toContain("confidence");
 });
@@ -89,9 +90,9 @@ it.each([0, 1, 2, 3])("keeps preset %i deterministic and rejects previous-genera
   const proposal = index === 0 ? p : index === 2 ? { ...p, action: "set_charging" as const,
     jobId: "", fromRobotId: "", toRobotId: "", robotId: "R1", stationId: "S1" } : undefined;
   const current = html(c, proposal);
-  expect(current).toContain("Deterministic presentation · No live LLM");
+  expect(current).toContain(index === 0 || index === 2 ? "Go-scripted preset · No model inference" : "No proposal source invoked");
   expect(current).not.toMatch(/live OpenAI inference|GPT-powered|GPT-6|completed model analysis/i);
-  expect(current).toContain(index === 0 || index === 2 ? "Deterministic local Mastra adapter; no paid model inference" : "No adapter or model invoked");
+  expect(current).toContain(index === 0 || index === 2 ? "No Mastra adapter or model was invoked" : "No adapter or model invoked");
   const nextGeneration = "b".repeat(64);
   const retired = html({ ...c, generation: nextGeneration }, proposal);
   expect(retired).toContain("Evidence unavailable or stale");
@@ -100,5 +101,33 @@ it.each([0, 1, 2, 3])("keeps preset %i deterministic and rejects previous-genera
   const fresh = parseEvidence({ ...c.evidence, generation: nextGeneration, runtimeId: `P${"b".repeat(32)}` }, nextGeneration, c.scenarioId);
   const replacement = html({ ...c, generation: nextGeneration, evidence: fresh }, proposal);
   expect(replacement).toContain("Original Go observation");
-  expect(replacement).toContain("No live LLM");
+  expect(replacement).toContain(index === 0 || index === 2 ? "No model inference" : "No proposal source invoked");
+});
+
+it.each([
+  ["go-scripted", "Go-scripted preset · No model inference"],
+  ["mastra-deterministic", "Deterministic Mastra adapter · No live LLM"],
+  ["recorded-model", "Recorded model result · No live inference for this run"],
+  ["live-model", "Live-model result · Provider identity not independently verified"],
+])("renders the server-classified source %s without inventing another source", (source, label) => {
+  const output = html(context(0, source), p);
+  expect(output).toContain(label);
+  if (source === "mastra-deterministic") expect(output).toContain("passed the strict reasoning schema");
+  else {
+    expect(output).not.toContain("Deterministic local Mastra adapter");
+    expect(output).not.toContain("passed the strict reasoning schema");
+  }
+});
+
+it.each([undefined, null, "invented", "none", { source: "live-model" }])("keeps missing or unknown provenance unavailable: %j", source => {
+  const c = context(0, source === undefined ? "unknown" : source);
+  if (source === undefined) {
+    const raw = { ...c.evidence }; delete (raw as Partial<typeof raw>).proposalSource;
+    c.evidence = parseEvidence(raw, generation, c.scenarioId);
+  }
+  const output = html(c, p);
+  expect(output).toContain("Proposal source unavailable");
+  expect(output).not.toContain("Deterministic local Mastra adapter");
+  expect(output).not.toContain("Live-model result");
+  expect(output).not.toContain("passed the strict reasoning schema");
 });

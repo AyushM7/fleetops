@@ -26,10 +26,24 @@ import (
 )
 
 type demoFactory struct {
-	pool              *db.Pool
-	auth              *auth.Authenticator
-	tokens            map[string]string
-	root, evidenceDir string
+	pool                             *db.Pool
+	auth                             *auth.Authenticator
+	tokens                           map[string]string
+	root, evidenceDir                string
+	proposerSubject, operatorSubject string
+	proposeRuntime                   func(context.Context, http.Handler, string) (string, error)
+	modelMode                        string
+	proposalSource                   demoProposalSource
+}
+
+func (f demoFactory) subject(role string) string {
+	if role == "proposer" && f.proposerSubject != "" {
+		return f.proposerSubject
+	}
+	if role == "operator" && f.operatorSubject != "" {
+		return f.operatorSubject
+	}
+	return role
 }
 
 type demoScenario struct {
@@ -63,7 +77,22 @@ func (f demoFactory) createScenario(ctx context.Context, id string) (*demoRun, e
 	return &demoRun{scenarioID: id, generation: scenario.generation, handler: handler, capture: scenario.capture, advance: scenario.advance,
 		inspect: scenario.inspect, step: func(context.Context) error { return scenario.service.Tick() },
 		evidence: &demoExplanation{Generation: scenario.generation, RuntimeID: scenario.runtimeID, ScenarioID: id,
-			ProposalID: scenario.evidence.ProposalID, Observation: observation}}, nil
+			ProposalID: scenario.evidence.ProposalID, ProposalSource: f.source(scenario.evidence.ProposalID), Observation: observation}}, nil
+}
+
+func (f demoFactory) source(proposalID string) demoProposalSource {
+	if proposalID == "" {
+		return demoSourceNone
+	}
+	if f.proposalSource == "" && f.proposeRuntime == nil {
+		return demoSourceMastra
+	}
+	switch f.proposalSource {
+	case demoSourceGoScripted, demoSourceMastra, demoSourceRecorded, demoSourceLive:
+		return f.proposalSource
+	default:
+		return demoSourceUnknown
+	}
 }
 
 func (f demoFactory) prepareScenario(id string) (*demoScenario, error) {
@@ -81,6 +110,9 @@ func (f demoFactory) prepareScenario(id string) (*demoScenario, error) {
 			return nil, err
 		}
 		evidence.ScenarioID = id
+	}
+	if f.modelMode != "" {
+		evidence.ModelMode = f.modelMode
 	}
 	scenario := &demoScenario{factory: f, service: service, generation: demoRandom(), evidence: evidence}
 	scenario.dir = filepath.Join(f.evidenceDir, scenario.generation)
@@ -120,11 +152,11 @@ func (s *demoScenario) prepareProposal(ctx context.Context, handler http.Handler
 
 func (s *demoScenario) verifySubmission(ctx context.Context) error {
 	var runtime string
-	if err := s.factory.pool.QueryRow(ctx, `SELECT runtime_id FROM fleet_proposals WHERE id=$1 AND state='pending' AND execution='none' AND submitted_by='proposer'`, s.evidence.ProposalID).Scan(&runtime); err != nil {
+	if err := s.factory.pool.QueryRow(ctx, `SELECT runtime_id FROM fleet_proposals WHERE id=$1 AND state='pending' AND execution='none' AND submitted_by=$2`, s.evidence.ProposalID, s.factory.subject("proposer")).Scan(&runtime); err != nil {
 		return err
 	}
 	var audits int
-	if err := s.factory.pool.QueryRow(ctx, `SELECT count(*) FROM fleet_audit WHERE proposal_id=$1 AND attempt='create' AND accepted AND operator_subject='proposer'`, s.evidence.ProposalID).Scan(&audits); err != nil || audits != 1 || runtime != s.runtimeID {
+	if err := s.factory.pool.QueryRow(ctx, `SELECT count(*) FROM fleet_audit WHERE proposal_id=$1 AND attempt='create' AND accepted AND operator_subject=$2`, s.evidence.ProposalID, s.factory.subject("proposer")).Scan(&audits); err != nil || audits != 1 || runtime != s.runtimeID {
 		return errors.New("committed proposer audit or runtime not confirmed")
 	}
 	return nil
@@ -163,6 +195,9 @@ func demoBaseline(initial sim.State) (demoEvidence, error) {
 }
 
 func (f demoFactory) propose(ctx context.Context, handler http.Handler, dir string) (string, error) {
+	if f.proposeRuntime != nil {
+		return f.proposeRuntime(ctx, handler, dir)
+	}
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	server := httptest.NewServer(handler)
@@ -245,7 +280,7 @@ func (s *demoScenario) verifyRecovery(ctx context.Context) error {
 		return errors.New("recovery did not match verified outcome")
 	}
 	var approved, executed int
-	if err := s.factory.pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE attempt='approve'),count(*) FILTER (WHERE attempt='execute') FROM fleet_audit WHERE proposal_id=$1 AND accepted AND operator_subject='operator'`, s.evidence.ProposalID).Scan(&approved, &executed); err != nil || approved != 1 || executed != 1 {
+	if err := s.factory.pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE attempt='approve'),count(*) FILTER (WHERE attempt='execute') FROM fleet_audit WHERE proposal_id=$1 AND accepted AND operator_subject=$2`, s.evidence.ProposalID, s.factory.subject("operator")).Scan(&approved, &executed); err != nil || approved != 1 || executed != 1 {
 		return errors.New("independent committed approval/execution audits not confirmed")
 	}
 	return nil

@@ -3,13 +3,17 @@ import { parseSnapshot, type FleetSnapshot, type Robot } from "./fleet";
 import type { Proposal } from "./proposals";
 import { isScenarioID, type ScenarioID } from "./scenarios";
 
+export type ProposalSource = "go-scripted" | "mastra-deterministic" | "recorded-model" | "live-model" | "none" | "unknown";
 export interface ExplanationEvidence {
-  generation: string; runtimeId: string; scenarioId: ScenarioID; proposalId: string; observation: FleetSnapshot;
+  generation: string; runtimeId: string; scenarioId: ScenarioID; proposalId: string; proposalSource: ProposalSource; observation: FleetSnapshot;
 }
 export interface EvidenceContext {
   generation: string; scenarioId?: ScenarioID; evidence?: ExplanationEvidence; current: FleetSnapshot | null; available: boolean;
 }
 const record = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
+function proposalSource(value: unknown): ProposalSource {
+  return value === "go-scripted" || value === "mastra-deterministic" || value === "recorded-model" || value === "live-model" || value === "none" ? value : "unknown";
+}
 export function parseEvidence(raw: unknown, generation: string, scenario: ScenarioID | undefined): ExplanationEvidence {
   if (!record(raw) || raw.generation !== generation || raw.scenarioId !== scenario || !isScenarioID(raw.scenarioId) ||
       typeof raw.runtimeId !== "string" || !/^P[a-f0-9]{32}$/.test(raw.runtimeId) || typeof raw.proposalId !== "string") throw new Error("Evidence identity unavailable.");
@@ -28,9 +32,39 @@ export function parseEvidence(raw: unknown, generation: string, scenario: Scenar
         !observation.robots.some(r => r.id === c.toRobotId && r.status === "idle" && r.jobId === "" && r.battery >= Math.max(30, c.requiredBattery))) throw new Error("Candidate evidence invalid.");
     seen.add(identity);
   }
-  return { generation, scenarioId: raw.scenarioId, runtimeId: raw.runtimeId, proposalId: raw.proposalId, observation };
+  const source = proposalSource(raw.proposalSource);
+  return { generation, scenarioId: raw.scenarioId, runtimeId: raw.runtimeId, proposalId: raw.proposalId, proposalSource: raw.proposalId !== "" && source === "none" ? "unknown" : source, observation };
 }
+
+const sourceText: Record<ProposalSource, { label: string; source: string; policy: string }> = {
+  "go-scripted": {
+    label: "Go-scripted preset · No model inference",
+    source: "Fixed Go-scripted preset. No Mastra adapter or model was invoked. This explanation is host-authored from Go evidence.",
+    policy: "Go admitted the preset submission against its observation. No model reasoning schema, model grounding checks or model statement policy were evaluated.",
+  },
+  "mastra-deterministic": {
+    label: "Deterministic Mastra adapter · No live LLM",
+    source: "Deterministic local Mastra adapter; no paid model inference. The explanation shown here is host-authored from Go evidence.",
+    policy: "The local adapter passed the strict reasoning schema, exact telemetry/reference checks, bounded statement policy and fresh-snapshot check before submission.",
+  },
+  "recorded-model": {
+    label: "Recorded model result · No live inference for this run",
+    source: "Recorded model result identified by the server. The recording is not a new model invocation or independent proof of provider identity.",
+    policy: "Go admission is separate from recorded model output. This display does not establish which model validation steps were performed.",
+  },
+  "live-model": {
+    label: "Live-model result · Provider identity not independently verified",
+    source: "Live-model result identified by the server. This display does not independently verify provider identity or model-reported provenance.",
+    policy: "Go admission is separate from model output. Model-specific validation claims require their own evidence.",
+  },
+  none: { label: "No proposal source invoked", source: "No adapter or model invoked for this preset. No supported proposal was submitted at startup.", policy: "No model output to validate." },
+  unknown: { label: "Proposal source unavailable", source: "Proposal source is missing or unknown. Mastra or model provenance cannot be established.", policy: "Only the displayed Go evidence can be assessed. No model validation history is established." },
+};
 const telemetry = (r: Robot): string => `${r.id}: ${r.status}, battery ${r.battery}%, position (${r.x}, ${r.y}), job ${r.jobId || "none"}, waiting ${r.waitTicks} ticks, blocked ${r.blocked ? "yes" : "no"}.`;
+
+export function proposalSourceLabel(source: ProposalSource | undefined): string {
+  return sourceText[source ?? "unknown"].label;
+}
 
 function matchesProposal(s: FleetSnapshot, p: Proposal): boolean {
   if (p.action === "reassign_unstarted_job") return s.reassignmentCandidates?.some(c => c.jobId === p.jobId && c.fromRobotId === p.fromRobotId && c.toRobotId === p.toRobotId) === true;
@@ -68,14 +102,15 @@ export function Evidence({ context: c, proposal }: { context: EvidenceContext; p
   if (!verified || !e || !c.current) return <p className="inbox-message decision-error" role="status">Evidence unavailable or stale. Current reasoning cannot be verified; prior observations do not authorize this run.</p>;
   const s = e.observation;
   const noAction = !proposal;
+  const provenance = sourceText[e.proposalSource];
   return <>{noAction && <p className="inbox-message">{s.activeIncidents.length ? `Operator attention: no eligible recovery proposal at startup (Go tick ${s.tick}). Eligibility may change later.` : "No recovery recommendation needed at startup. Observe normal simulator activity."}</p>}<details className="reasoning-evidence"><summary>Evidence &amp; reasoning</summary>
-    <p className="evidence-label">Deterministic presentation · No live LLM</p>
+    <p className="evidence-label">{provenance.label}</p>
     <p>Original Go observation · tick {s.tick}. Current Go telemetry · tick {c.current.tick}.</p>
     {s.tick !== c.current.tick && <p>Original evidence is historical within this run; it is not current authorization. No new analysis is performed as time advances.</p>}
     <dl className="reasoning-stages">
       <div><dt>Go observation / classification</dt><dd>{s.activeIncidents.length ? s.activeIncidents.map(i => <p key={`${i.robotId}:${i.type}`}>{i.robotId}: {i.type} ({i.severity}) at tick {s.tick}. {telemetry(i.telemetry)}</p>) : "No Go-classified incidents at the original observation."}</dd></div>
-      <div><dt>Recommendation source</dt><dd>{noAction ? "No adapter or model invoked for this preset. No supported proposal was submitted at startup." : "Deterministic local Mastra adapter; no paid model inference. The explanation shown here is host-authored from Go evidence."}</dd></div>
-      <div><dt>Host grounding / policy</dt><dd>{noAction ? "No model output to validate." : "The local adapter passed the strict reasoning schema, exact telemetry/reference checks, bounded statement policy and fresh-snapshot check before submission."}</dd></div>
+      <div><dt>Recommendation source</dt><dd>{provenance.source}</dd></div>
+      <div><dt>Host grounding / policy</dt><dd>{provenance.policy}</dd></div>
     </dl>
     {proposal ? <ActionEvidence observation={s} proposal={proposal} /> : <p>{s.activeIncidents.length
       ? `Operator attention required. Go admitted ${s.reassignmentCandidates?.length ?? 0} transfer candidates at tick ${s.tick}. No eligible recovery proposal is available at startup. Eligibility may change as simulation advances; this preset does not resubmit automatically.`
