@@ -1,88 +1,118 @@
 # FleetOps
 
-AI-assisted warehouse fleet operations, built around a deterministic Go simulator and a human approval boundary.
+**AI-assisted warehouse robot fleet management, with deterministic simulation and human-controlled recovery.**
 
-When a robot blocks an aisle or holds an unfinished job, an explanation alone does not restore progress. FleetOps connects observed conditions to bounded recovery proposals, operator review, validated execution and measurable simulator outcomes.
+FleetOps connects robot telemetry and incident detection to bounded response proposals, operational safety checks, operator review, and audited execution. It combines a Go fleet simulator, a TypeScript/Mastra agent, and a React dashboard to make each step from recommendation to outcome inspectable.
 
 **LLM proposes. Go validates. Human approves. Go executes.**
 
-- **Observe:** a React dashboard shows warehouse state, telemetry, active incidents and job progress from Go snapshots.
-- **Recommend:** a TypeScript/Mastra agent produces grounded explanations and can submit a pending proposal for charging in place or transferring an uncollected job.
-- **Review:** an independent operator approves or rejects; Go revalidates before execution and records domain attempts in PostgreSQL.
-- **Measure:** separate evaluations test recommendation quality, adversarial rejection and paired simulator recovery.
+## Live demo
 
-**Recorded evidence:** 11/12 real-model decision trials passed; host validation rejected the remaining poisoned-runtime recommendation. In a separate Go experiment, reassignment delivered a blocked job in three ticks while the baseline remained unfinished after 200 ticks. These are historical, scoped results, not live dashboard metrics or a general reliability claim.
+**[Open the public visitor demo →](https://fleetops-ai.duckdns.org)**
 
-## Architecture and stack
+The public demo uses **Go-scripted incident proposals, with no live model calls**. Real-model reasoning was evaluated separately using the Mastra agent; the recorded results appear below.
 
-```text
-Go simulator -> telemetry + Go-classified conditions -> Mastra reasoning
-                                                         | pending proposal
-React operator review -> authenticated GraphQL -> Go fleet service -> simulator command
-                                                        |
-                                           PostgreSQL proposals + audit attempts
+When available, open the demo to start an isolated visitor session:
+
+1. Choose **Blocked job recovery**, **Routine charging**, **Healthy fleet operations**, or **No eligible recovery**.
+2. Inspect the warehouse map, robot telemetry, incident evidence, and any pending proposal.
+3. Approve or reject a proposal as the operator, then advance the simulation to observe the result. Transferring a job and delivering it are separate events.
+4. Switch scenarios or restart for a fresh run. Sessions expire after 20 minutes; each visitor has separate simulation state, database schema, and proposer/operator identities.
+
+[Features](#features) · [Architecture](#architecture) · [Safety](#safety-and-human-approval) · [Evaluations](#evaluations-and-measured-results) · [Getting started](#getting-started) · [Limitations](#limitations-and-future-work)
+
+## Features
+
+- **Deterministic warehouse simulation:** seeded ticks, robot telemetry, job scheduling, battery and charging dynamics, A* pathfinding, and bounded traffic recovery.
+- **Incident response:** Go-classified conditions and eligible recovery candidates, with TypeScript/Mastra observation, investigation, and structured recommendation workflows.
+- **Controlled execution:** deterministic Go validation, independent operator approval, and execution-time revalidation for charging in place and transferring an uncollected job.
+- **Authenticated GraphQL API:** role-scoped reads, proposal submission, and operator decisions, backed by PostgreSQL proposal and audit records.
+- **React operator dashboard:** warehouse map, fleet/job views, incidents, agent activity, approval inbox, and simulation controls.
+- **Isolated visitor sessions:** server-owned scenario presets, private runtime resources, bounded session lifetimes, and evidence archival.
+- **Reproducible evaluations:** labelled decision scenarios, saved model-response replay, adversarial contract probes, and paired simulator recovery experiments.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    UI[React operator dashboard] -->|Authenticated reads and decisions| API[GraphQL API]
+    PRESET[Public visitor presets: Go-scripted proposals] -->|Separate proposer identity| API
+    AGENT[TypeScript / Mastra agent integration] <-->|Observations and proposal tools| API
+    MODEL[Separate real-model evaluation] --> EVAL[Mastra generation and TypeScript host validation]
+    EVAL --> RESULT[Scored recommendations: no submission or execution]
+    API --> SERVICE[Go fleet service]
+    SERVICE <-->|Snapshots and serialized ticks| SIM[Deterministic Go simulator]
+    SERVICE --> VALIDATE[Go proposal validation]
+    VALIDATE --> PENDING[Pending proposal]
+    PENDING --> REVIEW[Independent human review in dashboard]
+    REVIEW -->|Decision through GraphQL| GATE[Go authorization and execution revalidation]
+    GATE -->|Approved and still eligible| COMMAND[Bounded simulator command]
+    COMMAND --> SIM
+    SERVICE <-->|Proposals and audit attempts| DB[(PostgreSQL)]
 ```
 
-The fleet service owns the simulator and serializes ticks, submissions and decisions with one mutex. The agent has observation/proposal tools, with no approval, execution, ticking or fault-injection tools. PostgreSQL persists workflow records; running simulator state stays in memory.
+The diagram separates proposal sources; the visitor server does not invoke Mastra or a model. The live-model evaluation harness exercises recommendation generation and TypeScript host validation without submitting proposals or executing commands. The agent integration can read fleet state and submit proposals through GraphQL, but has no approval, execution, ticking, or fault-injection tools.
 
-| Layer | Technology and responsibility |
+The Go fleet service owns the simulator and serializes state access, submissions, and decisions. PostgreSQL stores workflow records; simulator state remains in memory. Each public visitor receives a separate service/runtime and private schema.
+
+See the [architecture reference](docs/architecture.md), [engineering decisions](docs/decisions.md), and [visitor isolation and security](docs/pub-02.md). Historical sections retain their original scope; the current visitor entry point is [server application wiring](backend/cmd/server/application.go).
+
+## Technology stack
+
+| Layer | Technologies |
 | --- | --- |
-| Simulation | Go 1.27.1; seeded ticks, A* routing, dispatch, battery/charging and bounded recovery |
-| Service/API | Go, gqlgen GraphQL, trusted bearer identities, admission and execution checks |
-| Persistence | PostgreSQL 18.6, pgx, migrations and transactional proposal/audit records |
-| Reasoning | TypeScript, Mastra, Zod; snapshot grounding and bounded statement validation |
-| Operator UI | React 19, TypeScript, Vite, SVG map and approval inbox |
-| Verification | Go tests/race checks, Vitest, strict TypeScript checks and paired recovery harnesses |
+| Simulation and service | Go, deterministic grid simulation, A* routing |
+| API and persistence | gqlgen GraphQL, PostgreSQL, pgx |
+| Agent | TypeScript, Mastra, Zod |
+| Operator interface | React, TypeScript, Vite, SVG warehouse map |
+| Testing | Go tests and race checks, Vitest, TypeScript checks |
+| Packaging and delivery | Docker / Docker Compose, GitHub Actions, GHCR |
+| Hosting configuration | AWS Lightsail target, Caddy reverse proxy / HTTPS |
 
-See [architecture](docs/architecture.md) and [engineering decisions](docs/decisions.md).
+The repository includes an image publishing workflow and Lightsail deployment configuration. These files do not establish the current health of the public service; see the [deployment runbook](docs/pub-03.md).
 
 ## Safety and human approval
 
-Submission creates a pending proposal without executing it. The service checks trusted identity, canonical parameters, runtime ownership and expiry; submitter and approving operator must be independent. Approval triggers another Go preflight immediately before the command. Checks include robot health, the 30% battery floor, job ownership and station/route eligibility. Rejection or expiry cannot execute a command.
+An AI recommendation never directly becomes an executed command. The system separates four responsibilities:
 
-Only `SetCharging` (already at a station) and `ReassignUnstartedJob` are supported operator commands. Successful reassignment means ownership transferred; delivery requires subsequent simulator ticks. It does not repair the obstructing robot.
+1. **Propose:** the reasoning host checks structured output against observed facts and allowed statements. Go validates identity, canonical parameters, runtime ownership, expiry, and operational eligibility before admitting a pending proposal.
+2. **Review:** an authenticated operator independently approves or rejects. The proposer cannot approve its own proposal.
+3. **Revalidate and execute:** immediately before execution, Go checks authorization and current safety conditions again, including robot health, the 30% battery floor, job ownership, and relevant station/route eligibility.
+4. **Record:** PostgreSQL stores proposal lifecycle and domain audit attempts, distinguishing rejection, command outcome, and committed evidence.
 
-Simulator memory and SQL commits cannot roll back together. Persistence uncertainty poisons the runtime and stops further ticks/mutations pending reconciliation. Clients retain unknown outcomes rather than automatically retrying. Domain audit records are not a complete HTTP access log, and failed database writes cannot be advertised as durable evidence. The [frozen safety rules](docs/safety-rules.md) remain authoritative.
+The supported operator commands are `SetCharging` for a robot already at a station and `ReassignUnstartedJob` for a job not yet collected. Reassignment transfers ownership; later simulator ticks determine delivery. It does not repair the obstructing robot. Background scheduling and automatic charging are simulator dynamics, separate from operator commands.
 
-## Evaluation evidence
+Simulator memory and SQL commits cannot be rolled back atomically. Persistence uncertainty poisons the runtime and stops further ticks/mutations pending reconciliation; clients retain unknown outcomes instead of automatically retrying. Failed database writes cannot guarantee durable audit records, and domain audits are not a complete HTTP access log.
 
-These results come from the [Phase 5 report](docs/phase5-evaluation-report.md) and [saved real-model artifact](docs/evidence/p5-04-live-full.json). They were not regenerated for this README.
+See the [safety rules](docs/safety-rules.md) and [proposal lifecycle implementation](backend/fleet/README.md).
 
-| Evaluation | Recorded result | Scope |
+## Evaluations and measured results
+
+These are **recorded, scoped results**, verified against the [evaluation report](docs/phase5-evaluation-report.md) and [saved real-model responses](docs/evidence/p5-04-live-full.json). They measure different layers of the system:
+
+| Measurement | Supported result | What it establishes |
 | --- | --- | --- |
-| OpenAI `gpt-6-luna` | **11/12** recommendation/host passes; 12/12 completed calls | One trial per selected fixture/synthetic scenario |
-| Poisoned runtime | Model proposed reassignment despite required abstention; TypeScript host rejected it | No submission or Go execution was reached |
-| Adversarial contracts | **16/16** bad outputs rejected after remediation; **4/4** deterministic input defenses passed | Input attacks used a local adapter; no live adversarial trials |
-| Mastra local adapter | **12/12** decisions passed | Deterministic integration, without a live LLM |
-| Paired Go recovery | **5/5 experiment criteria** | Two command successes, three no-intervention controls; one delivery improvement |
+| Labelled decision dataset | **12 scenarios** | Selected fixture and synthetic cases covering supported actions and abstention |
+| Real-model recommendations | **11/12 passed**, one trial per scenario | Recommendation/scoring and host acceptance on this small sample; no submission or execution |
+| Failed recommendation | Poisoned-runtime reassignment rejected by the TypeScript host | The model proposed an action where abstention was required; the request never reached Go execution |
+| Adversarial output contracts | **16/16 rejected** after fixing two grounding gaps | Tested false approval/delivery claims and other invalid outputs were rejected; not general prompt-injection resistance |
+| Paired Go recovery | Blocked job delivered **three ticks after intervention**; baseline unfinished across **200 observation ticks** | A controlled simulator outcome following validated reassignment and test-supplied approval |
 
-The model receives a deterministic **supported-action hint** and allowed statements. This measures assisted contract compliance, not independent incident diagnosis or action discovery. Twelve non-random cases with one trial each are a small sample, with no generalization or variability estimate. Phase 5 model runs did not exercise human approval, GraphQL execution or PostgreSQL audits; [Phase 4 acceptance](docs/phase4-acceptance.md) records a separate end-to-end demonstration.
+The recovery experiment starts at tick 42 with seed 42: treatment delivers J1 at tick 45, while baseline J1 remains unfinished at tick 242. Five experiment criteria passed overall: two successful commands and three no-intervention controls, with one delivery improvement. The harness uses a trusted test operator; it does not measure human response time or an end-to-end live-model intervention.
 
-### Measured simulator outcomes
+The model prompt includes a deterministic supported-action hint and exact allowed statements. These results measure assisted contract compliance rather than autonomous incident diagnosis. Twelve non-random cases with one trial each do not establish general production reliability. The unfinished baseline does not support a percentage speedup or a broad throughput claim. Adversarial input defenses used a deterministic adapter, not a live model.
 
-Each Phase 5 pair uses seed 42, equal initial state and a 200-tick observation window, with a trusted test operator rather than a human reviewer.
+For methodology, denominators, evidence provenance, and replay commands, see the [detailed report](docs/phase5-evaluation-report.md) and [evaluation guide](evals/README.md).
 
-- **Blocked job:** baseline J1 remained unfinished at tick 242; reassignment at tick 42 delivered J1 at tick 45. Treatment added one completed job and removed 200 blocked-robot post-tick samples, using 13 more aggregate stored battery percentage-points.
-- **Routine charging:** R1 ended at 91% versus 40% baseline battery, a 51-point gain; no competing jobs or throughput improvement were measured.
-- **Three controls:** no eligible recipient, offline source and healthy fleet produced no command and identical paired final states.
+## Getting started
 
-Ticks are simulation steps; battery percentage-points are not kWh. An unfinished baseline cannot support a percentage speedup. Five passing criteria are not five successful recoveries.
+### Public visitor demo
 
-## Engineering iteration
+Use the [public URL](https://fleetops-ai.duckdns.org) when accessible. No local installation or model API key is needed. Visitor proposals are scripted in Go.
 
-| Decision | Reason and lesson |
-| --- | --- |
-| Deterministic simulation | Seeded RNG, ordered processing and replay checks permit reproducible regressions and equal baseline/treatment comparisons, trading physical realism for inspectable experiments. |
-| Safety in Go | Grounded text can still recommend the wrong action, as the poisoned-runtime failure shows. The reasoning host checks its contract; Go owns operational admission and execution. |
-| Independent human approval | A recommendation does not authorize a command. Canonical pending proposals, independent identities and repeated preflight preserve review as state changes. |
-| Constrained explanations | Initial adversarial checks rejected only 14/16 outputs: false approval and delivery claims passed grounding. Exact host-supplied statements closed those probes, at the cost of rejecting some truthful paraphrases. |
-| Separate evidence layers | Correct recommendations, accepted commands, delivery and committed audits require different evidence; the reports keep those measurements separate. |
+### Local scripted demo
 
-Phases 0–2 established repository and deterministic simulation/navigation foundations. Phase 3 added the safety/proposal boundary; Phase 4 connected persistence, GraphQL, Mastra and operator review. Phase 5 added decision, adversarial and paired recovery evaluation. Phase 6 began with the local demo gateway and repository inventory; the dashboard redesign and richer controls remain unfinished. Historical simulator acceptance limitations remain in [known limitations](docs/known-limitations.md).
-
-## Local demo quickstart
-
-Use PowerShell 7, Docker, Node **24.21.0** and Go **1.27.1**. From the repository root:
+Prerequisites: **PowerShell 7**, **Node.js 24.21.0**, **Go 1.27.1**, and a running **Docker** engine able to run PostgreSQL 18.6. From the repository root:
 
 ```powershell
 npm ci --prefix agent
@@ -90,54 +120,47 @@ npm ci --prefix web
 pwsh -NoProfile -File evals/phase4/start-demo.ps1 -LocalDemo -Submit
 ```
 
-The launcher builds both apps and creates its own temporary backend test copy and ephemeral PostgreSQL container. Open the loopback URL printed after `READY`. No API key is needed: **the ordinary demo uses deterministic Mastra reasoning, not a live LLM**. Its gateway gives browser sessions a shared demo operator identity and must stay local.
+The launcher builds the agent and dashboard, creates a temporary backend test copy and PostgreSQL container, and prints a loopback URL after `READY`. It uses a **deterministic Mastra adapter**, requires **no model API key**, and submits a pending proposal without approving it. This local test harness uses a shared demo operator identity; it differs from the isolated public visitor server.
 
-### Demo walkthrough
-
-1. At tick 42, inspect blocked R1 and uncollected J1 in the warehouse and approval inbox.
-2. Review the pending R1 → R3 reassignment. As the human operator, click **Approve** once, or reject without executing.
-3. Distinguish the transfer receipt from delivery. After approval, scripted ticks show delivery at tick 45, then compare with the untouched baseline at tick 242.
-4. Inspect generated evidence and committed audits using the [full demo guide](docs/phase4-demo.md). Recorded reports are historical evidence; only a newly observed session establishes that session's outcome.
-
-Stop gracefully from another terminal:
+Inspect the blocked job, approve or reject the transfer, then advance time to distinguish transfer from delivery. Stop gracefully from a second terminal at the repository root:
 
 ```powershell
 New-Item evals/dist/p405/stop -ItemType File -Force | Out-Null
 ```
 
-The launcher removes its temporary infrastructure. Preserve sanitized evidence before another run overwrites it. See the guide for rejection, expiry, outages and cleanup. Real screenshots and a recorded walkthrough will follow dashboard completion and verification; these steps describe the existing interface.
+The launcher cleans up temporary infrastructure after a successful shutdown; failures retain resources for investigation. See the [local demo guide](docs/phase4-demo.md) for evidence, failure handling, and cleanup. To run the normal isolated visitor server instead, follow the [visitor server configuration](docs/pub-02.md); production requires separate HTTPS, database, and evidence-storage setup.
 
-## Isolated visitor server (PUB-02)
+### Evaluation workflow
 
-The normal Go application now serves isolated visitors using the four fixed
-PUB-01 presets. Each visitor owns a simulator, private PostgreSQL schema and
-independent proposer/operator identities. Preset proposals are Go-scripted;
-this path invokes no Mastra adapter or model. Approval remains an explicit human
-action through the existing Go validation and authorization gates.
+Install the evaluation dependencies, then inspect the model-evaluation plan without calling a provider:
 
-Build `web` first, then configure `FLEETOPS_MODE`, `FLEETOPS_PUBLIC_ORIGIN`,
-`FLEETOPS_DATABASE_URL`, `FLEETOPS_ASSETS_DIR` and `FLEETOPS_EVIDENCE_DIR` before
-running `go run ./cmd/server` from `backend`. Local mode requires a loopback HTTP
-origin. Production requires HTTPS at a trusted TLS terminator, an exact public
-origin and explicitly configured proxy peers. Shared automatic ticking is
-rejected; each visitor controls its own lifecycle. The historical bearer-server
-setup guides do not configure this visitor entry point.
+```powershell
+npm ci --prefix evals
+npm --prefix evals run benchmark --silent -- --model-eval --scenario-limit 2 --plan
+```
 
-See [PUB-02 configuration, limits and verification](docs/pub-02.md) and the
-placeholder-only [deployment preparation](deploy/pub02/compose.example.yml).
-No public deployment has been performed.
+Omitting `--plan` runs the offline Mastra adapter by default, without an API key. Saved real-model responses can also be replayed without new inference; the [evaluation guide](evals/README.md) documents that test and Windows temporary-directory setup.
 
-## Current status and further reading
+New real-model trials are a separate, explicitly enabled workflow requiring provider credentials, a selected model, request/token limits, a reviewed cost file and hash, and a budget. Follow the [live evaluation configuration](evals/README.md#future-live-configuration-and-cost-review) before enabling `--live`. Recommendation acceptance in this harness does not submit, approve, or execute commands.
 
-Phases 0–5 and DEMO-01 are merged; DEMO-02 inventory is available locally. DEMO-03 is documentation polish. The approved Phase 6 dashboard design direction remains planned; no redesigned dashboard, playback, scenario controls or Phase 7 public deployment is claimed here. Remote CI acceptance and branch protection were not checked for this task.
+## Project structure
 
-- [Known limitations](docs/known-limitations.md): model, simulator, lifecycle and deployment boundaries.
-- [Architecture](docs/architecture.md), [decisions](docs/decisions.md), [safety rules](docs/safety-rules.md).
-- [Phase 5 report](docs/phase5-evaluation-report.md), [evaluation runner/offline commands](evals/README.md), [results log](docs/eval-results.md).
-- [Recovery demo](docs/phase4-demo.md), [Phase 4 acceptance](docs/phase4-acceptance.md), [normal GraphQL setup](docs/local-graphql-demo.md), [operator inbox](docs/operator-inbox.md).
+| Path | Responsibility |
+| --- | --- |
+| [`backend/`](backend/) | Simulator, routing, scheduling, incidents, safety/proposal lifecycle, GraphQL, persistence, visitor isolation |
+| [`agent/`](agent/) | Mastra agents, observation/proposal tools, structured reasoning, grounding, evaluation adapters |
+| [`web/`](web/) | React dashboard, warehouse visualization, simulation controls, operator decisions |
+| [`evals/`](evals/) | Labelled scenarios, decision/adversarial benchmarks, recovery and demo harnesses |
+| [`docs/`](docs/) | Architecture, safety rules, evaluation reports, operational guides, historical evidence |
+| [`deploy/`](deploy/) | Container deployment, proxy, database initialization, configuration checks, smoke tools |
+| [`Dockerfile`](Dockerfile), [`.github/workflows/`](.github/workflows/) | Production image build, CI checks, GHCR publication |
 
-Repository layout: `backend/` owns simulation and service boundaries; `agent/` owns reasoning/submission; `web/` owns operator presentation; `evals/` owns evaluation harnesses; `docs/` records decisions and evidence.
+## Limitations and future work
 
-For development, install pinned dependencies in `agent`, `web` and `evals`, then run `make test` (Go tests/vet and all three npm test/typecheck suites). Windows Make workflows require WSL with corresponding tools and Docker integration. [Verification limitations](docs/known-limitations.md#verification-and-provenance) explain why historical failures must not be presented as a clean current full-suite result.
+- **Simulation scope:** discrete grid dynamics are not physical robot control. Traffic recovery is bounded and cannot resolve every delay; historical acceptance evidence includes an unresolved long-wait case.
+- **Reasoning scope:** supported actions and explanation vocabulary are deliberately narrow. Future evaluation should test broader, held-out cases, repeated trials, and live adversarial inputs before expanding capabilities.
+- **Persistence scope:** proposal/audit persistence is not a resumable simulator checkpoint. Process failure can require evidence preservation and reconciliation of retained visitor schemas.
+- **Operational scope:** the visitor server has bounded capacity and targets one application process. Distributed simulator ownership, horizontal scaling, and production throughput have not been demonstrated.
+- **Evidence scope:** recorded model responses, host checks, command execution, human approval, and delivered jobs require separate evidence. A polished demo does not establish production reliability.
 
-For the separate Compose database setup, copy `.env.example` to ignored `.env`, replace database placeholders privately, then use `make up` and `make down`. PostgreSQL binds to loopback; `POSTGRES_HOST_PORT` overrides its host port. The named volume preserves data; do not use `down -v`. CI defines test, integration and Gitleaks jobs; configuration alone does not establish passing remote runs or required branch-protection checks.
+Further reading: [evaluation methodology](docs/phase5-evaluation-report.md), [visitor security and operational limits](docs/pub-02.md), [deployment and recovery runbook](docs/pub-03.md), and [historical limitations](docs/known-limitations.md). Older status sections in these detailed records describe their original verification context.
