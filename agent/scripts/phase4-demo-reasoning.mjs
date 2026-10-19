@@ -1,13 +1,28 @@
 // Acceptance-only adapter. This exercises Mastra but is NOT a live LLM demo.
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { registerHooks } from "node:module";
 import { Agent } from "@mastra/core/agent";
 import { noopLogger } from "@mastra/core/logger";
 import { createFleetClient, observedFacts, validateReasoning } from "../dist/index.js";
 import { instructions } from "../dist/agent.js";
 import { reasoningSchema } from "../dist/contracts.js";
 import { createFleetTools } from "../dist/tools.js";
-import { offlineModelFixture, reasoningFixture, chargingReasoningFixture } from "../src/fixtures.ts";
+
+// The source fixtures use NodeNext .js specifiers. Resolve those imports only
+// within agent/src, matching the existing evaluation source runner.
+const sourceRoot = new URL("../src/", import.meta.url).href;
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (context.parentURL?.startsWith(sourceRoot) && specifier.startsWith(".") && specifier.endsWith(".js")) {
+      const source = new URL(specifier.slice(0, -3) + ".ts", context.parentURL);
+      if (existsSync(source)) return nextResolve(source.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+const { offlineModelFixture, reasoningFixture, chargingReasoningFixture } = await import("../src/fixtures.ts");
 
 assert.equal(process.version, "v24.21.0");
 assert.ok(process.argv.includes("--submit"), "Explicit --submit opt-in is required.");

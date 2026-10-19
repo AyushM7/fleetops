@@ -140,8 +140,16 @@ func TestDemoScenariosPostgres(t *testing.T) {
 				t.Fatal(w.Body.String())
 			}
 			reset, err := c.status(context.Background())
-			if err != nil || reset.ScenarioID != id || !reflect.DeepEqual(initial, reset.Snapshot) {
+			if err != nil || reset.Snapshot == nil || reset.ScenarioID != id {
 				t.Fatal("restart changed selected scenario", err)
+			}
+			initialState, resetState := *initial, *reset.Snapshot
+			if initialState.ObservationID == resetState.ObservationID {
+				t.Fatal("restart reused the previous observation identity")
+			}
+			initialState.ObservationID, resetState.ObservationID = "", ""
+			if !reflect.DeepEqual(initialState, resetState) {
+				t.Fatal("restart changed the deterministic warehouse state")
 			}
 			if reset.Evidence == nil || reset.Evidence.Generation == e.Generation || reset.Evidence.RuntimeID == e.RuntimeID ||
 				(actionable && reset.Evidence.ProposalID == e.ProposalID) {

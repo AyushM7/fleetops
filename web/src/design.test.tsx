@@ -99,7 +99,9 @@ describe("grounded dashboard design", () => {
   it("distinguishes local recommendation provenance and canonical proposal parameters from execution", () => {
     vi.stubGlobal("document", { querySelector: () => ({ getAttribute: () => "enabled" }) });
     const output = html(<InboxView feed={{ phase: "ready", proposals: [proposal], updatedAt: new Date() }} busy={null} receipt={null} runtimeAvailable decide={vi.fn()} refresh={vi.fn()} refreshStatus={vi.fn()} />);
-    expect(output).toContain("not a live LLM");
+    expect(output).toContain("Proposal source unavailable");
+    expect(output).not.toContain("Deterministic local Mastra adapter");
+    expect(output).not.toContain("Live-model result");
     expect(output).toContain("Proposal parameters · compare with fleet telemetry");
     expect(output).toContain('<dt>From robot</dt><dd>R1</dd>');
     expect(output).toContain('<dt>To robot</dt><dd>R3</dd>');
