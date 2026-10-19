@@ -3,7 +3,7 @@ import { Agent } from "@mastra/core/agent";
 import { noopLogger } from "@mastra/core/logger";
 import { createFleetClient, runOffline, observedFacts, validateReasoning } from "../dist/index.js";
 import { reasoningSchema } from "../dist/contracts.js";
-import { offlineModelFixture, reasoningFixture } from "../src/fixtures.ts";
+import { offlineModelFixture, reasoningFixture } from "../dist/fixtures.js";
 
 assert.equal(process.version, "v24.21.0");
 const api = createFleetClient(process.env.FLEETOPS_INCIDENT_FIXTURE_URL, process.env.FLEETOPS_INCIDENT_FIXTURE_TOKEN);

@@ -35,10 +35,11 @@ try {
     $env:FLEETOPS_AUTH_TOKENS = ConvertTo-Json -Compress -InputObject $credentials
     $env:FLEETOPS_CHARGING_DEMO = '1'
     $env:FLEETOPS_AUTO_TICK = '0'
+	$env:FLEETOPS_AGENT_FIXTURE_ENABLE = '1'
     $env:FLEETOPS_TICK_INTERVAL = '500ms'
     Push-Location "$repoRoot/backend"
     try {
-        go build -o "$agentRoot/dist/p400-server.exe" ./cmd/server
+        go build -tags fleetops_test -o "$agentRoot/dist/p400-server.exe" ./cmd/agentfixture
         Assert-Exit 'Build Go backend'
         # Serialize packages and t.Parallel tests sharing the migration lock; explicit concurrency tests still run their workers.
         # Git's Windows checkout uses CRLF for the byte-compared JSON goldens.
@@ -61,6 +62,8 @@ try {
     try {
         npm run build
         Assert-Exit 'Build TypeScript agent'
+        node node_modules/typescript/bin/tsc -p tsconfig.fixtures.json
+        Assert-Exit 'Build test-only fixture modules'
         npm run test:integration
         Assert-Exit 'Agent real-backend integration tests'
     } finally { Pop-Location }

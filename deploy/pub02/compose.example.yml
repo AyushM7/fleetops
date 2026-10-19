@@ -1,0 +1,30 @@
+# Preparation only. Build the image and provision a private durable evidence
+# directory for uid/gid 65532 before PUB-03. No public listener or DB is created.
+services:
+  app:
+    image: fleetops-pub02:local
+    init: true
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 2
+    stop_grace_period: 40s
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      PORT: "8080"
+      FLEETOPS_MODE: production
+      FLEETOPS_PUBLIC_ORIGIN: ${FLEETOPS_PUBLIC_ORIGIN:?set exact HTTPS origin}
+      FLEETOPS_TRUSTED_PROXIES: ${FLEETOPS_TRUSTED_PROXIES:?set actual direct proxy peer CIDRs}
+      FLEETOPS_DATABASE_URL: ${FLEETOPS_DATABASE_URL:?supply private dedicated database connection}
+      FLEETOPS_ASSETS_DIR: /web
+      FLEETOPS_EVIDENCE_DIR: /evidence
+    volumes:
+      - type: bind
+        source: ${FLEETOPS_EVIDENCE_HOST_DIR:?set durable private host directory}
+        target: /evidence
+    tmpfs:
+      - /tmp:size=16m,mode=1777

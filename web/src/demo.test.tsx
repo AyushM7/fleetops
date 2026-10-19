@@ -8,7 +8,7 @@ import { decideProposal } from "./proposals";
 const enableDemo = () => vi.stubGlobal("document", { querySelector: () => ({ getAttribute: () => "enabled" }) });
 afterEach(() => vi.unstubAllGlobals());
 
-describe("local demo", () => {
+describe("isolated visitor demo", () => {
   it("preserves normal authenticated mode without the server marker", () => {
     expect(isLocalDemo()).toBe(false);
     expect(authentication("normal-token")).toEqual({ credentials: "omit", headers: { "Content-Type": "application/json", Authorization: "Bearer normal-token" } });
@@ -17,7 +17,8 @@ describe("local demo", () => {
   it("opens directly to the warehouse with an explicit simulation disclosure", () => {
     enableDemo();
     const html = renderToString(<App />);
-    expect(html).toContain("Local demo");
+    expect(html).toContain("Visitor demo");
+    expect(html).not.toContain("Local demo");
     expect(html).toContain("No live LLM");
     expect(html).toContain("Loading the warehouse");
     expect(html).toContain("Approval inbox");

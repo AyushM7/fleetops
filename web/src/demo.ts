@@ -1,4 +1,4 @@
-// Only the isolated local gateway inserts this marker into the served HTML.
+// The isolated visitor gateway inserts this marker in local and HTTPS modes.
 export function isLocalDemo(): boolean {
   return typeof document !== "undefined" && document.querySelector('meta[name="fleetops-local-demo"]')?.getAttribute("content") === "enabled";
 }

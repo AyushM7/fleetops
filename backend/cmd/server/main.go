@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,8 +14,9 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 	if err := run(); err != nil {
-		log.Print(err)
+		slog.Error("application_stopped", "error", err.Error())
 		os.Exit(1)
 	}
 }
@@ -36,7 +37,7 @@ func parsePort(value string) (int, error) {
 	return port, nil
 }
 
-func run() error {
+func run() (result error) {
 	port, err := parsePort(os.Getenv("PORT"))
 	if err != nil {
 		return err
@@ -47,7 +48,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer closeApplication()
+	defer func() { result = errors.Join(result, closeApplication()) }()
 	server := &http.Server{
 		Addr:              ":" + strconv.Itoa(port),
 		Handler:           handler,
@@ -57,7 +58,7 @@ func run() error {
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    8192,
 	}
-	return serve(ctx, server)
+	return serve(ctx, boundedServer{server})
 }
 
 type httpServer interface {

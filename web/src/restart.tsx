@@ -16,7 +16,7 @@ async function demoRequest(path: "status" | "restart" | `scenario/${ScenarioID}`
     method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal,
     headers: { "Content-Type": "application/json", "X-FleetOps-Demo": "1", "X-FleetOps-Generation": generation, ...(tick === undefined ? {} : { "X-FleetOps-Tick": String(tick) }) }, body: "{}",
   });
-  if (response.status === 401 || response.status === 403) throw new DemoError(true, "Demo session ended. Reload the local demo URL.");
+  if (response.status === 401 || response.status === 403) throw new DemoError(true, "Visitor session ended. Clear this site's cookies to begin a new visit.");
   if (!response.ok) throw new DemoError(false, path === "restart" || path.startsWith("scenario/")
     ? "Restart was not confirmed. The previous run may have stopped. Refresh session status before retrying; historical outcomes may require reconciliation."
     : path === "status" ? "Demo session status unavailable. Decisions are disabled until status is refreshed."

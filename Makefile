@@ -4,7 +4,7 @@ test-backend:
 	cd backend && go test ./... && go vet ./...
 
 test-integration:
-	cd backend && go test -race -tags fleetops_test ./db/... ./fleet/... ./graphql/... -run Integration -count=1 -v
+	cd backend && go test -p 1 -race -tags fleetops_test ./db/... ./fleet/... ./graphql/... ./sim/... ./visitor/... ./cmd/... -run 'Integration|FixtureCannotBindPubliclyOrWithoutOptIn' -count=1 -v
 
 test-agent:
 	cd agent && npm test && npm run typecheck

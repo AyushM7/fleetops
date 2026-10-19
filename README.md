@@ -107,6 +107,26 @@ New-Item evals/dist/p405/stop -ItemType File -Force | Out-Null
 
 The launcher removes its temporary infrastructure. Preserve sanitized evidence before another run overwrites it. See the guide for rejection, expiry, outages and cleanup. Real screenshots and a recorded walkthrough will follow dashboard completion and verification; these steps describe the existing interface.
 
+## Isolated visitor server (PUB-02)
+
+The normal Go application now serves isolated visitors using the four fixed
+PUB-01 presets. Each visitor owns a simulator, private PostgreSQL schema and
+independent proposer/operator identities. Preset proposals are Go-scripted;
+this path invokes no Mastra adapter or model. Approval remains an explicit human
+action through the existing Go validation and authorization gates.
+
+Build `web` first, then configure `FLEETOPS_MODE`, `FLEETOPS_PUBLIC_ORIGIN`,
+`FLEETOPS_DATABASE_URL`, `FLEETOPS_ASSETS_DIR` and `FLEETOPS_EVIDENCE_DIR` before
+running `go run ./cmd/server` from `backend`. Local mode requires a loopback HTTP
+origin. Production requires HTTPS at a trusted TLS terminator, an exact public
+origin and explicitly configured proxy peers. Shared automatic ticking is
+rejected; each visitor controls its own lifecycle. The historical bearer-server
+setup guides do not configure this visitor entry point.
+
+See [PUB-02 configuration, limits and verification](docs/pub-02.md) and the
+placeholder-only [deployment preparation](deploy/pub02/compose.example.yml).
+No public deployment has been performed.
+
 ## Current status and further reading
 
 Phases 0–5 and DEMO-01 are merged; DEMO-02 inventory is available locally. DEMO-03 is documentation polish. The approved Phase 6 dashboard design direction remains planned; no redesigned dashboard, playback, scenario controls or Phase 7 public deployment is claimed here. Remote CI acceptance and branch protection were not checked for this task.
