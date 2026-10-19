@@ -1,0 +1,13 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$FLEETOPS_HOST} {
+	reverse_proxy app:8080 {
+		header_up -Forwarded
+		header_up -X-Real-IP
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {http.request.hostport}
+		header_up X-Forwarded-For {http.request.remote.host}
+	}
+}
