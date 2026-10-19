@@ -8,6 +8,10 @@ const freshGeneration = "b".repeat(64);
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe("scenario restart", () => {
+  it("explains how to renew an expired or revoked visitor without relying on a local runner", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("expired", { status: 401 })));
+    await expect(restartScenario(oldGeneration)).rejects.toThrow("Clear this site's cookies to begin a new visit.");
+  });
   it("shows accessible progress, disables repeated clicks, and displays failures without claiming success", () => {
     const busy = renderToString(<RestartControl busy disabled={false} error={null} onRestart={() => {}} />);
     expect(busy).toContain("disabled"); expect(busy).toContain("Restarting scenario");

@@ -49,7 +49,18 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: npm ci --prefix web
+      - run: npm --prefix web run build
+      - run: mkdir -m 700 "$RUNNER_TEMP/pub02-evidence" "$RUNNER_TEMP/pub02-private-evidence"
       - run: make test-integration
+        env:
+          FLEETOPS_PUB02_ASSETS: ${{ github.workspace }}/web/dist
+          FLEETOPS_PUB02_EVIDENCE: ${{ runner.temp }}/pub02-evidence
+          FLEETOPS_PUB02_PRIVATE_EVIDENCE: ${{ runner.temp }}/pub02-private-evidence
 
   gitleaks:
     runs-on: ubuntu-latest

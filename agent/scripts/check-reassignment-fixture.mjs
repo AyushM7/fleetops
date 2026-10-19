@@ -5,7 +5,7 @@ import { createFleetClient, runOffline, observedFacts, validateReasoning } from 
 import { reasoningSchema } from "../dist/contracts.js";
 import { instructions } from "../dist/agent.js";
 import { submitReviewedAction } from "../dist/submission.js";
-import { offlineModelFixture, reasoningFixture } from "../src/fixtures.ts";
+import { offlineModelFixture, reasoningFixture } from "../dist/fixtures.js";
 
 assert.equal(process.version, "v24.21.0");
 const endpoint = process.env.FLEETOPS_REASSIGNMENT_FIXTURE_URL;
