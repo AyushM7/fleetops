@@ -1,13 +1,169 @@
 # PUB-03 — Lightsail deployment
 
-Assessment: **CONDITIONAL — local preparation; public deployment is not authorized.**
+Current continuation: **CONDITIONAL — GHCR publishing workflow prepared and locally
+verified; actual Actions build/publication awaits integration into main.** The user
+reports an existing Ubuntu 24.04 / 1 GB Lightsail host, about 549 MiB available RAM,
+36 GB disk free, installed Docker/Compose and configured DNS/firewall. No AWS or
+credential changes are part of this continuation. Build on GitHub, pull on Lightsail.
+
+The original local preparation record below predates that host and is historical:
+
+Assessment: **CONDITIONAL — local preparation; public deployment was not authorized.**
 Public URL: **not deployed**. No AWS resource, budget, DNS record or public listener
 has been created. No commit, push or merge. Region requested: **us-east-2 (Ohio)**.
 Account ID, student credit coverage/expiry, billing email and DuckDNS hostname
 remain unverified/unset. Read-only CLI identity lookup failed because the configured
 session expired. A profile named `default` is not proof of the intended account.
 
-## Architecture and sizing
+## GHCR build and pull continuation
+
+Files for this continuation only: `.github/workflows/publish-image.yml`,
+`deploy/pub03/publish-image.sh`, `deploy/pub03/check-publish.py`, `docs/pub-03.md`.
+The existing production Dockerfile, application, Compose, AWS resources and
+credentials are unchanged. Prior 2 GB sizing advice below is historical; this
+continuation targets the user's existing 1 GB host without on-host compilation.
+
+### Publish from GitHub Actions
+
+After the change is reviewed and merged into **main**, the **Publish production
+image** workflow automatically runs on the standard GitHub-hosted **ubuntu-24.04
+amd64** runner. It can also be manually dispatched from Actions with branch main
+selected. It never publishes PR code, other branches, forks or private repositories.
+It uses the existing root Dockerfile and explicit `--platform linux/amd64`, with
+no QEMU, new project dependencies, external build service or paid model call.
+The only third-party action is the existing commit-pinned checkout action.
+Docker CLI creates a temporary docker-container BuildKit builder on the Actions
+runner for registry export and provenance; no builder runs on Lightsail.
+
+Image naming is `ghcr.io/ayushm7/fleetops:<full-40-character-commit-SHA>`. There are
+no latest/main tags. Same-commit runs are serialized, and an existing SHA image
+is reused instead of overwritten. Auth/server errors abort rather than authorize
+a rebuild. Missing manifests authorize the first build/push. An existing image
+must remain available in GHCR for retry and rollback; don't delete it as cleanup.
+Registry tags can still be changed by an authorized external publisher: **use the
+SHA tag plus digest printed in the workflow summary for strict immutability**.
+
+Top-level token permissions are empty; the publishing job gets only
+`contents: read` and `packages: write`. Checkout does not persist credentials.
+Only the login step receives the ephemeral `GITHUB_TOKEN`, through password-stdin;
+Docker auth lives in a runner-temp config, and logout runs even after failure.
+There is no AWS access, SSH deployment, PAT, registry credential on Lightsail,
+OIDC, attestation-write or repository-write permission. BuildKit's minimal
+provenance records build metadata without requiring GitHub artifact attestations.
+No env files, private runtime values, secret build arguments or SSH mounts enter
+the build; the unchanged `.dockerignore` restricts the production context.
+
+Check the repository's existing **CI** workflow as well as **Publish production
+image** before deployment. Publication does not imply application test acceptance,
+and nothing in this workflow automatically deploys the image.
+
+### One-time public package setting
+
+After the first successful publish, open
+[FleetOps container package](https://github.com/users/AyushM7/packages/container/package/fleetops),
+then **Package settings → Danger Zone → Change visibility → Public**. Confirm the
+package is linked to `AyushM7/fleetops`; the source label and publishing token link
+it automatically. If a pre-existing package is unlinked, grant this repository
+Actions access in that package's settings before retrying. Never broaden the
+workflow token to compensate for a package-access problem.
+
+Public source repository visibility alone does **not** make a new GHCR package
+public. A newly published package defaults to private; public packages support
+anonymous pulls. This one-time package setting is performed by its owner, not by
+the workflow. [GitHub Container Registry documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+No package visibility has been changed by this local task.
+
+### Exact Lightsail commands (operator-run; no local server build)
+
+In the **existing server clone**, update main normally, then use the SHA and digest
+from the successful publishing run. Don't substitute the unmerged topic-branch SHA.
+The private production env file must already contain the host/email, database
+passwords, reviewed Caddy image and evidence path from the original setup. Do not
+overwrite it with the example or print expanded Compose config.
+
+```bash
+# Run from the existing fleetops clone on Lightsail.
+git switch main
+git pull --ff-only
+RELEASE_SHA=$(git rev-parse HEAD)
+# Confirm the successful Actions run built exactly RELEASE_SHA.
+EXPECTED_DIGEST='sha256:PASTE_64_HEX_DIGEST_FROM_WORKFLOW_SUMMARY'
+export FLEETOPS_IMAGE="ghcr.io/ayushm7/fleetops:${RELEASE_SHA}@${EXPECTED_DIGEST}"
+
+dc() {
+  sudo env FLEETOPS_IMAGE="$FLEETOPS_IMAGE" docker compose \
+    --env-file /srv/fleetops/production.env \
+    -f deploy/pub03/compose.yml "$@"
+}
+dc config --quiet
+
+# Empty temporary Docker config proves this image is anonymously readable.
+# This does not alter existing Docker credentials or perform docker login.
+ANON_CONFIG=$(mktemp -d)
+sudo docker --config "$ANON_CONFIG" pull "$FLEETOPS_IMAGE"
+
+# Pull through the actual existing Compose service, never build on Lightsail.
+dc pull app
+sudo docker image inspect "$FLEETOPS_IMAGE" --format '{{.Os}}/{{.Architecture}} {{.Config.User}}'
+# Expected: linux/amd64 65532:65532
+```
+
+To persist the choice, use `sudoedit /srv/fleetops/production.env` and replace only
+its `FLEETOPS_IMAGE=` line with the exact line printed in the workflow summary.
+Keep all existing secrets and other settings unchanged. The function above also
+passes that value explicitly so sudo does not discard the shell override.
+
+For a fresh stack, once private evidence-directory ownership and DB env are ready,
+the operator can run `dc up -d --no-build --wait --wait-timeout 180`. For an already
+running stack, first take the graceful backup described below, then run
+`dc up -d --no-deps --no-build --wait --wait-timeout 180 app`. These are deployment
+commands for the operator; **this task does not execute them or open any endpoint**.
+Verify `dc ps`, HTTPS `/healthz`, `/readyz`, the existing `smoke.py` and observed
+memory. Retain all database/evidence/Caddy volumes. Pulling alone starts no service.
+
+Rollback uses the previous successful `FLEETOPS_IMAGE=...:<SHA>@sha256:<digest>`
+with the same Compose file/env/volumes, after graceful shutdown and backup. It
+requires no rebuild, registry login, database reset or AWS change. Don't run
+`down -v`, prune images needed for rollback, or print runtime secrets.
+
+### Continuation verification
+
+`python deploy/pub03/check-publish.py`: **8 tests PASS**, final run **1.968s**.
+Checks workflow triggers, public upstream/main restriction, amd64 runner, pinned
+checkout, token scope/cleanup, Bash syntax and actual Bash publisher execution
+against a mocked Docker executable: new publication, reuse without retagging,
+registry/auth failures, invalid SHA/branch/checkout and invalid digest. No real
+Docker build, registry request, model inference or AWS operation is performed by
+these tests. Existing PyYAML and Git Bash were reused; no dependencies installed.
+The first sandboxed run failed because Windows blocked Git Bash shared-memory
+initialization; the same tests passed outside that sandbox without code relaxation.
+`python deploy/pub03/check-config.py`: **5 tests PASS**, **0.001s**, preserving
+existing Compose/proxy/database invariants. `git diff --check` exited **0**; only
+the repository's ordinary Windows LF/CRLF conversion warning was emitted.
+
+Operator-run Git integration from the current reviewed working tree:
+
+```bash
+git switch -c codex/pub03-ghcr
+git add .github/workflows/publish-image.yml deploy/pub03/publish-image.sh deploy/pub03/check-publish.py docs/pub-03.md
+git diff --cached --check
+git diff --cached --stat
+git commit -m "PUB-03: publish production image to GHCR"
+git push -u origin codex/pub03-ghcr
+```
+
+Open a PR into main, review the four-file diff and existing CI results, then merge
+it through the repository's normal process. The main push publishes the merge's
+full SHA, which is the revision to deploy. No Git mutation above was executed here;
+the unrelated untracked handoff is deliberately absent from `git add`.
+
+Actual GitHub Actions build, GHCR publication, public package visibility and
+anonymous Lightsail pull remain **unexecuted** because no commit or push was
+authorized. A real image digest is available only after the workflow succeeds;
+none is fabricated in this document. Historical PUB-03 image acceptance below
+is not claimed as a new build or cloud verification.
+
+## Architecture and sizing (original local preparation)
 
 One Linux amd64 Lightsail instance runs Caddy, the scratch Go image containing the
 React dashboard, and PostgreSQL 18.6. Production never starts Node/Mastra or an LLM.
@@ -26,10 +182,8 @@ ceilings: Go 512 MiB, PostgreSQL 384 MiB, Caddy 128 MiB, plus Linux/Docker. Go h
 GOMEMLIMIT=384MiB and two execution threads. PostgreSQL allows 32 connections
 (the app uses at most 18), 64 MiB shared buffers and 2 MiB per work_mem operation.
 These limits are guardrails, not a claim that eight sustained users fit in 1 GiB.
-Build one stage at a time on the server before starting the stack; don't perform
-another large laptop build. Initial builds may temporarily need more memory than
-steady operation; if they cannot complete on 2 GiB, use an approved external build
-machine rather than silently provisioning a larger instance.
+The original source-build approach is superseded by the GHCR continuation above:
+build only on GitHub Actions and pull the result onto the existing 1 GB host.
 
 [AWS bundle pricing](https://docs.aws.amazon.com/lightsail/latest/userguide/amazon-lightsail-bundles.html)
 lists the $12 public IPv4 bundle. An
@@ -172,16 +326,14 @@ sudo chmod 600 /srv/fleetops/production.env
 # Privately edit production.env: approved hostname/email, immutable release tag,
 # CADDY_IMAGE=caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
 # and two distinct passwords generated by openssl rand -hex 32.
-# Set FLEETOPS_IMAGE=fleetops:RELEASE_ID and the evidence directory.
+# Set FLEETOPS_IMAGE to the GHCR SHA@digest from the workflow summary.
+# Set the existing private evidence directory; preserve all existing secrets.
 df -h /srv/fleetops
-sudo docker build --target web -t fleetops-web-build:RELEASE_ID .
-sudo docker build -t fleetops:RELEASE_ID .
-sudo docker image inspect fleetops:RELEASE_ID --format '{{.Id}}'
 dc() { sudo docker compose --env-file /srv/fleetops/production.env -f deploy/pub03/compose.yml "$@"; }
 dc config --quiet                       # Never print expanded config containing secrets.
-dc pull postgres caddy
+dc pull app postgres caddy
 dc run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile
-dc up -d --wait --wait-timeout 180
+dc up -d --no-build --wait --wait-timeout 180
 dc ps
 curl --fail --silent --show-error https://APPROVED_HOST/healthz
 curl --fail --silent --show-error https://APPROVED_HOST/readyz
@@ -312,8 +464,9 @@ The pre-existing untracked handoff is untouched. Frozen schema, safety rules and
 tool signatures are unchanged. No secrets or generated build/evidence files belong
 to the changed-source list. No requirement about the AWS account/hostname was guessed.
 
-Remaining gate: reauthenticate the selected AWS profile, verify account/credits,
-supply billing email and available DuckDNS hostname, then obtain the user's one
-explicit approval before any provisioning or public exposure. Deployment URL,
-external browser/port checks, real ACME issuance, target-host build/reboot,
-off-host backup restore and billing-alert delivery remain unverified until then.
+Current remaining gate: integrate the GHCR workflow into main, obtain a successful
+Actions run/digest, make the package publicly readable, and perform the operator-run
+pull/deployment checks above on the already provisioned host. No AWS provisioning
+is requested or performed by this continuation. Public application acceptance,
+off-host backup restore and billing-alert delivery have not been independently
+verified here.
