@@ -20,8 +20,12 @@ jobs:
       contents: read
       packages: write
     env:
-      DOCKER_CONFIG: ${{ runner.temp }}/fleetops-docker
+      DOCKER_CONFIG: /tmp/fleetops-docker
     steps:
+      - name: Prepare Docker configuration
+        shell: bash
+        run: mkdir -p "$DOCKER_CONFIG" && chmod 700 "$DOCKER_CONFIG"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
