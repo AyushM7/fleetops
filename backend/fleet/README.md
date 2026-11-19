@@ -1,5 +1,28 @@
 # Charging vertical slice
 
+## V2 automatic commands
+
+The trusted Go host binds `NewAutomaticHandler` to one V2 service on a private
+listener and enables it with `SetAutomaticCommandsEnabled(true)`. Automation
+starts disabled. Its hashed bearer credential uses role `automatic` and the
+exact `runtimeId`. That role has no access to the legacy GraphQL endpoint.
+
+`GET /state` returns a 30-second observation and the current job and robot
+versions. `POST /commands` accepts one `assignJobBatch` or `reassignUnstartedJob`
+with that observation, the runtime ID, expiry, a unique idempotency key, and
+preconditions for exactly the affected jobs and robots. Go rechecks these and
+the current simulator constraints under the same lock used for ticks. A batch
+rejects every entry if any one entry is invalid. Success confirms assignment
+or transfer. Pickup and delivery still occur through simulator ticks.
+
+The status of each command attempt is stored in `fleet_automatic_audit`. An exact
+retry links to its previous receipt. Reusing a key for different input is a
+conflict. A database error leaves an uncertain receipt and stops the affected
+runtime. A durable pending attempt requires reconciliation before any recovery
+can be claimed. Visitor expiry archives this journal with the other records.
+
+## Legacy approval workflow
+
 `ReadState` returns an opaque `ObservationID` for this service runtime and simulator
 revision. Repeated reads and pending-proposal creation preserve it. Every tick and
 command attempt invalidates it before mutation, including failed or partial commands;

@@ -2,6 +2,7 @@ package visitor
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -283,6 +284,12 @@ func TestWarehouseSSEAndSchemaCleanupIntegration(t *testing.T) {
 	if len(initial.Snapshot.Robots) != 11 || len(initial.Snapshot.Stations) != 4 || initial.RuntimeID == initialB.Evidence.RuntimeID {
 		t.Fatalf("invalid isolated warehouse snapshot: %+v", initial)
 	}
+	// Test-only journal evidence must survive the same expiry that closes SSE.
+	quoted := pgx.Identifier{schemaA}.Sanitize()
+	if _, err := factory.admin.Exec(ctx, `INSERT INTO `+quoted+`.fleet_automatic_audit
+		(runtime_id,subject,received_at,command,status) VALUES($1,'fixture-host',now(),'{}','pending')`, initial.RuntimeID); err != nil {
+		t.Fatal(err)
+	}
 	a.must(t, "/demo/play", selected.Generation, "", "{}")
 	readWarehouseFrame(t, reader, "state", selected.Generation, 2)
 	if tick := readWarehouseFrame(t, reader, "tick", selected.Generation, 3); tick.Tick != 1 {
@@ -309,6 +316,17 @@ func TestWarehouseSSEAndSchemaCleanupIntegration(t *testing.T) {
 	}
 	if after := b.status(t); !reflect.DeepEqual(after, initialB) {
 		t.Fatal("warehouse session expiry affected another visitor")
+	}
+	files, err := filepath.Glob(filepath.Join(factory.evidenceDir, schemaA, "database-final-*.json"))
+	if err != nil || len(files) != 1 {
+		t.Fatalf("automatic command archive was not produced: %v %v", files, err)
+	}
+	raw, err := os.ReadFile(files[0])
+	var archive visitorArchive
+	if err != nil || json.Unmarshal(raw, &archive) != nil || len(archive.AutomaticAudit) != 1 ||
+		!bytes.Contains(archive.AutomaticAudit[0], []byte(initial.RuntimeID)) ||
+		!bytes.Contains(archive.AutomaticAudit[0], []byte(`"pending"`)) {
+		t.Fatalf("automatic command audit was not preserved during expiry: %v", err)
 	}
 }
 

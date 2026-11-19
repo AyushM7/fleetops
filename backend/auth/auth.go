@@ -16,19 +16,22 @@ import (
 type Role string
 
 const (
-	Viewer   Role = "viewer"
-	Proposer Role = "proposer"
-	Operator Role = "operator"
+	Viewer    Role = "viewer"
+	Proposer  Role = "proposer"
+	Operator  Role = "operator"
+	Automatic Role = "automatic"
 )
 
 type Principal struct {
-	Subject string
-	Role    Role
+	Subject   string
+	Role      Role
+	RuntimeID string
 }
 type Credential struct {
-	Subject string `json:"subject"`
-	Role    Role   `json:"role"`
-	SHA256  string `json:"sha256"`
+	Subject   string `json:"subject"`
+	Role      Role   `json:"role"`
+	SHA256    string `json:"sha256"`
+	RuntimeID string `json:"runtimeId,omitempty"`
 }
 type entry struct {
 	principal Principal
@@ -57,15 +60,30 @@ func New(config string) (*Authenticator, error) {
 	seen := map[string]bool{}
 	for _, c := range credentials {
 		digest, err := hex.DecodeString(c.SHA256)
-		if err != nil || len(digest) != 32 || seen[strings.ToLower(c.SHA256)] || c.Subject == "" || strings.TrimSpace(c.Subject) != c.Subject || strings.ContainsFunc(c.Subject, unicode.IsControl) || len(c.Subject) > 128 || (c.Role != Viewer && c.Role != Proposer && c.Role != Operator) {
+		if err != nil || len(digest) != 32 || seen[strings.ToLower(c.SHA256)] || c.Subject == "" || strings.TrimSpace(c.Subject) != c.Subject || strings.ContainsFunc(c.Subject, unicode.IsControl) || len(c.Subject) > 128 || !validScope(c) {
 			return nil, ErrCredentials
 		}
 		seen[strings.ToLower(c.SHA256)] = true
-		e := entry{principal: Principal{c.Subject, c.Role}}
+		e := entry{principal: Principal{Subject: c.Subject, Role: c.Role, RuntimeID: c.RuntimeID}}
 		copy(e.digest[:], digest)
 		a.entries = append(a.entries, e)
 	}
 	return a, nil
+}
+
+func validScope(c Credential) bool {
+	switch c.Role {
+	case Viewer, Proposer, Operator:
+		return c.RuntimeID == ""
+	case Automatic:
+		if len(c.RuntimeID) != 33 || c.RuntimeID[0] != 'P' {
+			return false
+		}
+		_, err := hex.DecodeString(c.RuntimeID[1:])
+		return err == nil && c.RuntimeID[1:] == strings.ToLower(c.RuntimeID[1:])
+	default:
+		return false
+	}
 }
 
 // Authenticate installs identity only after verification; no public identity setter exists.

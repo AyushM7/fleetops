@@ -3,12 +3,16 @@ package graphql
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/AyushM7/fleetops/backend/auth"
 
 	"github.com/AyushM7/fleetops/backend/fleet"
 	"github.com/AyushM7/fleetops/backend/proposal"
@@ -91,6 +95,28 @@ func TestMutationUncertaintyAndErrorRedaction(t *testing.T) {
 	result := mutationResult(fleet.Result{Execution: fleet.Unknown, ExecutionAttempted: true}, errors.New("private connection token"))
 	if result.Error == nil || strings.Contains(*result.Error, "private") || result.AuditCommitted || !result.ExecutionAttempted || result.Execution != "unknown" {
 		t.Fatal(result)
+	}
+}
+
+func TestAutomaticCredentialCannotAccessLegacyGraphQL(t *testing.T) {
+	token := strings.Repeat("isolated-legacy-boundary-fixture-", 2)
+	hash := sha256.Sum256([]byte(token))
+	raw, _ := json.Marshal([]auth.Credential{{Subject: "host", Role: auth.Automatic, RuntimeID: "P" + strings.Repeat("a", 32), SHA256: hex.EncodeToString(hash[:])}})
+	credentials, err := auth.New(string(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := &readOnlyFixture{}
+	h := NewHandler(fixture, credentials)
+	for _, body := range []string{`{"query":"{fleetState{tick}}"}`, `{"query":"mutation{approveProposal(id:\"example\"){state}}"}`} {
+		request := httptest.NewRequest("POST", "/graphql", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Authorization", "Bearer "+token)
+		response := httptest.NewRecorder()
+		h.ServeHTTP(response, request)
+		if response.Code != 403 || fixture.calls != 0 {
+			t.Fatalf("automatic role reached the V1 service: %d, reads=%d", response.Code, fixture.calls)
+		}
 	}
 }
 

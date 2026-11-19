@@ -15,9 +15,11 @@ type RobotInfo struct {
 }
 
 type JobInfo struct {
-	Num      int
-	From, To Cell
-	ExitCost int
+	Num          int
+	From, To     Cell
+	ExitCost     int
+	Rank         int
+	DeadlineTick int
 }
 
 type Assignment struct{ JobNum, RobotNum int }
@@ -27,14 +29,17 @@ type Params struct{ MinBattery, ReserveBattery, MovingDrain int }
 // Distance reports route length and whether the destination is reachable.
 type Distance func(a, b Cell) (int, bool)
 
-// Assign processes jobs by numeric ID, choosing the nearest feasible unused robot.
+// Assign processes lower ranks and earlier deadlines first, then numeric job ID.
+// Each job gets the nearest feasible unused robot.
 // This is greedy assignment rather than global optimal matching.
 func Assign(idle []RobotInfo, pending []JobInfo, dist Distance, p Params) []Assignment {
 	if len(idle) == 0 || len(pending) == 0 {
 		return nil
 	}
 	jobs := slices.Clone(pending)
-	slices.SortFunc(jobs, func(a, b JobInfo) int { return cmp.Compare(a.Num, b.Num) })
+	slices.SortFunc(jobs, func(a, b JobInfo) int {
+		return cmp.Or(cmp.Compare(a.Rank, b.Rank), cmp.Compare(a.DeadlineTick, b.DeadlineTick), cmp.Compare(a.Num, b.Num))
+	})
 	used := make(map[int]bool, len(idle))
 	var assignments []Assignment
 	for _, job := range jobs {

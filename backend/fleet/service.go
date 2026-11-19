@@ -53,19 +53,23 @@ type Result struct {
 }
 
 type Service struct {
-	mu        sync.Mutex
-	commander sim.Commander
-	tick      func()
-	transact  func(context.Context, func(*db.Tx) error) error
-	lifecycle *proposal.Lifecycle
-	clock     proposal.Clock
-	authorize Authorizer
-	at        time.Time
-	runtimeID string
-	revision  uint64
-	canonical map[string]proposal.Proposal
-	poisoned  bool
-	layout    LayoutView
+	mu                sync.Mutex
+	commander         sim.Commander
+	tick              func()
+	transact          func(context.Context, func(*db.Tx) error) error
+	lifecycle         *proposal.Lifecycle
+	clock             proposal.Clock
+	authorize         Authorizer
+	at                time.Time
+	runtimeID         string
+	revision          uint64
+	canonical         map[string]proposal.Proposal
+	poisoned          bool
+	layout            LayoutView
+	warehouseV2       bool
+	automaticEnabled  bool
+	automaticVersions map[string]commandEntity
+	automaticReads    []commandObservation
 }
 
 // New creates and exclusively owns a simulator. Callers never receive its
@@ -83,6 +87,7 @@ func New(cfg sim.Config, seed int64, pool *db.Pool, clock proposal.Clock, author
 		return nil, err
 	}
 	service.layout = layoutFromConfig(cfg)
+	service.warehouseV2 = cfg.MaintenanceBay != nil
 	return service, nil
 }
 

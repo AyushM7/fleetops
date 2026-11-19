@@ -5,6 +5,8 @@ import (
 	"github.com/AyushM7/fleetops/backend/scheduler"
 )
 
+const priorityHeadStartTicks = 20
+
 func (s *Sim) assignPending(skip []bool) {
 	if !s.cfg.AutoDispatch {
 		return
@@ -12,10 +14,7 @@ func (s *Sim) assignPending(skip []bool) {
 	var idle []scheduler.RobotInfo
 	robots := make(map[int]int)
 	for i, robot := range s.state.Robots {
-		if skip[i] || robot.Role == RoleMaintenance || robot.Status != RobotIdle || robot.JobID != "" {
-			continue
-		}
-		if s.cfg.MaintenanceBay != nil && (s.occupiedStation(robot.ID) != nil || s.cfg.AutoCharge && s.needsCharge(robot)) {
+		if skip[i] || !s.canAcceptJob(robot) {
 			continue
 		}
 		number := idNumber(robot.ID)
@@ -38,17 +37,41 @@ func (s *Sim) assignPending(skip []bool) {
 		if s.cfg.AutoCharge {
 			exit = s.chargingExitDistance(job.To, "", distance)
 		}
-		pending = append(pending, scheduler.JobInfo{Num: number, From: scheduler.Cell{X: job.From.X, Y: job.From.Y}, To: scheduler.Cell{X: job.To.X, Y: job.To.Y}, ExitCost: exit})
+		info := scheduler.JobInfo{Num: number, From: scheduler.Cell{X: job.From.X, Y: job.From.Y}, To: scheduler.Cell{X: job.To.X, Y: job.To.Y}, ExitCost: exit, Rank: job.CreatedTick}
+		if remaining := job.DeadlineTick - s.state.Tick; job.Type == JobPriority && remaining >= 0 && remaining <= priorityDeadlineSlack {
+			if delivery, reachable := distance(info.From, info.To); reachable && delivery <= remaining {
+				// New priority arrivals cannot overtake jobs older than this fixed advantage.
+				info.Rank -= priorityHeadStartTicks
+				info.DeadlineTick = job.DeadlineTick
+			}
+		}
+		pending = append(pending, info)
 	}
-	assignments := scheduler.Assign(idle, pending, distance, scheduler.Params{
-		MinBattery: s.cfg.MinAssignBattery, ReserveBattery: s.cfg.ReserveBattery, MovingDrain: s.cfg.MovingDrain,
-	})
+	assignments := scheduler.Assign(idle, pending, distance, s.assignmentParams())
 	for _, assignment := range assignments {
 		robot, job := &s.state.Robots[robots[assignment.RobotNum]], &s.state.Jobs[jobs[assignment.JobNum]]
-		job.Status, job.AssignedRobot = JobAssigned, robot.ID
-		robot.Status, robot.JobID = RobotMoving, job.ID
-		s.prepareNavigation(robot, job.From)
+		s.beginJob(robot, job)
 	}
+}
+
+func (s *Sim) canAcceptJob(robot RobotState) bool {
+	return robot.Role != RoleMaintenance && robot.Status == RobotIdle && robot.JobID == "" &&
+		(s.cfg.MaintenanceBay == nil || s.occupiedStation(robot.ID) == nil && (!s.cfg.AutoCharge || !s.needsCharge(robot)))
+}
+
+func (s *Sim) assignmentParams() scheduler.Params {
+	return scheduler.Params{
+		MinBattery: s.cfg.MinAssignBattery, ReserveBattery: s.cfg.ReserveBattery, MovingDrain: s.cfg.MovingDrain,
+	}
+}
+
+func (s *Sim) beginJob(robot *RobotState, job *JobState) {
+	job.Status, job.AssignedRobot = JobAssigned, robot.ID
+	if s.cfg.MaintenanceBay != nil {
+		job.AssignedTick = s.state.Tick
+	}
+	robot.Status, robot.JobID = RobotMoving, job.ID
+	s.prepareNavigation(robot, job.From)
 }
 
 func (s *Sim) dispatchDistance() scheduler.Distance {

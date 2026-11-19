@@ -17,6 +17,9 @@ func (s *Service) advanceRevision() error {
 		s.poisoned = true
 		return ErrPoisoned
 	}
+	if s.automaticVersions != nil {
+		s.refreshCommandVersions(s.commander.Snapshot())
+	}
 	s.revision++
 	return nil
 }

@@ -81,6 +81,11 @@ func (s *Sim) Tick() {
 	}
 	s.stepRobots()
 	if s.cfg.MaintenanceBay != nil {
+		for i := range s.state.Jobs {
+			if job := &s.state.Jobs[i]; job.Status != JobDone {
+				s.trackJobDeadline(job)
+			}
+		}
 		s.trimCompletedJobs()
 	}
 	s.state.Aisles = s.snapshotAisles()
@@ -103,6 +108,18 @@ func (s *Sim) Snapshot() State {
 		}
 	}
 	state.Jobs = append([]JobState{}, s.state.Jobs...)
+	if s.cfg.MaintenanceBay != nil {
+		for i := range state.Jobs {
+			job := &state.Jobs[i]
+			job.QueueAgeTicks = job.AssignedTick - job.CreatedTick
+			if job.Status == JobPending {
+				job.QueueAgeTicks = state.Tick - job.CreatedTick
+			}
+			if job.Status == JobInProgress {
+				job.CargoRobotID = job.AssignedRobot
+			}
+		}
+	}
 	state.Stations = append([]StationState{}, s.state.Stations...)
 	state.TrafficDeadlocks = slices.Clone(s.state.TrafficDeadlocks)
 	for i := range state.TrafficDeadlocks {

@@ -227,7 +227,7 @@ func (s *Sim) updateArrival(robot *RobotState, job *JobState) bool {
 		job.Status = JobDone
 		robot.Status, robot.JobID = RobotIdle, ""
 		if s.cfg.MaintenanceBay != nil {
-			s.state.CompletedJobs++
+			s.completeJob(job)
 		}
 		return true
 	}

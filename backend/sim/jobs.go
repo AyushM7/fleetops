@@ -6,7 +6,11 @@ import (
 	"strconv"
 )
 
-const retainedCompletedJobs = 100
+const (
+	retainedCompletedJobs = 100
+	priorityJobEvery      = 4
+	priorityDeadlineSlack = 40
+)
 
 func (c Config) jobEndpoints() []Point {
 	cells := c.JobCells()
@@ -39,10 +43,44 @@ func (s *Sim) addJob() {
 		s.jobSequence++
 		number = s.jobSequence
 	}
-	s.state.Jobs = append(s.state.Jobs, JobState{
-		ID:   fmt.Sprintf("J%d", number),
-		From: s.jobCells[from], To: s.jobCells[to], Status: JobPending,
-	})
+	job := JobState{
+		ID: fmt.Sprintf("J%d", number), From: s.jobCells[from], To: s.jobCells[to],
+		Status: JobPending,
+	}
+	if s.cfg.MaintenanceBay != nil {
+		job.Type, job.CreatedTick = JobNormal, s.state.Tick
+		if number%priorityJobEvery == 0 {
+			job.Type = JobPriority
+			// Include the shortest delivery leg before allowing time for pickup and traffic.
+			route, _ := s.PlanRoute(job.From, job.To)
+			job.DeadlineTick = job.CreatedTick + len(route) + priorityDeadlineSlack
+		}
+	}
+	s.state.Jobs = append(s.state.Jobs, job)
+}
+
+func (s *Sim) trackJobDeadline(job *JobState) {
+	if job.Type == JobPriority && !job.DeadlineMissed && s.state.Tick > job.DeadlineTick {
+		job.DeadlineMissed = true
+		s.state.PriorityDeadlinesMissed++
+	}
+}
+
+func (s *Sim) completeJob(job *JobState) {
+	s.state.CompletedJobs++
+	if job.Type == "" {
+		return
+	}
+	job.CompletedTick = s.state.Tick
+	job.Outcome = JobDelivered
+	if job.Type == JobPriority {
+		s.trackJobDeadline(job)
+		job.Outcome = JobLate
+		if !job.DeadlineMissed {
+			job.Outcome = JobOnTime
+			s.state.PriorityDeadlinesMet++
+		}
+	}
 }
 
 func countJobs(jobs []JobState) (active, completed int) {
