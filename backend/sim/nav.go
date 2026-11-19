@@ -6,6 +6,7 @@ type robotNavigation struct {
 	target     Point
 	route      []Point
 	relocation bool
+	undocking  bool
 }
 
 func (s *Sim) clearNavigation(robot *RobotState) {
@@ -48,7 +49,9 @@ func (s *Sim) planNavigation(robot *RobotState, target Point, dynamic bool) bool
 			return false
 		}
 	}
-	s.navigation[robot.ID] = robotNavigation{target: target, route: points, relocation: s.navigation[robot.ID].relocation}
+	nav := s.navigation[robot.ID]
+	nav.target, nav.route = target, points
+	s.navigation[robot.ID] = nav
 	return true
 }
 
@@ -103,6 +106,9 @@ func (s *Sim) advanceNavigation(robot *RobotState, target Point) bool {
 	robot.X, robot.Y = next.X, next.Y
 	robot.WaitTicks, robot.Blocked = 0, false
 	nav.route = nav.route[1:]
+	if nav.undocking && !s.cfg.chargerPocket(next) {
+		nav.undocking = false
+	}
 	s.navigation[robot.ID] = nav
 	return true
 }

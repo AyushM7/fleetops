@@ -33,10 +33,11 @@ func (s *Sim) seekParking(skip []bool) {
 			continue
 		}
 		if route, reachable := s.navigationRoute(*robot, target, true); reachable {
-			s.navigation[robot.ID] = robotNavigation{target: target, route: route, relocation: true}
+			s.navigation[robot.ID] = robotNavigation{target: target, route: route, relocation: true, undocking: docked}
 			robot.Status = RobotMoving
 		} else if docked {
 			if nav, feasible := s.relocationRoute(*robot); feasible {
+				nav.undocking = true
 				s.navigation[robot.ID], robot.Status = nav, RobotMoving
 			}
 		}

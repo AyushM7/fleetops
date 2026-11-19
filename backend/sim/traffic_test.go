@@ -72,6 +72,28 @@ func TestWarehouseV2NarrowPassageKeepsItsExitAndHasNoJobStops(t *testing.T) {
 	}
 }
 
+func TestWarehouseV2ProtectsChargerPocketExit(t *testing.T) {
+	s := newTestSim(t, WarehouseV2Config(), 3)
+	charger, pocket, exit := Point{12, 0}, Point{11, 0}, Point{11, 1}
+	arriving, departing := &s.state.Robots[2], &s.state.Robots[4]
+	arriving.X, arriving.Y, arriving.Status = exit.X, exit.Y, RobotMoving
+	departing.X, departing.Y, departing.Status = charger.X, charger.Y, RobotMoving
+	s.navigation[departing.ID] = robotNavigation{target: exit, route: []Point{pocket, exit}, relocation: true, undocking: true}
+	if blocker := s.crossingBlocker(*departing, []Point{pocket, exit}); blocker != 2 {
+		t.Errorf("undocking into a pocket with an occupied exit was admitted, blocker = %d", blocker)
+	}
+	departing.X, departing.Y = pocket.X, pocket.Y
+	arriving.X, arriving.Y = 12, 1
+	s.navigation[departing.ID] = robotNavigation{target: exit, route: []Point{exit}, relocation: true, undocking: true}
+	s.traffic = newTrafficReservations(s.state.Robots)
+	if s.reserveMove(*arriving, exit) {
+		t.Error("arriving robot took the departing robot's only exit")
+	}
+	if !s.reserveMove(*departing, exit) {
+		t.Error("departing robot could not take its reserved exit")
+	}
+}
+
 func TestWarehouseV2DetectsAndClearsAisleMouthDeadlock(t *testing.T) {
 	s := recoverySim(t, WarehouseV2Config(), []Point{{4, 2}, {4, 1}}, []Point{{3, 1}, {4, 3}}, [][]Point{{{4, 1}, {3, 1}}, {{4, 2}, {4, 3}}})
 	s.Tick()
@@ -91,6 +113,24 @@ func TestWarehouseV2DetectsAndClearsAisleMouthDeadlock(t *testing.T) {
 	}
 	if s.Snapshot().CompletedJobs != 2 {
 		t.Fatalf("cycle did not clear, robots: %+v", s.Snapshot().Robots)
+	}
+}
+
+func TestWarehouseV2CanYieldWithoutCompletingAnUnaffordableParkingTrip(t *testing.T) {
+	cfg := WarehouseV2Config()
+	s := newTestSim(t, cfg, 42)
+	robot := &s.state.Robots[0]
+	robot.X, robot.Y, robot.Status, robot.Battery = 11, 1, RobotMoving, 4
+	s.navigation[robot.ID] = robotNavigation{target: cfg.RobotStarts[0], relocation: true}
+	s.traffic = newTrafficReservations(s.state.Robots)
+	if !s.retreatRobot(robot, []int{0}) {
+		t.Fatal("parking robot could not yield despite an affordable charger exit")
+	}
+	if robot.Status != RobotIdle || (Point{robot.X, robot.Y}) != (Point{12, 1}) || robot.Battery != 3 {
+		t.Fatalf("parking should yield one cell and preserve energy for a charger: %+v", robot)
+	}
+	if _, exists := s.navigation[robot.ID]; exists {
+		t.Fatal("yielding robot kept its abandoned parking route")
 	}
 }
 
@@ -115,13 +155,18 @@ func TestWarehouseV2CongestionSafety(t *testing.T) {
 	}
 }
 
-func TestWarehouseV2SustainsDeliveriesAfterCongestion(t *testing.T) {
+func TestWarehouseV2SustainsDeliveriesAfterCongestionIntegration(t *testing.T) {
 	for _, seed := range []int64{1, 2, 3, 42, 99} {
 		t.Run(fmt.Sprint(seed), func(t *testing.T) {
 			s := newTestSim(t, WarehouseV2Config(), seed)
 			lastCompleted := 0
 			for tick := 1; tick <= 5000; tick++ {
 				s.Tick()
+				r5 := s.state.Robots[4]
+				if seed == 3 && (Point{r5.X, r5.Y}) == (Point{11, 0}) && r5.WaitTicks > 4*s.cfg.RecoverAfter {
+					t.Fatalf("tick %d: R5 trapped leaving C3 after %d ticks at %v, route %+v, cycles %+v", tick, r5.WaitTicks,
+						Point{r5.X, r5.Y}, s.navigation[r5.ID], s.state.TrafficDeadlocks)
+				}
 				for _, robot := range s.state.Robots {
 					if robot.Status == RobotFaulted {
 						t.Fatalf("tick %d: %s depleted its battery", tick, robot.ID)

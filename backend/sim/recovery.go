@@ -384,18 +384,26 @@ func (s *Sim) retreatRobot(robot *RobotState, cycle []int) bool {
 		// Budget the remaining mission using R1's parked-obstacle estimates;
 		// dynamic replanning follows the hold after cycle members can move away.
 		route, ok := s.navigationRoute(proposed, target, false)
-		if !ok || !s.reserveMove(*robot, point) {
+		nav := s.navigation[robot.ID]
+		cancelParking := !ok && s.cfg.MaintenanceBay != nil && nav.relocation && s.relocationAffordable(proposed, point, 0)
+		if (!ok && !cancelParking) || !s.reserveMove(*robot, point) {
 			continue
 		}
 		*robot = proposed
 		robot.WaitTicks, robot.Blocked = 0, false
-		nav := s.navigation[robot.ID]
-		nav.target, nav.route = target, route
-		s.navigation[robot.ID] = nav
 		recovery := s.recovery[robot.ID]
 		recovery.retreats = slices.DeleteFunc(recovery.retreats, func(tick int) bool { return tick <= s.state.Tick-200 })
 		recovery.retreats = append(recovery.retreats, s.state.Tick)
-		recovery.hold, recovery.resume = s.cfg.HoldTicks, true
+		if cancelParking {
+			robot.Status = RobotIdle
+			delete(s.navigation, robot.ID)
+			delete(s.idleTicks, robot.ID)
+			recovery.hold, recovery.resume = 0, false
+		} else {
+			nav.target, nav.route = target, route
+			s.navigation[robot.ID] = nav
+			recovery.hold, recovery.resume = s.cfg.HoldTicks, true
+		}
 		s.recovery[robot.ID] = recovery
 		return true
 	}

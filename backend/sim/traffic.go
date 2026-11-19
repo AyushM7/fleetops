@@ -64,10 +64,10 @@ func (s *Sim) crossingBlocker(mover RobotState, route []Point) int {
 			}
 		}
 	}
-	if !s.cfg.narrowPassage(first) {
+	if !s.cfg.narrowPassage(first) && !(s.navigation[mover.ID].undocking && s.cfg.chargerPocket(first)) {
 		return -1
 	}
-	// Wait outside a one-cell pinch until there is room to leave it.
+	// Wait outside the constrained cell until there is room to leave it.
 	return s.exitBlocker(mover, second)
 }
 
@@ -77,8 +77,12 @@ func (s *Sim) exitClaim(mover RobotState, target Point) int {
 		if robot.Status != RobotMoving {
 			continue
 		}
-		route := s.navigation[robot.ID].route
-		exit, ok := s.passageExit(Point{robot.X, robot.Y}, route)
+		nav := s.navigation[robot.ID]
+		position := Point{robot.X, robot.Y}
+		exit, ok := s.passageExit(position, nav.route)
+		if nav.undocking && len(nav.route) > 0 && s.cfg.chargerPocket(position) {
+			exit, ok = nav.route[0], true
+		}
 		if !ok || exit != target {
 			continue
 		}
@@ -110,6 +114,24 @@ func (s *Sim) passageExit(position Point, route []Point) (Point, bool) {
 		return route[0], true
 	}
 	return Point{}, false
+}
+
+func (c Config) chargerPocket(p Point) bool {
+	if c.CellTypeAt(p) != CellFree {
+		return false
+	}
+	// A station can be entered only by its reserved robot, so it is not
+	// a through exit for a robot departing via the adjacent pocket.
+	transit, besideStation := 0, false
+	for _, neighbor := range orthogonalNeighbors(p) {
+		switch c.CellTypeAt(neighbor) {
+		case CellFree, CellAisle:
+			transit++
+		case CellStation:
+			besideStation = true
+		}
+	}
+	return besideStation && transit == 1
 }
 
 func (c Config) narrowPassage(p Point) bool {
