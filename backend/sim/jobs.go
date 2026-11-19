@@ -2,11 +2,30 @@ package sim
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 )
 
+const retainedCompletedJobs = 100
+
+func (c Config) jobEndpoints() []Point {
+	cells := c.JobCells()
+	if c.MaintenanceBay != nil {
+		cells = slices.DeleteFunc(cells, func(p Point) bool {
+			// Reserve narrow passages and aisle mouths for continuous travel.
+			return c.narrowPassage(p) || c.onAisle(p) ||
+				c.onAisle(Point{p.X, p.Y - 1}) || c.onAisle(Point{p.X, p.Y + 1})
+		})
+	}
+	return cells
+}
+
 func (s *Sim) addJob() {
-	if len(s.state.Jobs) >= s.cfg.MaxJobs {
+	count := len(s.state.Jobs)
+	if s.cfg.MaintenanceBay != nil {
+		count, _ = countJobs(s.state.Jobs)
+	}
+	if count >= s.cfg.MaxJobs {
 		return
 	}
 	from := s.rng.Intn(len(s.jobCells))
@@ -15,9 +34,43 @@ func (s *Sim) addJob() {
 	if to >= from {
 		to++
 	}
+	number := len(s.state.Jobs) + 1
+	if s.cfg.MaintenanceBay != nil {
+		s.jobSequence++
+		number = s.jobSequence
+	}
 	s.state.Jobs = append(s.state.Jobs, JobState{
-		ID:   fmt.Sprintf("J%d", len(s.state.Jobs)+1),
+		ID:   fmt.Sprintf("J%d", number),
 		From: s.jobCells[from], To: s.jobCells[to], Status: JobPending,
+	})
+}
+
+func countJobs(jobs []JobState) (active, completed int) {
+	for _, job := range jobs {
+		if job.Status == JobDone {
+			completed++
+		} else {
+			active++
+		}
+	}
+	return active, completed
+}
+
+func (s *Sim) trimCompletedJobs() {
+	if len(s.state.Jobs) <= retainedCompletedJobs {
+		return
+	}
+	_, completed := countJobs(s.state.Jobs)
+	overflow := completed - retainedCompletedJobs
+	if overflow <= 0 {
+		return
+	}
+	s.state.Jobs = slices.DeleteFunc(s.state.Jobs, func(job JobState) bool {
+		if overflow == 0 || job.Status != JobDone {
+			return false
+		}
+		overflow--
+		return true
 	})
 }
 

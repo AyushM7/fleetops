@@ -77,6 +77,59 @@ func TestConfiguredJobIntervalAndLimit(t *testing.T) {
 	}
 }
 
+func TestWarehouseV2CapsAllActiveJobStates(t *testing.T) {
+	cfg := WarehouseV2Config()
+	cfg.AutoDispatch = false
+	cfg.InitialJobs, cfg.NewJobEvery, cfg.MaxJobs = 3, 1, 3
+	s := newTestSim(t, cfg, 42)
+	s.state.Jobs[1].Status, s.state.Jobs[2].Status = JobAssigned, JobInProgress
+	s.Tick()
+	if len(s.state.Jobs) != 3 {
+		t.Fatal("pending, assigned, and in-progress jobs must all count against MaxJobs")
+	}
+	completeV2Job(t, s, &s.state.Jobs[2])
+	s.Tick()
+	if len(s.state.Jobs) != 4 || s.state.Jobs[3].ID != "J4" || s.Snapshot().CompletedJobs != 1 {
+		t.Fatalf("completion should free one slot without deleting its history: %+v", s.state.Jobs)
+	}
+}
+
+func TestWarehouseV2TrimsHistoryAndKeepsIncreasingIDs(t *testing.T) {
+	cfg := WarehouseV2Config()
+	cfg.AutoDispatch = false
+	cfg.InitialJobs, cfg.NewJobEvery, cfg.MaxJobs = 1, 1, 2
+	first, replay := newTestSim(t, cfg, 42), newTestSim(t, cfg, 42)
+	for number := 2; number <= retainedCompletedJobs+42; number++ {
+		first.Tick()
+		replay.Tick()
+		state := first.Snapshot()
+		if !reflect.DeepEqual(state, replay.Snapshot()) {
+			t.Fatalf("same-seed replay diverged at tick %d", state.Tick)
+		}
+		if state.CompletedJobs != number-2 || len(state.Jobs) != 2+min(state.CompletedJobs, retainedCompletedJobs) {
+			t.Fatalf("tick %d: total completions %d, retained jobs %d", state.Tick, state.CompletedJobs, len(state.Jobs))
+		}
+		if state.Jobs[0].ID != "J1" || state.Jobs[len(state.Jobs)-1].ID != fmt.Sprintf("J%d", number) {
+			t.Fatalf("tick %d: expected the original pending job and the next monotonic ID", state.Tick)
+		}
+		if state.CompletedJobs > retainedCompletedJobs && state.Jobs[1].ID != fmt.Sprintf("J%d", number-retainedCompletedJobs) {
+			t.Fatalf("tick %d: expected older completions to be trimmed, got %s", state.Tick, state.Jobs[1].ID)
+		}
+		completeV2Job(t, first, &first.state.Jobs[len(first.state.Jobs)-1])
+		completeV2Job(t, replay, &replay.state.Jobs[len(replay.state.Jobs)-1])
+	}
+}
+
+func completeV2Job(t *testing.T, s *Sim, job *JobState) {
+	t.Helper()
+	robot := &s.state.Robots[0]
+	robot.X, robot.Y, robot.JobID, robot.Status = job.To.X, job.To.Y, job.ID, RobotMoving
+	job.Status, job.AssignedRobot = JobInProgress, robot.ID
+	if !s.updateArrival(robot, job) {
+		t.Fatal("job did not complete at its delivery point")
+	}
+}
+
 func TestNumericJobSelection(t *testing.T) {
 	for _, tc := range []struct {
 		id   string

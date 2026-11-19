@@ -2,6 +2,8 @@ package visitor
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"net/http"
 	"os"
@@ -45,7 +47,18 @@ func (f demoFactory) create(ctx context.Context) (*demoRun, error) {
 }
 
 func (f demoFactory) createScenario(ctx context.Context, id string) (*demoRun, error) {
-	service, err := fleet.NewVisitor(id, f.pool)
+	var service *fleet.Service
+	var err error
+	if id == warehouseScenario {
+		var seed [8]byte
+		if _, err := rand.Read(seed[:]); err != nil {
+			return nil, err
+		}
+		// Keep the replay seed exact in browser JSON numbers.
+		service, err = fleet.NewVisitorWarehouse(int64(binary.LittleEndian.Uint64(seed[:])&((1<<53)-1)), f.pool)
+	} else {
+		service, err = fleet.NewVisitor(id, f.pool)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -81,10 +94,14 @@ func (f demoFactory) createScenario(ctx context.Context, id string) (*demoRun, e
 	if s.proposalID != "" {
 		source = demoSourceGoScripted
 	}
-	return &demoRun{scenarioID: id, generation: s.generation, handler: handler, capture: s.capture,
+	run := &demoRun{scenarioID: id, generation: s.generation, runtimeID: s.runtimeID, handler: handler, capture: s.capture,
 		inspect: s.inspect, step: func(context.Context) error { return service.Tick() },
 		evidence: &demoExplanation{Generation: s.generation, RuntimeID: s.runtimeID, ScenarioID: id,
-			ProposalID: s.proposalID, ProposalSource: source, Observation: observation}}, nil
+			ProposalID: s.proposalID, ProposalSource: source, Observation: observation}}
+	if id == warehouseScenario {
+		run.warehouse = service.Snapshot
+	}
+	return run, nil
 }
 
 func (s *demoScenario) verifySubmission(ctx context.Context) error {

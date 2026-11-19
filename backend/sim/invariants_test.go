@@ -9,8 +9,16 @@ import (
 )
 
 func checkInvariants(s State, cfg Config, navigation ...map[string]robotNavigation) error {
-	if len(s.Jobs) > cfg.MaxJobs {
-		return fmt.Errorf("I10: %d jobs exceed limit %d", len(s.Jobs), cfg.MaxJobs)
+	jobsAgainstLimit := len(s.Jobs)
+	if cfg.MaintenanceBay != nil {
+		active, completed := countJobs(s.Jobs)
+		jobsAgainstLimit = active
+		if completed > retainedCompletedJobs || completed > s.CompletedJobs {
+			return fmt.Errorf("I10: %d retained completions exceed the history bound or completion total %d", completed, s.CompletedJobs)
+		}
+	}
+	if jobsAgainstLimit > cfg.MaxJobs {
+		return fmt.Errorf("I10: %d jobs exceed limit %d", jobsAgainstLimit, cfg.MaxJobs)
 	}
 	robots := make(map[string]RobotState, len(s.Robots))
 	jobs := make(map[string]JobState, len(s.Jobs))
@@ -45,7 +53,7 @@ func checkInvariants(s State, cfg Config, navigation ...map[string]robotNavigati
 	if err := checkFaultInvariants(s.Faults, s.Tick, robots); err != nil {
 		return err
 	}
-	if err := checkEntityOrder(s); err != nil {
+	if err := checkEntityOrder(s, cfg); err != nil {
 		return err
 	}
 	return checkAisleInvariants(s, cfg)
@@ -116,7 +124,7 @@ func checkRobotInvariants(robot RobotState, cfg Config, jobs map[string]JobState
 			return fmt.Errorf("I6: %s is %s with a job", robot.ID, robot.Status)
 		}
 	case RobotMoving:
-		if robot.JobID == "" && !cfg.AutoCharge {
+		if robot.JobID == "" && !cfg.AutoCharge && cfg.MaintenanceBay == nil {
 			return fmt.Errorf("I6: %s moving without a job", robot.ID)
 		}
 	case RobotFaulted:
@@ -139,13 +147,15 @@ func checkReservationInvariants(s State, cfg Config, robots map[string]RobotStat
 			}
 			robot, exists := robots[id]
 			arrived := len(nav.route) == 0 && nav.target == (Point{X: robot.X, Y: robot.Y})
-			if !exists || !cfg.Recovery || robot.Status != RobotMoving || robot.JobID != "" || cfg.CellTypeAt(nav.target) != CellFree || !arrived && (len(nav.route) == 0 || nav.route[len(nav.route)-1] != nav.target) {
+			targetKind := cfg.CellTypeAt(nav.target)
+			parking := targetKind == CellParking || targetKind == CellMaintenanceBay
+			if !exists || (!cfg.Recovery && cfg.MaintenanceBay == nil) || robot.Status != RobotMoving || robot.JobID != "" || targetKind != CellFree && !parking || !arrived && (len(nav.route) == 0 || nav.route[len(nav.route)-1] != nav.target) {
 				return fmt.Errorf("I6: %s has invalid relocation trip", id)
 			}
 			previous := Point{X: robot.X, Y: robot.Y}
 			for _, point := range nav.route {
 				dx, dy := point.X-previous.X, point.Y-previous.Y
-				if dx*dx+dy*dy != 1 || cfg.CellTypeAt(point) != CellFree && cfg.CellTypeAt(point) != CellAisle {
+				if dx*dx+dy*dy != 1 || cfg.CellTypeAt(point) != CellFree && cfg.CellTypeAt(point) != CellAisle && !(parking && point == nav.target) {
 					return fmt.Errorf("I6: %s has invalid relocation route", id)
 				}
 				previous = point
@@ -235,7 +245,7 @@ func checkStationInvariants(stations []StationState, robots map[string]RobotStat
 			continue
 		}
 		robot, exists := robots[station.OccupiedBy]
-		if !exists || robot.X != station.X || robot.Y != station.Y || (robot.Status != RobotCharging && robot.Status != RobotOffline) {
+		if !exists || robot.X != station.X || robot.Y != station.Y || (robot.Status != RobotCharging && robot.Status != RobotOffline && robot.Activity != ActivityUndocking) {
 			return fmt.Errorf("I7: station %s has invalid occupant %s", station.ID, station.OccupiedBy)
 		}
 		occupancy[robot.ID]++
@@ -270,8 +280,12 @@ func checkFaultInvariants(faults []FaultState, tick int, robots map[string]Robot
 	return nil
 }
 
-func checkEntityOrder(s State) error {
-	groups := map[string][]string{"R": {}, "J": {}, "S": {}, "F": {}}
+func checkEntityOrder(s State, cfg Config) error {
+	stationPrefix := "S"
+	if cfg.MaintenanceBay != nil {
+		stationPrefix = "C"
+	}
+	groups := map[string][]string{"R": {}, "J": {}, stationPrefix: {}, "F": {}}
 	for _, robot := range s.Robots {
 		groups["R"] = append(groups["R"], robot.ID)
 	}
@@ -279,13 +293,22 @@ func checkEntityOrder(s State) error {
 		groups["J"] = append(groups["J"], job.ID)
 	}
 	for _, station := range s.Stations {
-		groups["S"] = append(groups["S"], station.ID)
+		groups[stationPrefix] = append(groups[stationPrefix], station.ID)
 	}
 	for _, fault := range s.Faults {
 		groups["F"] = append(groups["F"], fault.ID)
 	}
-	for _, prefix := range []string{"R", "J", "S", "F"} {
+	for _, prefix := range []string{"R", "J", stationPrefix, "F"} {
+		previous := 0
 		for i, id := range groups[prefix] {
+			if prefix == "J" && cfg.MaintenanceBay != nil {
+				number := idNumber(id)
+				if number <= previous || id != fmt.Sprintf("J%d", number) {
+					return fmt.Errorf("I9: job ID %q does not increase after J%d", id, previous)
+				}
+				previous = number
+				continue
+			}
 			if want := fmt.Sprintf("%s%d", prefix, i+1); id != want {
 				return fmt.Errorf("I9: ID %q at index %d, want %s", id, i, want)
 			}

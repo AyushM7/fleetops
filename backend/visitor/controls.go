@@ -8,9 +8,11 @@ import (
 	"time"
 )
 
+const warehouseTickInterval = 400 * time.Millisecond
+
 func isTimeControl(path string) bool {
 	switch path {
-	case "/demo/play", "/demo/pause", "/demo/step", "/demo/speed/0.5", "/demo/speed/1", "/demo/speed/2":
+	case "/demo/play", "/demo/pause", "/demo/stop", "/demo/step", "/demo/speed/0.5", "/demo/speed/1", "/demo/speed/2":
 		return true
 	}
 	return false
@@ -31,6 +33,19 @@ func demoInterval(speed string) time.Duration {
 // No catch-up ticks, per-request timers, or worker per Play are created.
 func (c *demoController) advanceInteractive(ctx context.Context, now time.Time) error {
 	if !c.running || now.Before(c.nextTick) {
+		return nil
+	}
+	if c.run.warehouse != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := c.run.step(ctx); err != nil {
+			c.ready, c.running = false, false
+			c.run.events.signal()
+			return err
+		}
+		c.nextTick = now.Add(warehouseTickInterval)
+		c.publishWarehouse("tick")
 		return nil
 	}
 	status, err := c.status(ctx)
@@ -60,6 +75,11 @@ func (c *demoController) status(ctx context.Context) (demoStatus, error) {
 		status.Speed = "1"
 	}
 	if !status.Ready {
+		return status, nil
+	}
+	if c.run.warehouse != nil {
+		state := c.run.warehouse()
+		status.Warehouse, status.State, status.Evidence = &state, c.warehouseState(), c.run.evidence
 		return status, nil
 	}
 	snapshot, decided, err := c.run.inspect(ctx)
@@ -113,6 +133,17 @@ func (c *demoController) control(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "simulation unavailable", 503)
 		return
 	}
+	if c.run.warehouse != nil {
+		before := c.warehouseState()
+		c.ensureWarehouseSnapshot()
+		if c.applyWarehouseControl(w, r.URL.Path) {
+			if c.warehouseState() != before {
+				c.publishWarehouse("state")
+			}
+			_ = c.writeStatus(w, r.Context())
+		}
+		return
+	}
 	status, err := c.status(r.Context())
 	if err != nil || status.State == "unavailable" {
 		http.Error(w, "simulation unavailable; reconcile unknown outcomes", 503)
@@ -123,6 +154,38 @@ func (c *demoController) control(w http.ResponseWriter, r *http.Request) {
 			c.ready, c.running = false, false
 		}
 	}
+}
+
+func (c *demoController) warehouseState() string {
+	switch {
+	case c.stopped:
+		return "stopped"
+	case c.running:
+		return "running"
+	default:
+		return "paused"
+	}
+}
+
+func (c *demoController) applyWarehouseControl(w http.ResponseWriter, path string) bool {
+	switch path {
+	case "/demo/play":
+		if c.stopped {
+			http.Error(w, "warehouse stopped; restart to begin a new run", http.StatusConflict)
+			return false
+		}
+		if !c.running {
+			c.running, c.nextTick = true, time.Now().Add(warehouseTickInterval)
+		}
+	case "/demo/pause":
+		c.running = false
+	case "/demo/stop":
+		c.running, c.stopped = false, true
+	default:
+		http.Error(w, "warehouse ticks are controlled by the server", http.StatusConflict)
+		return false
+	}
+	return true
 }
 
 func (c *demoController) applyControl(w http.ResponseWriter, r *http.Request, status demoStatus) bool {

@@ -1,6 +1,7 @@
 package visitor
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -243,6 +244,72 @@ func TestPUB02TwoVisitorIntegration(t *testing.T) {
 		t.Fatal("expiry affected B")
 	}
 	t.Log("PASS: distinct runtimes/observations, refresh, private proposals/provenance/audits, independent approval/step/scenario/restart, expiry and schema cleanup; scripted Go presets, no agent runtime or model inference")
+}
+
+func TestWarehouseSSEAndSchemaCleanupIntegration(t *testing.T) {
+	g, factory, a, b := visitorIntegration(t)
+	initialA, initialB := a.status(t), b.status(t)
+	schemaA := visitorSchema(t, a, initialA.Generation)
+	var selected demoStatus
+	if err := json.Unmarshal(a.must(t, "/demo/scenario/"+warehouseScenario, initialA.Generation, "", "{}"), &selected); err != nil || selected.Generation == "" {
+		t.Fatalf("warehouse selection failed: %+v, %v", selected, err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.origin+"/demo/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var session *visitorSession
+	for _, cookie := range a.client.Jar.Cookies(req.URL) {
+		if cookie.Name == g.cookieName {
+			session = g.manager.lookup(cookie.Value)
+		}
+	}
+	if session == nil {
+		t.Fatal("warehouse visitor session missing")
+	}
+	res, err := a.client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("warehouse stream returned %d", res.StatusCode)
+	}
+	reader := bufio.NewScanner(res.Body)
+	initial := readWarehouseFrame(t, reader, "snapshot", selected.Generation, 1)
+	if len(initial.Snapshot.Robots) != 11 || len(initial.Snapshot.Stations) != 4 || initial.RuntimeID == initialB.Evidence.RuntimeID {
+		t.Fatalf("invalid isolated warehouse snapshot: %+v", initial)
+	}
+	a.must(t, "/demo/play", selected.Generation, "", "{}")
+	readWarehouseFrame(t, reader, "state", selected.Generation, 2)
+	if tick := readWarehouseFrame(t, reader, "tick", selected.Generation, 3); tick.Tick != 1 {
+		t.Fatalf("expected the first server tick, got %d", tick.Tick)
+	}
+
+	session.mu.Lock()
+	session.deadline = time.Now().Add(-time.Second)
+	session.mu.Unlock()
+	for reader.Scan() {
+	}
+	if err := reader.Err(); err != nil {
+		t.Fatalf("expired warehouse stream did not close: %v", err)
+	}
+	for {
+		var exists bool
+		if err := factory.admin.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname=$1)`, schemaA).Scan(&exists); err != nil {
+			t.Fatal(err)
+		}
+		if !exists {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if after := b.status(t); !reflect.DeepEqual(after, initialB) {
+		t.Fatal("warehouse session expiry affected another visitor")
+	}
 }
 
 func TestPUB02ConcurrentRestartsIntegration(t *testing.T) {

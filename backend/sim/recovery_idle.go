@@ -44,6 +44,7 @@ func (s *Sim) yieldIdleAisleMouth(waiter, owner int) bool {
 	probe.state.Robots = slices.Clone(s.state.Robots)
 	probe.navigation = maps.Clone(s.navigation)
 	probe.recovery = maps.Clone(s.recovery)
+	probe.traffic = nil
 	id := s.state.Robots[waiter].ID
 	recovery := probe.recovery[id]
 	recovery.retreats = slices.Clone(recovery.retreats)
@@ -54,7 +55,11 @@ func (s *Sim) yieldIdleAisleMouth(waiter, owner int) bool {
 	if _, feasible := probe.relocationRoute(probe.state.Robots[owner]); !feasible {
 		return false
 	}
-	s.state.Robots[waiter] = probe.state.Robots[waiter]
+	yielded := probe.state.Robots[waiter]
+	if !s.reserveMove(s.state.Robots[waiter], Point{yielded.X, yielded.Y}) {
+		return false
+	}
+	s.state.Robots[waiter] = yielded
 	s.navigation[id] = probe.navigation[id]
 	s.recovery[id] = probe.recovery[id]
 	return true

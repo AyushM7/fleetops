@@ -57,12 +57,16 @@ func TestRunValidArguments(t *testing.T) {
 }
 
 func TestRunLayouts(t *testing.T) {
-	for _, layout := range []string{"default", "warehouse"} {
-		t.Run(layout, func(t *testing.T) {
-			cfg := sim.DefaultConfig()
-			if layout == "warehouse" {
-				cfg = sim.WarehouseConfig()
-			}
+	for _, tc := range []struct {
+		layout string
+		config func() sim.Config
+	}{
+		{"default", sim.DefaultConfig},
+		{"warehouse", sim.WarehouseConfig},
+		{"warehouse-v2", sim.WarehouseV2Config},
+	} {
+		t.Run(tc.layout, func(t *testing.T) {
+			cfg := tc.config()
 			for _, ticks := range []int{0, 300} {
 				s, err := sim.New(cfg, 42)
 				if err != nil {
@@ -77,9 +81,9 @@ func TestRunLayouts(t *testing.T) {
 				}
 				for repeat := 0; repeat < 2; repeat++ {
 					var stdout, stderr bytes.Buffer
-					code := run([]string{"-layout=" + layout, "-ticks=" + fmt.Sprint(ticks)}, &stdout, &stderr)
+					code := run([]string{"-layout=" + tc.layout, "-ticks=" + fmt.Sprint(ticks)}, &stdout, &stderr)
 					if code != 0 || stderr.Len() != 0 || !bytes.Equal(stdout.Bytes(), append(want, '\n')) {
-						t.Fatalf("layout=%s ticks=%d repeat=%d exit=%d stderr=%q: snapshot mismatch", layout, ticks, repeat, code, stderr.String())
+						t.Fatalf("layout=%s ticks=%d repeat=%d exit=%d stderr=%q: snapshot mismatch", tc.layout, ticks, repeat, code, stderr.String())
 					}
 				}
 			}

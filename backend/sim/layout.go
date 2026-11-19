@@ -16,6 +16,22 @@ func WarehouseConfig() Config {
 	return c
 }
 
+// WarehouseV2Config returns the fixed warehouse for the 11-robot fleet.
+func WarehouseV2Config() Config {
+	c := WarehouseConfig()
+	c.Height = 13
+	c.ChargeRelease, c.ParkingGraceTicks = 85, 10
+	c.Stations = []Point{{1, 0}, {6, 0}, {12, 0}, {18, 0}}
+	c.MaintenanceBay = &Point{9, 0}
+	c.Walls = append(c.Walls, Point{8, 0}, Point{10, 0})
+	c.RobotStarts = make([]Point, 0, warehouseTransportCount)
+	for x := 0; x < c.Width; x += 2 {
+		c.RobotStarts = append(c.RobotStarts, Point{x, 12})
+		c.Walls = append(c.Walls, Point{x + 1, 12})
+	}
+	return c
+}
+
 func orthogonalNeighbors(p Point) [4]Point {
 	return [4]Point{{X: p.X - 1, Y: p.Y}, {X: p.X + 1, Y: p.Y}, {X: p.X, Y: p.Y - 1}, {X: p.X, Y: p.Y + 1}}
 }
@@ -53,8 +69,19 @@ func (c Config) validateConnectivity() error {
 			return fmt.Errorf("%w: V12 station %v has no access to the traversable component", ErrInvalidConfig, station)
 		}
 	}
-	// V6 restricts starts to job cells or stations, so the checks above also
-	// cover every robot start without making stations BFS transit cells.
+	if c.MaintenanceBay != nil {
+		for _, bay := range c.robotStarts() {
+			entrances := 0
+			for _, neighbor := range orthogonalNeighbors(bay) {
+				if visited[neighbor] {
+					entrances++
+				}
+			}
+			if entrances != 1 {
+				return fmt.Errorf("%w: V2 bay %v must have exactly one corridor entrance", ErrInvalidConfig, bay)
+			}
+		}
+	}
 	return nil
 }
 

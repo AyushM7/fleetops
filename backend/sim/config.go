@@ -5,6 +5,8 @@ import (
 	"slices"
 )
 
+const warehouseTransportCount = 10
+
 type Config struct {
 	Width                 int
 	Height                int
@@ -13,10 +15,11 @@ type Config struct {
 	AisleYMax             int
 	Walls                 []Point
 	Stations              []Point
-	RobotStarts           []Point
+	RobotStarts           []Point // V2 reserves these starts for transport robots.
+	MaintenanceBay        *Point  // Enables V2 and is the sole maintenance start.
 	InitialJobs           int
 	NewJobEvery           int
-	MaxJobs               int
+	MaxJobs               int // Caps active jobs in V2 and total retained jobs in legacy scenarios.
 	MovingDrain           int
 	IdleDrainEvery        int
 	ChargeGain            int
@@ -29,6 +32,8 @@ type Config struct {
 	ReserveBattery        int
 	AutoCharge            bool
 	ChargeBelow           int
+	ChargeRelease         int
+	ParkingGraceTicks     int
 	Recovery              bool
 	RecoverAfter          int
 	HoldTicks             int
@@ -79,6 +84,10 @@ func (c Config) CellTypeAt(p Point) CellType {
 		return CellStation
 	case p.Y >= c.AisleYMin && p.Y <= c.AisleYMax && slices.Contains(c.AisleColumns, p.X):
 		return CellAisle
+	case c.MaintenanceBay != nil && p == *c.MaintenanceBay:
+		return CellMaintenanceBay
+	case c.MaintenanceBay != nil && slices.Contains(c.RobotStarts, p):
+		return CellParking
 	default:
 		return CellFree
 	}
@@ -109,7 +118,18 @@ func (c Config) Clone() Config {
 	c.Walls = slices.Clone(c.Walls)
 	c.Stations = slices.Clone(c.Stations)
 	c.RobotStarts = slices.Clone(c.RobotStarts)
+	if c.MaintenanceBay != nil {
+		bay := *c.MaintenanceBay
+		c.MaintenanceBay = &bay
+	}
 	return c
+}
+
+func (c Config) robotStarts() []Point {
+	if c.MaintenanceBay == nil {
+		return c.RobotStarts
+	}
+	return append(slices.Clone(c.RobotStarts), *c.MaintenanceBay)
 }
 
 func (c Config) Validate() error {
@@ -153,7 +173,7 @@ func (c Config) Validate() error {
 	if c.MaxJobs < 1 || c.MaxJobs > 200 || c.InitialJobs < 0 || c.InitialJobs > c.MaxJobs {
 		return fmt.Errorf("%w: MaxJobs must be in [1,200] and InitialJobs in [0,MaxJobs]", ErrInvalidConfig)
 	}
-	if len(c.JobCells()) < 2 {
+	if len(c.jobEndpoints()) < 2 {
 		return fmt.Errorf("%w: at least two eligible job cells are required", ErrInvalidConfig)
 	}
 	if err := c.validateConnectivity(); err != nil {
@@ -178,6 +198,14 @@ func (c Config) validateWarehouseSettings() error {
 	if c.AutoCharge && (c.ChargeBelow <= c.MinAssignBattery || c.ChargeBelow > 100) {
 		return fmt.Errorf("%w: V14 AutoCharge requires MinAssignBattery < ChargeBelow <= 100", ErrInvalidConfig)
 	}
+	if c.MaintenanceBay != nil {
+		if c.AutoCharge && (c.ChargeRelease <= c.ChargeBelow || c.ChargeRelease > 100) {
+			return fmt.Errorf("%w: V2 requires ChargeBelow < ChargeRelease <= 100", ErrInvalidConfig)
+		}
+		if c.ParkingGraceTicks < 0 {
+			return fmt.Errorf("%w: V2 ParkingGraceTicks must be nonnegative", ErrInvalidConfig)
+		}
+	}
 	if c.Recovery && (!c.AutoCharge || c.RecoverAfter <= c.BlockedAfter) {
 		return fmt.Errorf("%w: Recovery requires AutoCharge and RecoverAfter > BlockedAfter", ErrInvalidConfig)
 	}
@@ -198,16 +226,21 @@ func (c Config) validateLayout() error {
 	if len(c.Stations) < 1 || len(c.Stations) > 4 {
 		return fmt.Errorf("%w: station count must be in [1,4]", ErrInvalidConfig)
 	}
-	if len(c.RobotStarts) < 5 || len(c.RobotStarts) > 8 {
+	if c.MaintenanceBay != nil {
+		if len(c.RobotStarts) != warehouseTransportCount || len(c.Stations) != 4 {
+			return fmt.Errorf("%w: V2 requires 10 transport starts and 4 stations", ErrInvalidConfig)
+		}
+	} else if len(c.RobotStarts) < 5 || len(c.RobotStarts) > 8 {
 		return fmt.Errorf("%w: robot start count must be in [5,8]", ErrInvalidConfig)
 	}
+	starts := c.robotStarts()
 	for _, group := range []struct {
 		name   string
 		points []Point
 	}{
 		{"stations", c.Stations},
 		{"walls", c.Walls},
-		{"robot starts", c.RobotStarts},
+		{"robot starts", starts},
 	} {
 		seen := make(map[Point]bool, len(group.points))
 		for _, p := range group.points {
@@ -227,9 +260,12 @@ func (c Config) validateLayout() error {
 			return fmt.Errorf("%w: wall %v overlaps an aisle or station", ErrInvalidConfig, p)
 		}
 	}
-	for _, p := range c.RobotStarts {
+	for _, p := range starts {
 		if slices.Contains(c.Walls, p) {
 			return fmt.Errorf("%w: robot start %v is on a wall", ErrInvalidConfig, p)
+		}
+		if c.MaintenanceBay != nil && (c.onAisle(p) || slices.Contains(c.Stations, p)) {
+			return fmt.Errorf("%w: V2 bay %v overlaps an aisle or station", ErrInvalidConfig, p)
 		}
 	}
 	return nil

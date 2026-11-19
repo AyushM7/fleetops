@@ -11,7 +11,7 @@ func (g routingGrid) Height() int { return g.cfg.Height }
 
 func (g routingGrid) Walkable(c routing.Cell) bool {
 	switch g.cfg.CellTypeAt(Point{X: c.X, Y: c.Y}) {
-	case CellFree, CellAisle, CellStation:
+	case CellFree, CellAisle, CellStation, CellParking, CellMaintenanceBay:
 		return true
 	default:
 		return false

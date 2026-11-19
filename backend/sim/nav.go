@@ -6,6 +6,7 @@ type robotNavigation struct {
 	target     Point
 	route      []Point
 	relocation bool
+	undocking  bool
 }
 
 func (s *Sim) clearNavigation(robot *RobotState) {
@@ -43,7 +44,14 @@ func (s *Sim) planNavigation(robot *RobotState, target Point, dynamic bool) bool
 	if !ok {
 		return false
 	}
-	s.navigation[robot.ID] = robotNavigation{target: target, route: points, relocation: s.navigation[robot.ID].relocation}
+	if s.cfg.MaintenanceBay != nil {
+		if exit, restricted := s.passageExit(Point{robot.X, robot.Y}, points); restricted && s.exitBlocker(*robot, exit) >= 0 {
+			return false
+		}
+	}
+	nav := s.navigation[robot.ID]
+	nav.target, nav.route = target, points
+	s.navigation[robot.ID] = nav
 	return true
 }
 
@@ -73,7 +81,9 @@ func (s *Sim) prepareNavigation(robot *RobotState, target Point) {
 	if _, exists := s.navigation[robot.ID]; !s.cfg.AutoCharge || !exists {
 		s.navigation[robot.ID] = robotNavigation{target: target}
 	}
-	s.planNavigation(robot, target, false)
+	if s.cfg.MaintenanceBay == nil || !s.planNavigation(robot, target, true) {
+		s.planNavigation(robot, target, false)
+	}
 }
 
 func (s *Sim) waitForNavigation(robot *RobotState, target Point) {
@@ -88,7 +98,7 @@ func (s *Sim) waitForNavigation(robot *RobotState, target Point) {
 func (s *Sim) advanceNavigation(robot *RobotState, target Point) bool {
 	s.prepareNavigation(robot, target)
 	nav := s.navigation[robot.ID]
-	if nav.target != target || len(nav.route) == 0 || s.navigationBlocked(*robot, nav.route[0], true) {
+	if nav.target != target || len(nav.route) == 0 || s.nextStepBlocked(*robot, nav.route) || !s.reserveMove(*robot, nav.route[0]) {
 		s.waitForNavigation(robot, target)
 		return false
 	}
@@ -96,6 +106,9 @@ func (s *Sim) advanceNavigation(robot *RobotState, target Point) bool {
 	robot.X, robot.Y = next.X, next.Y
 	robot.WaitTicks, robot.Blocked = 0, false
 	nav.route = nav.route[1:]
+	if nav.undocking && !s.cfg.chargerPocket(next) {
+		nav.undocking = false
+	}
 	s.navigation[robot.ID] = nav
 	return true
 }

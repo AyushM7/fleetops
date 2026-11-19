@@ -14,11 +14,15 @@ func (s *Sim) stepRobots() {
 	for i := range s.state.Robots {
 		skip[i] = s.prepareRobot(&s.state.Robots[i])
 	}
-	s.assignPending(skip)   // Pass B.
-	s.seekCharging(skip)    // Pass C.
+	s.assignPending(skip) // Pass B.
+	s.seekCharging(skip)  // Pass C.
+	s.seekParking(skip)
 	s.clearIdleAisles(skip) // Pass C2.
+	if s.cfg.MaintenanceBay != nil {
+		s.traffic = newTrafficReservations(s.state.Robots)
+	}
 	moved := make([]bool, len(s.state.Robots))
-	for i := range s.state.Robots { // Pass D retains numeric movement priority.
+	for _, i := range s.movementOrder() {
 		robot := &s.state.Robots[i]
 		if skip[i] {
 			continue
@@ -32,7 +36,17 @@ func (s *Sim) stepRobots() {
 			s.finishNavigation(robot)
 		}
 	}
-	s.recoverTraffic(moved) // Pass E cannot move a robot twice.
+	events := s.recoverTraffic(moved)
+	if s.traffic != nil {
+		s.releaseVacatedStations()
+		s.state.TrafficDeadlocks = s.state.TrafficDeadlocks[:0]
+		for _, event := range events {
+			if len(event.cycle) > 0 {
+				s.state.TrafficDeadlocks = append(s.state.TrafficDeadlocks, TrafficDeadlock{event.cycle, event.robot})
+			}
+		}
+		s.traffic = nil
+	}
 }
 
 func (s *Sim) prepareRobot(robot *RobotState) bool {
@@ -61,19 +75,27 @@ func (s *Sim) prepareRobot(robot *RobotState) bool {
 }
 
 func (s *Sim) stepCharging(robot *RobotState) {
-	robot.Battery = min(100, robot.Battery+s.cfg.ChargeGain)
-	if robot.Battery < 100 {
+	target := 100
+	if s.cfg.MaintenanceBay != nil && s.cfg.AutoCharge {
+		target = s.cfg.ChargeRelease
+	}
+	if robot.Battery < target {
+		robot.Battery = min(target, robot.Battery+s.cfg.ChargeGain)
+	}
+	if robot.Battery < target {
 		return
 	}
 	robot.Status = RobotIdle
-	for i := range s.state.Stations {
-		if s.state.Stations[i].OccupiedBy == robot.ID {
-			s.state.Stations[i].OccupiedBy = ""
-		}
+	if station := s.occupiedStation(robot.ID); station != nil && s.cfg.MaintenanceBay == nil {
+		station.OccupiedBy = ""
 	}
 }
 
 func (s *Sim) stepIdle(robot *RobotState) {
+	if s.cfg.MaintenanceBay != nil && s.cfg.AutoCharge && s.needsCharge(*robot) {
+		// Low-power standby preserves the energy needed to reach a dock after traffic clears.
+		return
+	}
 	if s.queuedForCharging(*robot) {
 		return
 	}
@@ -88,7 +110,7 @@ func (s *Sim) stepIdle(robot *RobotState) {
 
 // Low-power waiting applies only while an affordable charger is unavailable.
 func (s *Sim) queuedForCharging(robot RobotState) bool {
-	if !s.cfg.AutoCharge || robot.Status != RobotIdle || robot.JobID != "" || robot.Battery >= s.cfg.ChargeBelow {
+	if !s.cfg.AutoCharge || robot.Status != RobotIdle || robot.JobID != "" || !s.needsCharge(robot) {
 		return false
 	}
 	for _, station := range s.state.Stations {
@@ -120,7 +142,12 @@ func (s *Sim) stepMoving(robot *RobotState) {
 		if job.Status != JobAssigned && job.Status != JobInProgress {
 			return
 		}
-		if updateArrival(robot, job) {
+		if s.cfg.MaintenanceBay != nil && job.Status == JobAssigned && (Point{robot.X, robot.Y}) == job.From {
+			job.Status = JobInProgress
+			s.prepareNavigation(robot, job.To)
+			return
+		}
+		if s.updateArrival(robot, job) {
 			return
 		}
 		target := job.From
@@ -131,7 +158,9 @@ func (s *Sim) stepMoving(robot *RobotState) {
 			return
 		}
 		previousStatus := job.Status
-		updateArrival(robot, job)
+		if s.cfg.MaintenanceBay == nil || previousStatus == JobInProgress {
+			s.updateArrival(robot, job)
+		}
 		robot.Battery = max(0, robot.Battery-s.cfg.MovingDrain)
 		if previousStatus == JobAssigned && job.Status == JobInProgress {
 			s.prepareNavigation(robot, job.To)
@@ -143,7 +172,53 @@ func (s *Sim) stepMoving(robot *RobotState) {
 	}
 }
 
-func updateArrival(robot *RobotState, job *JobState) bool {
+func (s *Sim) robotActivity(robot RobotState) RobotActivity {
+	position := Point{robot.X, robot.Y}
+	switch robot.Status {
+	case RobotFaulted:
+		return ActivityFaulted
+	case RobotOffline:
+		return ActivityOutOfService
+	case RobotCharging:
+		return ActivityCharging
+	case RobotMoving:
+		switch {
+		case s.occupiedStation(robot.ID) != nil:
+			return ActivityUndocking
+		case robot.WaitTicks > 0:
+			return ActivityWaitingForTraffic
+		case s.reservedStation(robot.ID) != nil:
+			return ActivityGoingToCharge
+		case s.navigation[robot.ID].relocation:
+			if s.isBay(s.navigation[robot.ID].target) {
+				return ActivityGoingToPark
+			}
+			return ActivityRelocating
+		}
+		for _, job := range s.state.Jobs {
+			if job.ID == robot.JobID && job.AssignedRobot == robot.ID {
+				switch {
+				case job.Status == JobInProgress:
+					return ActivityDelivering
+				case position == job.From:
+					return ActivityPickingUp
+				default:
+					return ActivityGoingToPickup
+				}
+			}
+		}
+	case RobotIdle:
+		if s.occupiedStation(robot.ID) != nil {
+			return ActivityUndocking
+		}
+		if s.isBay(position) {
+			return ActivityParked
+		}
+	}
+	return ActivityAvailable
+}
+
+func (s *Sim) updateArrival(robot *RobotState, job *JobState) bool {
 	position := Point{robot.X, robot.Y}
 	if job.Status == JobAssigned && position == job.From {
 		job.Status = JobInProgress
@@ -151,6 +226,9 @@ func updateArrival(robot *RobotState, job *JobState) bool {
 	if job.Status == JobInProgress && position == job.To {
 		job.Status = JobDone
 		robot.Status, robot.JobID = RobotIdle, ""
+		if s.cfg.MaintenanceBay != nil {
+			s.state.CompletedJobs++
+		}
 		return true
 	}
 	return false

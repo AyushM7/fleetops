@@ -2,11 +2,129 @@ package sim
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 )
+
+func TestWarehouseV2Starts(t *testing.T) {
+	cfg := WarehouseV2Config()
+	s := newTestSim(t, cfg, 42)
+	state := s.Snapshot()
+	if len(state.Robots) != 11 || len(state.Stations) != 4 {
+		t.Fatalf("got %d robots and %d stations, want 11 and 4", len(state.Robots), len(state.Stations))
+	}
+	for i, station := range state.Stations {
+		p := Point{station.X, station.Y}
+		if station.ID != fmt.Sprintf("C%d", i+1) || p != cfg.Stations[i] || s.CellAt(p) != CellStation {
+			t.Fatalf("station %d has unexpected startup state: %+v", i+1, station)
+		}
+	}
+	jobCells, starts := cfg.JobCells(), cfg.robotStarts()
+	for i, robot := range state.Robots {
+		p := Point{robot.X, robot.Y}
+		maintenance := i == 10
+		wantRole := RoleTransport
+		wantType := CellParking
+		if maintenance {
+			wantRole = RoleMaintenance
+			wantType = CellMaintenanceBay
+		}
+		if robot.ID != fmt.Sprintf("R%d", i+1) || robot.Role != wantRole || robot.Maintenance != maintenance || p != starts[i] || s.CellAt(p) != wantType || robot.Activity != ActivityParked || robot.Status != RobotIdle || robot.Battery != 100 {
+			t.Fatalf("robot %d has unexpected startup state: %+v", i+1, robot)
+		}
+		if slices.Contains(jobCells, p) {
+			t.Fatalf("bay %v is eligible for pickup or delivery", p)
+		}
+		for _, station := range cfg.Stations {
+			route, err := s.PlanRoute(p, station)
+			if err != nil || len(route) == 0 || route[len(route)-1] != station {
+				t.Fatalf("no route from %s's bay to %v: %v", robot.ID, station, err)
+			}
+			for _, step := range route[:len(route)-1] {
+				if !slices.Contains(jobCells, step) {
+					t.Fatalf("route from %s to %v uses resource cell %v for transit", robot.ID, station, step)
+				}
+			}
+		}
+	}
+	*cfg.MaintenanceBay = Point{0, 0}
+	if s.CellAt(Point{9, 0}) != CellMaintenanceBay || *WarehouseV2Config().MaintenanceBay != (Point{9, 0}) {
+		t.Fatal("simulator and warehouse constructor must own independent maintenance bay configuration")
+	}
+}
+
+func TestValidateWarehouseV2(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(*Config)
+		want   string
+	}{
+		{"missing transport", func(c *Config) { c.RobotStarts = c.RobotStarts[:9] }, "V2 requires 10 transport starts and 4 stations"},
+		{"extra transport", func(c *Config) { c.RobotStarts = append(c.RobotStarts, Point{0, 0}) }, "V2 requires 10 transport starts and 4 stations"},
+		{"missing charger", func(c *Config) { c.Stations = c.Stations[:3] }, "V2 requires 10 transport starts and 4 stations"},
+		{"duplicate parking", func(c *Config) { c.RobotStarts[0] = c.RobotStarts[1] }, "robot starts positions must be unique"},
+		{"duplicate chargers", func(c *Config) { c.Stations[0] = c.Stations[1] }, "stations positions must be unique"},
+		{"maintenance bay overlaps parking", func(c *Config) { *c.MaintenanceBay = c.RobotStarts[0] }, "robot starts positions must be unique"},
+		{"maintenance bay out of bounds", func(c *Config) { *c.MaintenanceBay = Point{-1, 0} }, "in bounds"},
+		{"parking on a wall", func(c *Config) { c.RobotStarts[0] = Point{1, 12} }, "on a wall"},
+		{"parking on a charger", func(c *Config) { c.RobotStarts[0] = c.Stations[0] }, "overlaps an aisle or station"},
+		{"parking on an aisle", func(c *Config) { c.RobotStarts[0] = Point{4, 2} }, "overlaps an aisle or station"},
+		{"parking disconnects the warehouse", func(c *Config) { c.RobotStarts[0] = Point{0, 11} }, "job cells must share one traversable component"},
+		{"parking in a corridor", func(c *Config) { c.RobotStarts[0] = Point{1, 11} }, "must have exactly one corridor entrance"},
+		{"isolated parking", func(c *Config) { c.Walls = append(c.Walls, Point{0, 11}) }, "must have exactly one corridor entrance"},
+		{"isolated maintenance bay", func(c *Config) { c.Walls = append(c.Walls, Point{9, 1}) }, "must have exactly one corridor entrance"},
+		{"isolated charger", func(c *Config) { c.Walls = append(c.Walls, Point{0, 0}, Point{2, 0}, Point{1, 1}) }, "V12 station"},
+		{"release does not exceed charge threshold", func(c *Config) { c.ChargeRelease = c.ChargeBelow }, "ChargeBelow < ChargeRelease"},
+		{"negative parking grace", func(c *Config) { c.ParkingGraceTicks = -1 }, "ParkingGraceTicks must be nonnegative"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := WarehouseV2Config()
+			tc.change(&cfg)
+			assertWarehouseValidation(t, cfg, tc.want)
+		})
+	}
+}
+
+func TestWarehouseV2KeepsMaintenanceOutOfTransport(t *testing.T) {
+	cfg := WarehouseV2Config()
+	cfg.InitialJobs = 0
+	s := newTestSim(t, cfg, 42)
+	s.state.Jobs = []JobState{{ID: "J1", From: Point{9, 1}, To: Point{9, 2}, Status: JobPending}}
+	s.Tick()
+	if assigned := s.state.Jobs[0].AssignedRobot; assigned == "" || assigned == "R11" || s.state.Robots[10].JobID != "" {
+		t.Fatalf("transport job assigned to %q with R11 job %q", assigned, s.state.Robots[10].JobID)
+	}
+
+	for _, tc := range []struct {
+		name     string
+		from, to int
+		want     error
+	}{
+		{"transport only", 0, 1, nil},
+		{"maintenance source", 10, 1, ErrReassignment},
+		{"maintenance recipient", 0, 10, ErrReassignment},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestSim(t, cfg, 42)
+			source, recipient := &s.state.Robots[tc.from], &s.state.Robots[tc.to]
+			s.state.Jobs = []JobState{{ID: "J1", From: Point{9, 1}, To: Point{9, 2}, Status: JobAssigned, AssignedRobot: source.ID}}
+			source.Status, source.JobID, source.Blocked, source.WaitTicks = RobotMoving, "J1", true, cfg.BlockedAfter
+			before := s.Snapshot()
+			if _, err := s.PreviewReassignment("J1", source.ID, recipient.ID); !errors.Is(err, tc.want) {
+				t.Errorf("preview %s → %s = %v, want %v", source.ID, recipient.ID, err, tc.want)
+			}
+			if err := s.ReassignUnstartedJob("J1", source.ID, recipient.ID); !errors.Is(err, tc.want) {
+				t.Errorf("reassignment %s → %s = %v, want %v", source.ID, recipient.ID, err, tc.want)
+			}
+			if tc.want != nil && !reflect.DeepEqual(before, s.Snapshot()) {
+				t.Fatal("rejected command mutated state")
+			}
+		})
+	}
+}
 
 func TestWarehouseConfig(t *testing.T) {
 	cfg := WarehouseConfig()
