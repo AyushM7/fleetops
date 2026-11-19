@@ -13,8 +13,10 @@ import (
 )
 
 var (
-	ErrAutomaticCommand = errors.New("invalid V2 automatic command")
-	ErrAutomaticExpired = errors.New("automatic command has expired or exceeds its freshness window")
+	ErrAutomaticCommand     = errors.New("invalid V2 automatic command")
+	ErrAutomaticExpired     = errors.New("automatic command has expired or exceeds its freshness window")
+	ErrAutomaticKeyConflict = errors.New("automatic command key already belongs to a different request")
+	ErrAutomaticPriorDenial = errors.New("automatic command was previously rejected")
 )
 
 const automaticMaxTTL = 30 * time.Second
@@ -22,6 +24,8 @@ const automaticMaxTTL = 30 * time.Second
 type AutomaticCommand struct {
 	RuntimeID            string                              `json:"runtimeId"`
 	ObservationID        string                              `json:"observationId"`
+	IdempotencyKey       string                              `json:"idempotencyKey"`
+	Preconditions        map[string]uint64                   `json:"preconditions"`
 	ExpiresAt            time.Time                           `json:"expiresAt"`
 	AssignJobBatch       *sim.AssignJobBatchRequest          `json:"assignJobBatch,omitempty"`
 	ReassignUnstartedJob *safety.ReassignUnstartedJobRequest `json:"reassignUnstartedJob,omitempty"`
@@ -29,24 +33,65 @@ type AutomaticCommand struct {
 
 type AutomaticResult struct {
 	AuditID        int64     `json:"auditId"`
+	PriorAuditID   int64     `json:"priorAuditId,omitempty"`
 	Execution      Execution `json:"execution"`
 	AuditCommitted bool      `json:"auditCommitted"`
 }
 
 func (c AutomaticCommand) validate() error {
-	if len(c.RuntimeID) != 33 || len(c.ObservationID) != 64 || (c.AssignJobBatch == nil) == (c.ReassignUnstartedJob == nil) {
+	if len(c.RuntimeID) != 33 || len(c.ObservationID) != 33 || !validCommandKey(c.IdempotencyKey) ||
+		(c.AssignJobBatch == nil) == (c.ReassignUnstartedJob == nil) {
 		return ErrAutomaticCommand
 	}
+	var targets []string
 	if c.AssignJobBatch != nil {
-		return c.AssignJobBatch.Validate()
+		if err := c.AssignJobBatch.Validate(); err != nil {
+			return err
+		}
+		targets = make([]string, 0, 2*len(c.AssignJobBatch.Assignments))
+		for _, assignment := range c.AssignJobBatch.Assignments {
+			targets = append(targets, assignment.JobID, assignment.RobotID)
+		}
+	} else {
+		r := c.ReassignUnstartedJob
+		if !prefixedCommandID(r.JobID, 'J') || !prefixedCommandID(r.FromRobotID, 'R') || !prefixedCommandID(r.ToRobotID, 'R') || r.FromRobotID == r.ToRobotID {
+			return ErrAutomaticCommand
+		}
+		targets = []string{r.JobID, r.FromRobotID, r.ToRobotID}
 	}
-	r := c.ReassignUnstartedJob
-	for _, id := range []string{r.JobID, r.FromRobotID, r.ToRobotID} {
-		if len(id) < 2 || len(id) > 20 {
+	if len(c.Preconditions) != len(targets) {
+		return ErrAutomaticCommand
+	}
+	for _, id := range targets {
+		if c.Preconditions[id] == 0 {
 			return ErrAutomaticCommand
 		}
 	}
 	return nil
+}
+
+func validCommandKey(id string) bool {
+	if len(id) < 8 || len(id) > 64 {
+		return false
+	}
+	for _, c := range id {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+func prefixedCommandID(id string, prefix byte) bool {
+	if len(id) < 2 || len(id) > 20 || id[0] != prefix || id[1] == '0' {
+		return false
+	}
+	for _, c := range id[1:] {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // ExecuteAutomatic owns admission, serialized Go execution and the durable receipt.
@@ -55,6 +100,7 @@ func (s *Service) ExecuteAutomatic(ctx context.Context, command AutomaticCommand
 	defer s.mu.Unlock()
 	defer s.poisonOnPanic()
 	received := s.clock().UTC()
+	command.ExpiresAt = command.ExpiresAt.UTC()
 	principal, _ := auth.FromContext(ctx)
 	payload := []byte("{}")
 	denied := command.validate()
@@ -67,24 +113,32 @@ func (s *Service) ExecuteAutomatic(ctx context.Context, command AutomaticCommand
 	}
 	if err := s.automaticAccess(principal, command.RuntimeID); err != nil {
 		denied, payload = err, []byte("{}")
-	} else if denied == nil {
-		denied = s.automaticGate(ctx, command, received)
 	}
 
 	// A canceled request cannot cancel the bounded write that records its outcome.
 	auditContext := context.WithoutCancel(ctx)
 	result := AutomaticResult{Execution: NotExecuted}
-	status, reason := "pending", ""
-	var finished *time.Time
-	if denied != nil {
-		status, reason, finished = "rejected", denied.Error(), &received
-	}
+	var prior *automaticReceipt
 	err := s.transact(auditContext, func(tx *db.Tx) error {
-		return tx.QueryRow(`INSERT INTO fleet_automatic_audit (runtime_id, subject, received_at, finished_at, command, status, reason)
-			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7) RETURNING id`, s.runtimeID, principal.Subject, received, finished, payload, status, reason).Scan(&result.AuditID)
+		var storageErr error
+		result.AuditID, prior, denied, storageErr = s.stageAutomatic(ctx, tx, command, principal.Subject, payload, received, denied)
+		return storageErr
 	})
 	if err != nil {
 		return s.automaticPersistenceFailure(result)
+	}
+	if prior != nil {
+		result.PriorAuditID = prior.id
+		switch prior.status {
+		case "applied":
+			result.Execution, result.AuditCommitted = Succeeded, true
+			return result, nil
+		case "rejected":
+			result.AuditCommitted = true
+			return result, ErrAutomaticPriorDenial
+		default:
+			return s.automaticPersistenceFailure(result)
+		}
 	}
 	if denied != nil {
 		result.AuditCommitted = true
@@ -92,11 +146,11 @@ func (s *Service) ExecuteAutomatic(ctx context.Context, command AutomaticCommand
 	}
 
 	// Stage the attempt durably before crossing the simulator mutation boundary.
-	denied = s.automaticGate(ctx, command, s.clock().UTC())
+	denied = s.automaticGate(ctx, command, principal.Subject, s.clock().UTC())
 	if denied == nil {
 		denied = s.applyAutomatic(command)
 	}
-	status = "applied"
+	status, reason := "applied", ""
 	if denied != nil {
 		status, reason = "rejected", denied.Error()
 	} else {
@@ -124,14 +178,14 @@ func (s *Service) automaticAccess(principal auth.Principal, runtimeID string) er
 	return nil
 }
 
-func (s *Service) automaticGate(ctx context.Context, command AutomaticCommand, now time.Time) error {
+func (s *Service) automaticGate(ctx context.Context, command AutomaticCommand, subject string, now time.Time) error {
 	if s.poisoned {
 		return ErrPoisoned
 	}
 	if now.IsZero() || !now.Before(command.ExpiresAt) || command.ExpiresAt.Sub(now) > automaticMaxTTL {
 		return ErrAutomaticExpired
 	}
-	if err := s.checkObservation([]string{command.ObservationID}, true); err != nil {
+	if err := s.checkAutomaticObservation(command, subject, now); err != nil {
 		return err
 	}
 	return ctx.Err()

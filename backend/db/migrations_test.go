@@ -31,7 +31,7 @@ func TestMigrationCatalogOrderingAndChecksums(t *testing.T) {
 		t.Fatal("checksum is not SHA-256 of exact SQL bytes")
 	}
 	embedded, err := loadMigrations(migrationFiles)
-	if err != nil || len(embedded) != 6 {
+	if err != nil || len(embedded) != 7 {
 		t.Fatalf("embedded foundation: %v", err)
 	}
 	for i, migration := range embedded {

@@ -8,11 +8,13 @@ import (
 	"errors"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/AyushM7/fleetops/backend/auth"
 	"github.com/AyushM7/fleetops/backend/db"
+	"github.com/AyushM7/fleetops/backend/safety"
 	"github.com/AyushM7/fleetops/backend/sim"
 )
 
@@ -48,14 +50,16 @@ func automaticContext(t *testing.T, runtimeID string) context.Context {
 	return ctx
 }
 
-func automaticBatch(t *testing.T, s *Service, now time.Time) AutomaticCommand {
+func automaticBatch(t *testing.T, s *Service, ctx context.Context) AutomaticCommand {
 	t.Helper()
-	view, err := s.ReadState(context.Background())
+	view, err := s.ReadAutomaticState(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return AutomaticCommand{
-		RuntimeID: s.RuntimeID(), ObservationID: view.ObservationID, ExpiresAt: now.Add(automaticMaxTTL),
+		RuntimeID: view.RuntimeID, ObservationID: view.ObservationID, ExpiresAt: view.ExpiresAt,
+		IdempotencyKey: "assign-test-key",
+		Preconditions:  map[string]uint64{"J1": view.Versions["J1"], "R1": view.Versions["R1"]},
 		AssignJobBatch: &sim.AssignJobBatchRequest{Assignments: []sim.JobAssignment{{JobID: "J1", RobotID: "R1"}}},
 	}
 }
@@ -71,8 +75,8 @@ func automaticAuditStatus(t *testing.T, pool *db.Pool, id int64, want, subject s
 }
 
 func TestAutomaticExecutionWithoutApprovalIntegration(t *testing.T) {
-	s, pool, now, ctx := automaticFixture(t)
-	cmd := automaticBatch(t, s, *now)
+	s, pool, _, ctx := automaticFixture(t)
+	cmd := automaticBatch(t, s, ctx)
 	result, err := s.ExecuteAutomatic(ctx, cmd)
 	if err != nil || result.Execution != Succeeded || !result.AuditCommitted || s.Snapshot().Jobs[0].AssignedRobot != "R1" {
 		t.Fatalf("automatic execution: %+v %v", result, err)
@@ -85,17 +89,24 @@ func TestAutomaticExecutionWithoutApprovalIntegration(t *testing.T) {
 }
 
 func TestAutomaticDenialsAreAuditedIntegration(t *testing.T) {
-	s, pool, now, ctx := automaticFixture(t)
+	s, pool, _, ctx := automaticFixture(t)
 	before := s.Snapshot()
-	cmd := automaticBatch(t, s, *now)
+	cmd := automaticBatch(t, s, ctx)
 	rejected, err := s.ExecuteAutomatic(context.Background(), cmd)
 	if !errors.Is(err, ErrUnauthorized) || rejected.Execution != NotExecuted || !rejected.AuditCommitted {
 		t.Fatalf("unauthenticated attempt: %+v %v", rejected, err)
 	}
 	automaticAuditStatus(t, pool, rejected.AuditID, "rejected", "")
-	cmd.AssignJobBatch.Assignments[0].JobID = "J99999"
+	read, err := s.ReadAutomaticState(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.ObservationID, cmd.ExpiresAt = read.ObservationID, read.ExpiresAt
+	cmd.AssignJobBatch = nil
+	cmd.ReassignUnstartedJob = &safety.ReassignUnstartedJobRequest{JobID: "J1", FromRobotID: "R1", ToRobotID: "R2"}
+	cmd.Preconditions["R2"] = read.Versions["R2"]
 	rejected, err = s.ExecuteAutomatic(ctx, cmd)
-	if !errors.Is(err, sim.ErrAssignmentConflict) || rejected.Execution != NotExecuted || !rejected.AuditCommitted ||
+	if !errors.Is(err, sim.ErrReassignment) || rejected.Execution != NotExecuted || !rejected.AuditCommitted ||
 		!reflect.DeepEqual(s.Snapshot(), before) {
 		t.Fatalf("unsafe attempt mutated state or missed its audit: %+v %v", rejected, err)
 	}
@@ -103,7 +114,7 @@ func TestAutomaticDenialsAreAuditedIntegration(t *testing.T) {
 }
 
 func TestAutomaticAuditUncertaintyPoisonsRuntimeIntegration(t *testing.T) {
-	s, pool, now, ctx := automaticFixture(t)
+	s, pool, _, ctx := automaticFixture(t)
 	if _, err := pool.Exec(ctx, `CREATE FUNCTION fail_automatic_finish() RETURNS trigger
 		LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test-only audit failure'; END; $$
 	`); err != nil {
@@ -113,11 +124,103 @@ func TestAutomaticAuditUncertaintyPoisonsRuntimeIntegration(t *testing.T) {
 		FOR EACH ROW EXECUTE FUNCTION fail_automatic_finish()`); err != nil {
 		t.Fatal(err)
 	}
-	cmd := automaticBatch(t, s, *now)
+	cmd := automaticBatch(t, s, ctx)
 	result, err := s.ExecuteAutomatic(ctx, cmd)
 	if !errors.Is(err, ErrPersistence) || result.Execution != Unknown || result.AuditCommitted || !s.Poisoned() ||
 		s.Snapshot().Jobs[0].AssignedRobot != "R1" || !errors.Is(s.Tick(), ErrPoisoned) {
 		t.Fatalf("uncertain audit did not fail-stop: %+v %v", result, err)
 	}
 	automaticAuditStatus(t, pool, result.AuditID, "pending", "test-host")
+	replay, err := s.ExecuteAutomatic(ctx, cmd)
+	if !errors.Is(err, ErrPoisoned) || replay.Execution != Unknown || replay.AuditCommitted || replay.PriorAuditID != result.AuditID {
+		t.Fatalf("an uncertain command was retried or resolved prematurely: %+v %v", replay, err)
+	}
+	automaticAuditStatus(t, pool, replay.AuditID, "replayed", "test-host")
+}
+
+func TestAutomaticVersionsAndReplaysAcrossTicksIntegration(t *testing.T) {
+	s, pool, now, ctx := automaticFixture(t)
+	safe := automaticBatch(t, s, ctx)
+	stale := safe
+	stale.IdempotencyKey = "different-attempt"
+	if err := s.Tick(); err != nil {
+		t.Fatal(err)
+	}
+	*now = now.Add(time.Second)
+	applied, err := s.ExecuteAutomatic(ctx, safe)
+	if err != nil || applied.Execution != Succeeded {
+		t.Fatalf("unrelated tick invalidated the command: %+v %v", applied, err)
+	}
+	before := s.Snapshot()
+	denied, err := s.ExecuteAutomatic(ctx, stale)
+	if !errors.Is(err, ErrObservation) || denied.Execution != NotExecuted || !denied.AuditCommitted ||
+		!reflect.DeepEqual(s.Snapshot(), before) {
+		t.Fatalf("changed entity allowed a stale command: %+v %v", denied, err)
+	}
+	changed := safe
+	changed.ExpiresAt = safe.ExpiresAt.Add(-time.Second)
+	if _, err := s.ExecuteAutomatic(ctx, changed); !errors.Is(err, ErrAutomaticKeyConflict) {
+		t.Fatalf("different request reused a key: %v", err)
+	}
+
+	*now = safe.ExpiresAt.Add(time.Second)
+	replayed, err := s.ExecuteAutomatic(ctx, safe)
+	if err != nil || !replayed.AuditCommitted || replayed.Execution != Succeeded || replayed.PriorAuditID != applied.AuditID ||
+		!reflect.DeepEqual(s.Snapshot(), before) {
+		t.Fatalf("retry after expiry did not reuse its durable result: %+v %v", replayed, err)
+	}
+	automaticAuditStatus(t, pool, replayed.AuditID, "replayed", "test-host")
+}
+
+func TestAutomaticRevalidatesTTLAtExecutionIntegration(t *testing.T) {
+	s, pool, now, ctx := automaticFixture(t)
+	cmd := automaticBatch(t, s, ctx)
+	transact := s.transact
+	writes := 0
+	s.transact = func(ctx context.Context, body func(*db.Tx) error) error {
+		err := transact(ctx, body)
+		writes++
+		if writes == 1 {
+			*now = cmd.ExpiresAt
+		}
+		return err
+	}
+	before := s.Snapshot()
+	result, err := s.ExecuteAutomatic(ctx, cmd)
+	if !errors.Is(err, ErrAutomaticExpired) || result.Execution != NotExecuted || !result.AuditCommitted ||
+		!reflect.DeepEqual(s.Snapshot(), before) || writes != 2 {
+		t.Fatalf("expiry at the execution boundary was ignored: %+v %v", result, err)
+	}
+	automaticAuditStatus(t, pool, result.AuditID, "rejected", "test-host")
+}
+
+func TestAutomaticConcurrentDuplicateExecutesOnceIntegration(t *testing.T) {
+	s, pool, _, ctx := automaticFixture(t)
+	cmd := automaticBatch(t, s, ctx)
+	const attempts = 6
+	output := make(chan AutomaticResult, attempts)
+	var workers sync.WaitGroup
+	for range attempts {
+		workers.Go(func() {
+			result, err := s.ExecuteAutomatic(ctx, cmd)
+			if err != nil || result.Execution != Succeeded || !result.AuditCommitted {
+				t.Errorf("concurrent execution: %+v %v", result, err)
+			}
+			output <- result
+		})
+	}
+	workers.Wait()
+	close(output)
+	executions := 0
+	for receipt := range output {
+		if receipt.PriorAuditID == 0 {
+			executions++
+		}
+	}
+	var applied, replays int
+	err := pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE status='applied'),
+		count(*) FILTER (WHERE status='replayed') FROM fleet_automatic_audit`).Scan(&applied, &replays)
+	if err != nil || applied != 1 || replays != attempts-1 || executions != 1 {
+		t.Fatalf("duplicate received a second execution: receipts=%d applied=%d replays=%d %v", executions, applied, replays, err)
+	}
 }
