@@ -39,3 +39,32 @@ func TestHashedAuthentication(t *testing.T) {
 		}
 	}
 }
+
+func TestAutomaticCredentialRequiresRuntimeScope(t *testing.T) {
+	token := strings.Repeat("isolated-automation-test-", 2)
+	hash := sha256.Sum256([]byte(token))
+	runtimeID := "P" + strings.Repeat("a", 32)
+	for _, tc := range []struct {
+		role  Role
+		scope string
+		valid bool
+	}{
+		{Automatic, runtimeID, true},
+		{Automatic, "", false},
+		{Automatic, "P" + strings.Repeat("z", 32), false},
+		{Operator, runtimeID, false},
+	} {
+		config, _ := json.Marshal([]Credential{{Subject: "host", Role: tc.role, RuntimeID: tc.scope, SHA256: hex.EncodeToString(hash[:])}})
+		a, err := New(string(config))
+		if (err == nil) != tc.valid {
+			t.Fatalf("role %s scope %q: New = %v", tc.role, tc.scope, err)
+		}
+		if tc.valid {
+			ctx, err := a.Authenticate(context.Background(), token)
+			p, ok := FromContext(ctx)
+			if err != nil || !ok || p.Role != Automatic || p.RuntimeID != runtimeID {
+				t.Fatalf("authorization lost runtime scope: %+v %v", p, err)
+			}
+		}
+	}
+}
