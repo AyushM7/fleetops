@@ -13,7 +13,10 @@ import (
 	"time"
 
 	"github.com/AyushM7/fleetops/backend/graphql/model"
+	"github.com/AyushM7/fleetops/backend/sim"
 )
+
+const warehouseScenario = "warehouse-v2"
 
 type demoRun struct {
 	scenarioID string
@@ -23,6 +26,7 @@ type demoRun struct {
 	advance    func(context.Context) error
 	inspect    func(context.Context) (*model.FleetState, bool, error)
 	step       func(context.Context) error
+	warehouse  func() sim.State
 	evidence   *demoExplanation
 }
 
@@ -55,6 +59,7 @@ type demoStatus struct {
 	Speed      string            `json:"speed,omitempty"`
 	Snapshot   *model.FleetState `json:"snapshot,omitempty"`
 	Evidence   *demoExplanation  `json:"evidence,omitempty"`
+	Warehouse  *sim.State        `json:"warehouse,omitempty"`
 }
 
 // All browser forwarding, progress ticks, capture and replacement share this
@@ -71,6 +76,7 @@ type demoController struct {
 	record        func(string, string) error
 	interactive   bool
 	running       bool
+	stopped       bool
 	speed         string
 	nextTick      time.Time
 	lastStep      time.Time
@@ -99,6 +105,10 @@ func (c *demoController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if !c.ready || c.closed {
 		http.Error(w, "scenario unavailable; evidence capture or restart failed", http.StatusServiceUnavailable)
+		return
+	}
+	if c.run.warehouse != nil {
+		http.NotFound(w, r)
 		return
 	}
 	c.run.handler.ServeHTTP(w, r)
@@ -151,7 +161,7 @@ func (c *demoController) restart(w http.ResponseWriter, r *http.Request) {
 
 func allowedScenario(id string) bool {
 	switch id {
-	case "blocked-reassignment", "routine-charging", "healthy-operations", "blocked-no-candidate":
+	case "blocked-reassignment", "routine-charging", "healthy-operations", "blocked-no-candidate", warehouseScenario:
 		return true
 	}
 	return false
@@ -189,6 +199,7 @@ func (c *demoController) replaceScenario(ctx context.Context, id string) error {
 	}
 	c.run, c.ready = next, true
 	c.ticks = 0
+	c.stopped = false
 	c.running, c.speed, c.nextTick, c.lastStep = false, "1", time.Time{}, time.Time{}
 	return nil
 }

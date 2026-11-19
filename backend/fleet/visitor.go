@@ -20,10 +20,7 @@ func NewVisitor(id string, pool *db.Pool) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	s, err := newService(simulator, simulator.Tick, pool, time.Now, func(ctx context.Context, id proposal.OperatorIdentity) bool {
-		p, ok := auth.FromContext(ctx)
-		return ok && p.Role == auth.Operator && p.Subject == id.Subject
-	})
+	s, err := newService(simulator, simulator.Tick, pool, time.Now, visitorOperator)
 	if err != nil {
 		return nil, err
 	}
@@ -34,6 +31,16 @@ func NewVisitor(id string, pool *db.Pool) (*Service, error) {
 		}
 	}
 	return s, nil
+}
+
+// NewVisitorWarehouse constructs a seeded V2 simulator owned by one visitor.
+func NewVisitorWarehouse(seed int64, pool *db.Pool) (*Service, error) {
+	return New(sim.WarehouseV2Config(), seed, pool, time.Now, visitorOperator)
+}
+
+func visitorOperator(ctx context.Context, id proposal.OperatorIdentity) bool {
+	p, ok := auth.FromContext(ctx)
+	return ok && p.Role == auth.Operator && p.Subject == id.Subject
 }
 
 // RuntimeID is read-only provenance and never an authorization capability.
