@@ -113,6 +113,20 @@ func TestAssignNumericJobOrderAndSingleUse(t *testing.T) {
 	}
 }
 
+func TestAssignRankDeadlineAndNumericTieBreak(t *testing.T) {
+	idle := []RobotInfo{{Num: 1, Battery: 100}, {Num: 2, Battery: 100}, {Num: 3, Battery: 100}, {Num: 4, Battery: 100}}
+	pending := []JobInfo{
+		{Num: 2, Rank: 1, DeadlineTick: 60},
+		{Num: 8, Rank: 1, DeadlineTick: 40},
+		{Num: 5, Rank: 1, DeadlineTick: 40},
+		{Num: 9},
+	}
+	want := []Assignment{{9, 1}, {5, 2}, {8, 3}, {2, 4}}
+	if got := Assign(idle, pending, gridDistance, Params{MovingDrain: 1}); !slices.Equal(got, want) {
+		t.Fatalf("rank, deadline, ID order = %v, want %v", got, want)
+	}
+}
+
 type trip struct{ from, to Cell }
 
 func TestAssignUnreachableRoutes(t *testing.T) {

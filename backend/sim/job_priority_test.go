@@ -49,27 +49,59 @@ func TestWarehouseV2JobAgeAndCustodyIntegration(t *testing.T) {
 	cfg := WarehouseV2Config()
 	cfg.InitialJobs, cfg.NewJobEvery = 0, 10000
 	s := newTestSim(t, cfg, 1)
-	s.state.Tick = 4
+	s.state.Tick = priorityHeadStartTicks + 4
 	s.state.Jobs = []JobState{
 		{ID: "J1", Type: JobNormal, CreatedTick: 1, From: Point{0, 11}, To: Point{1, 11}, Status: JobPending},
-		{ID: "J2", Type: JobPriority, CreatedTick: 4, From: Point{0, 11}, To: Point{1, 11}, Status: JobPending, DeadlineTick: 50},
+		{ID: "J2", Type: JobPriority, CreatedTick: s.state.Tick, From: Point{0, 11}, To: Point{1, 11}, Status: JobPending, DeadlineTick: s.state.Tick + 30},
 	}
 	for i := 1; i < len(s.state.Robots); i++ {
 		s.state.Robots[i].Status = RobotOffline
 	}
 	s.Tick()
 	job := s.Snapshot().Jobs[0]
-	if job.Status != JobAssigned || job.AssignedRobot != "R1" || job.AssignedTick != 5 || job.QueueAgeTicks != 4 || job.CargoRobotID != "" {
+	if job.Status != JobAssigned || job.AssignedRobot != "R1" || job.AssignedTick != priorityHeadStartTicks+5 || job.QueueAgeTicks != priorityHeadStartTicks+4 || job.CargoRobotID != "" {
 		t.Fatalf("oldest feasible job must get the available robot and record its queue wait: %+v", job)
 	}
 	s.Tick()
 	job = s.Snapshot().Jobs[0]
-	if job.Status != JobInProgress || job.CargoRobotID != "R1" || job.QueueAgeTicks != 4 {
+	if job.Status != JobInProgress || job.CargoRobotID != "R1" || job.QueueAgeTicks != priorityHeadStartTicks+4 {
 		t.Fatalf("pickup must establish custody and freeze queue age: %+v", job)
 	}
 	s.Tick()
 	job = s.Snapshot().Jobs[0]
-	if job.Status != JobDone || job.CargoRobotID != "" || job.QueueAgeTicks != 4 || job.Outcome != JobDelivered || job.CompletedTick != 7 {
+	if job.Status != JobDone || job.CargoRobotID != "" || job.QueueAgeTicks != priorityHeadStartTicks+4 || job.Outcome != JobDelivered || job.CompletedTick != priorityHeadStartTicks+7 {
 		t.Fatalf("delivery must clear custody and record the outcome: %+v", job)
+	}
+}
+
+func TestWarehouseV2PriorityDispatchRespectsEligibilityIntegration(t *testing.T) {
+	cfg := WarehouseV2Config()
+	cfg.InitialJobs, cfg.NewJobEvery = 0, 10000
+	s := newTestSim(t, cfg, 1)
+	s.state.Jobs = []JobState{
+		{ID: "J1", Type: JobNormal, From: Point{0, 11}, To: Point{1, 11}, Status: JobPending},
+		{ID: "J2", Type: JobPriority, From: Point{0, 11}, To: Point{2, 11}, Status: JobPending, DeadlineTick: 35},
+		{ID: "J3", Type: JobPriority, From: Point{19, 11}, To: Point{18, 11}, Status: JobPending, DeadlineTick: 25},
+		{ID: "J4", Type: JobNormal, From: Point{15, 11}, To: Point{19, 10}, Status: JobInProgress, AssignedRobot: "R3"},
+		{ID: "J5", Type: JobPriority, From: Point{0, 11}, To: Point{1, 11}, Status: JobPending, DeadlineTick: 1},
+		{ID: "J6", Type: JobPriority, From: Point{0, 11}, To: Point{3, 11}, Status: JobPending, DeadlineTick: 3},
+	}
+	s.state.Tick = 1
+	for i := 1; i < warehouseTransportCount; i++ {
+		s.state.Robots[i].Status = RobotOffline
+	}
+	r2, r3, r4 := &s.state.Robots[1], &s.state.Robots[2], &s.state.Robots[3]
+	r2.Status, r2.Battery = RobotIdle, cfg.ChargeBelow
+	r3.Status, r3.JobID, r3.X, r3.Y = RobotMoving, "J4", 15, 11
+	r4.X, r4.Y = 19, 11
+	s.Tick()
+	state := s.Snapshot()
+	if state.Jobs[1].Status != JobAssigned || state.Jobs[1].AssignedRobot != "R1" ||
+		state.Jobs[0].Status != JobPending || state.Jobs[2].Status != JobPending ||
+		state.Jobs[4].Status != JobPending || state.Jobs[5].Status != JobPending {
+		t.Fatalf("urgency must favor eligible jobs whose delivery can still meet its deadline: %+v", state.Jobs)
+	}
+	if state.Jobs[3].CargoRobotID != "R3" || r2.JobID != "" || state.Robots[10].JobID != "" {
+		t.Fatalf("priority used a charging, committed, or maintenance robot: %+v", state.Robots)
 	}
 }
