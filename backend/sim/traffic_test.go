@@ -160,17 +160,21 @@ func TestWarehouseV2SustainsDeliveriesAfterCongestionIntegration(t *testing.T) {
 		t.Run(fmt.Sprint(seed), func(t *testing.T) {
 			s := newTestSim(t, WarehouseV2Config(), seed)
 			lastCompleted := 0
+			progress := make([]soakRobotProgress, len(s.state.Robots))
+			before := make([]RobotState, len(progress))
 			for tick := 1; tick <= 5000; tick++ {
+				copy(before, s.state.Robots)
 				s.Tick()
 				r5 := s.state.Robots[4]
 				if seed == 3 && (Point{r5.X, r5.Y}) == (Point{11, 0}) && r5.WaitTicks > 4*s.cfg.RecoverAfter {
 					t.Fatalf("tick %d: R5 trapped leaving C3 after %d ticks at %v, route %+v, cycles %+v", tick, r5.WaitTicks,
 						Point{r5.X, r5.Y}, s.navigation[r5.ID], s.state.TrafficDeadlocks)
 				}
-				for _, robot := range s.state.Robots {
+				for i, robot := range s.state.Robots {
 					if robot.Status == RobotFaulted {
 						t.Fatalf("tick %d: %s depleted its battery", tick, robot.ID)
 					}
+					progress[i].observe(s, before[i], robot)
 				}
 				if tick%500 != 0 {
 					continue
@@ -181,11 +185,72 @@ func TestWarehouseV2SustainsDeliveriesAfterCongestionIntegration(t *testing.T) {
 				lastCompleted = s.state.CompletedJobs
 			}
 			longestWait := 0
-			for _, robot := range s.state.Robots {
-				longestWait = max(longestWait, robot.WaitTicks)
+			delivered := 0
+			for i, robot := range s.state.Robots {
+				p := progress[i]
+				longestWait = max(longestWait, p.activeBlocked)
+				delivered += p.deliveries
+				t.Logf("%s moved=%d lastMove=%d deliveries=%d charging=%d idle=%d dockWait=%d undockWait=%d energyStranded=%d trafficWait=%d blocked=%d peakBlocked=%d activeBlocked=%d",
+					robot.ID, p.moves, p.lastMove, p.deliveries, p.charging, p.idle, p.dockWait, p.undockWait, p.energyStranded,
+					p.trafficWait, p.blocked, p.peakBlocked, p.activeBlocked)
 			}
-			t.Logf("%d ticks, %d completed deliveries, longest current wait %d ticks", s.state.Tick, s.state.CompletedJobs, longestWait)
+			if delivered != s.state.CompletedJobs {
+				t.Fatalf("per-robot deliveries total %d, simulator total %d", delivered, s.state.CompletedJobs)
+			}
+			if longestWait > 0 {
+				blockers := s.recoveryBlockers(s.recoveryOrder())
+				for i, robot := range s.state.Robots {
+					if progress[i].activeBlocked == 0 {
+						continue
+					}
+					blocker := "none"
+					if blockers[i] >= 0 {
+						blocker = s.state.Robots[blockers[i]].ID
+					}
+					t.Logf("%s unresolved at (%d,%d), battery=%d, job=%q, blocker=%s, route=%+v",
+						robot.ID, robot.X, robot.Y, robot.Battery, robot.JobID, blocker, s.navigation[robot.ID])
+				}
+				t.Logf("active cycles=%+v", s.state.TrafficDeadlocks)
+			}
+			t.Logf("%d ticks, %d completed deliveries, maximum unresolved active wait %d ticks", s.state.Tick, s.state.CompletedJobs, longestWait)
 		})
+	}
+}
+
+type soakRobotProgress struct {
+	moves, lastMove, deliveries, charging                   int
+	idle, dockWait, undockWait, energyStranded, trafficWait int
+	blocked, peakBlocked, activeBlocked                     int
+}
+
+func (p *soakRobotProgress) observe(s *Sim, before, robot RobotState) {
+	if before.JobID != "" && robot.JobID == "" {
+		p.deliveries++
+	}
+	p.activeBlocked = 0
+	switch {
+	case robot.X != before.X || robot.Y != before.Y:
+		p.moves++
+		p.lastMove = s.state.Tick
+	case robot.Battery > before.Battery:
+		p.charging++
+	case robot.Blocked:
+		p.blocked++
+		p.activeBlocked = robot.WaitTicks
+		p.peakBlocked = max(p.peakBlocked, robot.WaitTicks)
+	case robot.WaitTicks > 0:
+		p.trafficWait++
+	case robot.Status == RobotIdle && s.occupiedStation(robot.ID) != nil:
+		p.undockWait++
+	case robot.Status == RobotIdle && s.needsCharge(robot):
+		exit := s.relocationExit(robot, Point{robot.X, robot.Y})
+		if exit >= 0 && robot.Battery-exit*s.cfg.MovingDrain >= 1 {
+			p.dockWait++
+		} else {
+			p.energyStranded++
+		}
+	case robot.Status == RobotIdle:
+		p.idle++
 	}
 }
 
