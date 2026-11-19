@@ -10,11 +10,12 @@ type Reader interface {
 	PreviewReassignment(jobID, fromRobotID, toRobotID string) (ReassignmentPlan, error)
 }
 
-// Commander exposes commands that require operator validation and approval.
+// Commander exposes commands that require trusted, serialized admission.
 type Commander interface {
 	Reader
 	SetCharging(robotID, stationID string) error
 	ReassignUnstartedJob(jobID, fromRobotID, toRobotID string) error
+	AssignJobBatch(request AssignJobBatchRequest) error
 }
 
 // Driver exposes trusted scenario injections, never agent tools.
