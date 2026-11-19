@@ -61,6 +61,21 @@ const (
 	JobDone       JobStatus = "done"
 )
 
+type JobType string
+
+const (
+	JobNormal   JobType = "NORMAL"
+	JobPriority JobType = "PRIORITY"
+)
+
+type JobOutcome string
+
+const (
+	JobDelivered JobOutcome = "DELIVERED"
+	JobOnTime    JobOutcome = "ON_TIME"
+	JobLate      JobOutcome = "LATE"
+)
+
 type FaultType string
 
 const (
@@ -89,6 +104,16 @@ type JobState struct {
 	To            Point     `json:"to"`
 	Status        JobStatus `json:"status"`
 	AssignedRobot string    `json:"assignedRobot"` // Empty if unassigned; retained when done.
+
+	Type           JobType    `json:"type,omitempty"`
+	CreatedTick    int        `json:"createdTick,omitempty"` // Initial V2 jobs are created at tick zero.
+	AssignedTick   int        `json:"assignedTick,omitempty"`
+	DeadlineTick   int        `json:"deadlineTick,omitempty"`
+	DeadlineMissed bool       `json:"deadlineMissed,omitempty"`
+	CompletedTick  int        `json:"completedTick,omitempty"`
+	QueueAgeTicks  int        `json:"queueAgeTicks,omitempty"`
+	CargoRobotID   string     `json:"cargoRobotId,omitempty"`
+	Outcome        JobOutcome `json:"outcome,omitempty"`
 }
 
 type StationState struct {
@@ -127,4 +152,7 @@ type State struct {
 	Stations         []StationState    `json:"stations"`
 	Faults           []FaultState      `json:"faults"`
 	Aisles           []AisleState      `json:"aisles"`
+
+	PriorityDeadlinesMet    int `json:"priorityDeadlinesMet,omitempty"`
+	PriorityDeadlinesMissed int `json:"priorityDeadlinesMissed,omitempty"`
 }

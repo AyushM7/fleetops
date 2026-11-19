@@ -46,6 +46,9 @@ func (s *Sim) assignPending(skip []bool) {
 	for _, assignment := range assignments {
 		robot, job := &s.state.Robots[robots[assignment.RobotNum]], &s.state.Jobs[jobs[assignment.JobNum]]
 		job.Status, job.AssignedRobot = JobAssigned, robot.ID
+		if s.cfg.MaintenanceBay != nil {
+			job.AssignedTick = s.state.Tick
+		}
 		robot.Status, robot.JobID = RobotMoving, job.ID
 		s.prepareNavigation(robot, job.From)
 	}
