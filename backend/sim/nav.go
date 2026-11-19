@@ -88,7 +88,7 @@ func (s *Sim) waitForNavigation(robot *RobotState, target Point) {
 func (s *Sim) advanceNavigation(robot *RobotState, target Point) bool {
 	s.prepareNavigation(robot, target)
 	nav := s.navigation[robot.ID]
-	if nav.target != target || len(nav.route) == 0 || s.navigationBlocked(*robot, nav.route[0], true) {
+	if nav.target != target || len(nav.route) == 0 || s.nextStepBlocked(*robot, nav.route) || !s.reserveMove(*robot, nav.route[0]) {
 		s.waitForNavigation(robot, target)
 		return false
 	}

@@ -39,7 +39,8 @@ func (s *Sim) prepareRecovery(robot *RobotState) bool {
 		return false
 	}
 	if robot.WaitTicks == 0 || (robot.WaitTicks+1)%s.cfg.ReplanAfter == 0 {
-		if s.planNavigation(robot, s.recoveryTarget(*robot), true) {
+		target := s.recoveryTarget(*robot)
+		if s.planNavigation(robot, target, true) || s.canResumeTrafficRoute(*robot, target) {
 			recovery.resume = false
 			s.recovery[robot.ID] = recovery
 			return false
@@ -48,6 +49,16 @@ func (s *Sim) prepareRecovery(robot *RobotState) bool {
 	robot.WaitTicks++
 	robot.Blocked = robot.WaitTicks >= s.cfg.BlockedAfter
 	return true
+}
+
+func (s *Sim) canResumeTrafficRoute(robot RobotState, target Point) bool {
+	if s.cfg.MaintenanceBay == nil {
+		return false
+	}
+	nav := s.navigation[robot.ID]
+	// A whole-route replan can fail when several healthy robots queue ahead.
+	return nav.target == target && len(nav.route) > 0 && !s.nextStepBlocked(robot, nav.route) &&
+		s.routeAffordable(robot, target, len(nav.route))
 }
 
 func (s *Sim) recoveryTarget(robot RobotState) Point {
@@ -100,6 +111,9 @@ func (s *Sim) recoveryBlockers(order []int) []int {
 				blockers[i] = j
 				break
 			}
+		}
+		if blockers[i] == -1 {
+			blockers[i] = s.crossingBlocker(s.navigation[s.state.Robots[i].ID].route)
 		}
 		if blockers[i] >= 0 || !s.cfg.onAisle(next) {
 			continue
@@ -166,7 +180,7 @@ func (s *Sim) recoverTraffic(skip []bool) []recoveryEvent {
 				tracked[i] = true
 			}
 			aged := s.recordRecoveryCycle(cycle)
-			if trigger || aged {
+			if aged || trigger && s.recoveryTriggered(cycle) {
 				event := s.recoverCycle(cycle, skip)
 				events = append(events, event)
 				if event.robot != "" {
@@ -184,6 +198,15 @@ func (s *Sim) recoverTraffic(skip []bool) []recoveryEvent {
 	}
 	events = append(events, s.recoverIdleAisleMouths(skip)...)
 	return events
+}
+
+func (s *Sim) recoveryTriggered(cycle []int) bool {
+	if s.cfg.MaintenanceBay == nil {
+		return true
+	}
+	return slices.ContainsFunc(cycle, func(i int) bool {
+		return s.state.Robots[i].WaitTicks >= s.cfg.RecoverAfter
+	})
 }
 
 func (s *Sim) clearRecoveryCycle(id string) {
@@ -357,7 +380,7 @@ func (s *Sim) retreatRobot(robot *RobotState, cycle []int) bool {
 		// Budget the remaining mission using R1's parked-obstacle estimates;
 		// dynamic replanning follows the hold after cycle members can move away.
 		route, ok := s.navigationRoute(proposed, target, false)
-		if !ok {
+		if !ok || !s.reserveMove(*robot, point) {
 			continue
 		}
 		*robot = proposed

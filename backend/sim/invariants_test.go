@@ -53,7 +53,7 @@ func checkInvariants(s State, cfg Config, navigation ...map[string]robotNavigati
 	if err := checkFaultInvariants(s.Faults, s.Tick, robots); err != nil {
 		return err
 	}
-	if err := checkEntityOrder(s); err != nil {
+	if err := checkEntityOrder(s, cfg); err != nil {
 		return err
 	}
 	return checkAisleInvariants(s, cfg)
@@ -278,8 +278,12 @@ func checkFaultInvariants(faults []FaultState, tick int, robots map[string]Robot
 	return nil
 }
 
-func checkEntityOrder(s State) error {
-	groups := map[string][]string{"R": {}, "J": {}, "S": {}, "F": {}}
+func checkEntityOrder(s State, cfg Config) error {
+	stationPrefix := "S"
+	if cfg.MaintenanceBay != nil {
+		stationPrefix = "C"
+	}
+	groups := map[string][]string{"R": {}, "J": {}, stationPrefix: {}, "F": {}}
 	for _, robot := range s.Robots {
 		groups["R"] = append(groups["R"], robot.ID)
 	}
@@ -287,13 +291,22 @@ func checkEntityOrder(s State) error {
 		groups["J"] = append(groups["J"], job.ID)
 	}
 	for _, station := range s.Stations {
-		groups["S"] = append(groups["S"], station.ID)
+		groups[stationPrefix] = append(groups[stationPrefix], station.ID)
 	}
 	for _, fault := range s.Faults {
 		groups["F"] = append(groups["F"], fault.ID)
 	}
-	for _, prefix := range []string{"R", "J", "S", "F"} {
+	for _, prefix := range []string{"R", "J", stationPrefix, "F"} {
+		previous := 0
 		for i, id := range groups[prefix] {
+			if prefix == "J" && cfg.MaintenanceBay != nil {
+				number := idNumber(id)
+				if number <= previous || id != fmt.Sprintf("J%d", number) {
+					return fmt.Errorf("I9: job ID %q does not increase after J%d", id, previous)
+				}
+				previous = number
+				continue
+			}
 			if want := fmt.Sprintf("%s%d", prefix, i+1); id != want {
 				return fmt.Errorf("I9: ID %q at index %d, want %s", id, i, want)
 			}

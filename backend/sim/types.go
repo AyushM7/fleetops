@@ -110,13 +110,19 @@ type FaultState struct {
 	Tick   int       `json:"tick"`
 }
 
+type TrafficDeadlock struct {
+	Robots        []string `json:"robots"`
+	YieldingRobot string   `json:"yieldingRobot,omitempty"`
+}
+
 type State struct {
-	CompletedJobs int            `json:"completedJobs,omitempty"`
-	Tick          int            `json:"tick"`
-	Seed          int64          `json:"seed"`
-	Robots        []RobotState   `json:"robots"`
-	Jobs          []JobState     `json:"jobs"`
-	Stations      []StationState `json:"stations"`
-	Faults        []FaultState   `json:"faults"`
-	Aisles        []AisleState   `json:"aisles"`
+	TrafficDeadlocks []TrafficDeadlock `json:"trafficDeadlocks,omitempty"`
+	CompletedJobs    int               `json:"completedJobs,omitempty"`
+	Tick             int               `json:"tick"`
+	Seed             int64             `json:"seed"`
+	Robots           []RobotState      `json:"robots"`
+	Jobs             []JobState        `json:"jobs"`
+	Stations         []StationState    `json:"stations"`
+	Faults           []FaultState      `json:"faults"`
+	Aisles           []AisleState      `json:"aisles"`
 }

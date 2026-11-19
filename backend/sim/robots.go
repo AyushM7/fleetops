@@ -17,8 +17,11 @@ func (s *Sim) stepRobots() {
 	s.assignPending(skip)   // Pass B.
 	s.seekCharging(skip)    // Pass C.
 	s.clearIdleAisles(skip) // Pass C2.
+	if s.cfg.MaintenanceBay != nil {
+		s.traffic = newTrafficReservations(s.state.Robots)
+	}
 	moved := make([]bool, len(s.state.Robots))
-	for i := range s.state.Robots { // Pass D retains numeric movement priority.
+	for _, i := range s.movementOrder() {
 		robot := &s.state.Robots[i]
 		if skip[i] {
 			continue
@@ -32,7 +35,16 @@ func (s *Sim) stepRobots() {
 			s.finishNavigation(robot)
 		}
 	}
-	s.recoverTraffic(moved) // Pass E cannot move a robot twice.
+	events := s.recoverTraffic(moved)
+	if s.traffic != nil {
+		s.state.TrafficDeadlocks = s.state.TrafficDeadlocks[:0]
+		for _, event := range events {
+			if len(event.cycle) > 0 {
+				s.state.TrafficDeadlocks = append(s.state.TrafficDeadlocks, TrafficDeadlock{event.cycle, event.robot})
+			}
+		}
+		s.traffic = nil
+	}
 }
 
 func (s *Sim) prepareRobot(robot *RobotState) bool {

@@ -3,6 +3,7 @@ package sim
 import (
 	"fmt"
 	"math/rand"
+	"slices"
 )
 
 // Sim owns deterministic state and is not goroutine-safe.
@@ -16,6 +17,7 @@ type Sim struct {
 	navigation        map[string]robotNavigation
 	recovery          map[string]robotRecovery
 	protected         map[Point]bool
+	traffic           *trafficReservations
 }
 
 // New constructs an isolated deterministic simulator from a configuration and seed.
@@ -100,6 +102,10 @@ func (s *Sim) Snapshot() State {
 	}
 	state.Jobs = append([]JobState{}, s.state.Jobs...)
 	state.Stations = append([]StationState{}, s.state.Stations...)
+	state.TrafficDeadlocks = slices.Clone(s.state.TrafficDeadlocks)
+	for i := range state.TrafficDeadlocks {
+		state.TrafficDeadlocks[i].Robots = slices.Clone(state.TrafficDeadlocks[i].Robots)
+	}
 	state.Aisles = s.snapshotAisles()
 	state.Faults = make([]FaultState, len(s.state.Faults))
 	for i, fault := range s.state.Faults {
