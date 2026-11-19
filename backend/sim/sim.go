@@ -42,9 +42,14 @@ func New(cfg Config, seed int64) (*Sim, error) {
 	}
 	for i, p := range starts {
 		id := fmt.Sprintf("R%d", i+1)
-		s.state.Robots = append(s.state.Robots, RobotState{
-			ID: id, X: p.X, Y: p.Y, Battery: 100, Status: RobotIdle, Maintenance: i == len(cfg.RobotStarts),
-		})
+		robot := RobotState{ID: id, X: p.X, Y: p.Y, Battery: 100, Status: RobotIdle}
+		if cfg.MaintenanceBay != nil {
+			robot.Role = RoleTransport
+			if i == warehouseTransportCount {
+				robot.Role = RoleMaintenance
+			}
+		}
+		s.state.Robots = append(s.state.Robots, robot)
 		s.unresponsiveTicks[id] = 0
 	}
 	stationPrefix := "S"
@@ -82,6 +87,13 @@ func (s *Sim) CellAt(p Point) CellType {
 func (s *Sim) Snapshot() State {
 	state := s.state
 	state.Robots = append([]RobotState{}, s.state.Robots...)
+	if s.cfg.MaintenanceBay != nil {
+		for i := range state.Robots {
+			robot := &state.Robots[i]
+			robot.Maintenance = robot.Role == RoleMaintenance
+			robot.Activity = s.robotActivity(*robot)
+		}
+	}
 	state.Jobs = append([]JobState{}, s.state.Jobs...)
 	state.Stations = append([]StationState{}, s.state.Stations...)
 	state.Aisles = s.snapshotAisles()

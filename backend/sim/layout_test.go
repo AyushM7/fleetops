@@ -26,11 +26,13 @@ func TestWarehouseV2Starts(t *testing.T) {
 	for i, robot := range state.Robots {
 		p := Point{robot.X, robot.Y}
 		maintenance := i == 10
+		wantRole := RoleTransport
 		wantType := CellParking
 		if maintenance {
+			wantRole = RoleMaintenance
 			wantType = CellMaintenanceBay
 		}
-		if robot.ID != fmt.Sprintf("R%d", i+1) || robot.Maintenance != maintenance || p != starts[i] || s.CellAt(p) != wantType || robot.Status != RobotIdle || robot.Battery != 100 {
+		if robot.ID != fmt.Sprintf("R%d", i+1) || robot.Role != wantRole || robot.Maintenance != maintenance || p != starts[i] || s.CellAt(p) != wantType || robot.Activity != ActivityParked || robot.Status != RobotIdle || robot.Battery != 100 {
 			t.Fatalf("robot %d has unexpected startup state: %+v", i+1, robot)
 		}
 		if slices.Contains(jobCells, p) {
@@ -61,6 +63,7 @@ func TestValidateWarehouseV2(t *testing.T) {
 		want   string
 	}{
 		{"missing transport", func(c *Config) { c.RobotStarts = c.RobotStarts[:9] }, "V2 requires 10 transport starts and 4 stations"},
+		{"extra transport", func(c *Config) { c.RobotStarts = append(c.RobotStarts, Point{0, 0}) }, "V2 requires 10 transport starts and 4 stations"},
 		{"missing charger", func(c *Config) { c.Stations = c.Stations[:3] }, "V2 requires 10 transport starts and 4 stations"},
 		{"duplicate parking", func(c *Config) { c.RobotStarts[0] = c.RobotStarts[1] }, "robot starts positions must be unique"},
 		{"duplicate chargers", func(c *Config) { c.Stations[0] = c.Stations[1] }, "stations positions must be unique"},

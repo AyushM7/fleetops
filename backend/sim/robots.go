@@ -120,6 +120,11 @@ func (s *Sim) stepMoving(robot *RobotState) {
 		if job.Status != JobAssigned && job.Status != JobInProgress {
 			return
 		}
+		if s.cfg.MaintenanceBay != nil && job.Status == JobAssigned && (Point{robot.X, robot.Y}) == job.From {
+			job.Status = JobInProgress
+			s.prepareNavigation(robot, job.To)
+			return
+		}
 		if updateArrival(robot, job) {
 			return
 		}
@@ -131,7 +136,9 @@ func (s *Sim) stepMoving(robot *RobotState) {
 			return
 		}
 		previousStatus := job.Status
-		updateArrival(robot, job)
+		if s.cfg.MaintenanceBay == nil || previousStatus == JobInProgress {
+			updateArrival(robot, job)
+		}
 		robot.Battery = max(0, robot.Battery-s.cfg.MovingDrain)
 		if previousStatus == JobAssigned && job.Status == JobInProgress {
 			s.prepareNavigation(robot, job.To)
@@ -141,6 +148,45 @@ func (s *Sim) stepMoving(robot *RobotState) {
 		}
 		return
 	}
+}
+
+func (s *Sim) robotActivity(robot RobotState) RobotActivity {
+	position := Point{robot.X, robot.Y}
+	switch robot.Status {
+	case RobotFaulted:
+		return ActivityFaulted
+	case RobotOffline:
+		return ActivityOutOfService
+	case RobotCharging:
+		return ActivityCharging
+	case RobotMoving:
+		switch {
+		case robot.WaitTicks > 0:
+			return ActivityWaitingForTraffic
+		case s.reservedStation(robot.ID) != nil:
+			return ActivityGoingToCharge
+		case s.navigation[robot.ID].relocation:
+			return ActivityRelocating
+		}
+		for _, job := range s.state.Jobs {
+			if job.ID == robot.JobID && job.AssignedRobot == robot.ID {
+				switch {
+				case job.Status == JobInProgress:
+					return ActivityDelivering
+				case position == job.From:
+					return ActivityPickingUp
+				default:
+					return ActivityGoingToPickup
+				}
+			}
+		}
+	case RobotIdle:
+		switch s.cfg.CellTypeAt(position) {
+		case CellParking, CellMaintenanceBay:
+			return ActivityParked
+		}
+	}
+	return ActivityAvailable
 }
 
 func updateArrival(robot *RobotState, job *JobState) bool {

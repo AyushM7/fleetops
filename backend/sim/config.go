@@ -5,6 +5,8 @@ import (
 	"slices"
 )
 
+const warehouseTransportCount = 10
+
 type Config struct {
 	Width                 int
 	Height                int
@@ -13,8 +15,8 @@ type Config struct {
 	AisleYMax             int
 	Walls                 []Point
 	Stations              []Point
-	RobotStarts           []Point
-	MaintenanceBay        *Point // Enables the V2 fleet, with transport robots starting in their parking cells.
+	RobotStarts           []Point // V2 reserves these starts for transport robots.
+	MaintenanceBay        *Point  // Enables V2 and is the sole maintenance start.
 	InitialJobs           int
 	NewJobEvery           int
 	MaxJobs               int
@@ -215,7 +217,7 @@ func (c Config) validateLayout() error {
 		return fmt.Errorf("%w: station count must be in [1,4]", ErrInvalidConfig)
 	}
 	if c.MaintenanceBay != nil {
-		if len(c.RobotStarts) != 10 || len(c.Stations) != 4 {
+		if len(c.RobotStarts) != warehouseTransportCount || len(c.Stations) != 4 {
 			return fmt.Errorf("%w: V2 requires 10 transport starts and 4 stations", ErrInvalidConfig)
 		}
 	} else if len(c.RobotStarts) < 5 || len(c.RobotStarts) > 8 {

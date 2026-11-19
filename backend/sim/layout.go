@@ -23,7 +23,7 @@ func WarehouseV2Config() Config {
 	c.Stations = []Point{{1, 0}, {6, 0}, {12, 0}, {18, 0}}
 	c.MaintenanceBay = &Point{9, 0}
 	c.Walls = append(c.Walls, Point{8, 0}, Point{10, 0})
-	c.RobotStarts = make([]Point, 0, 10)
+	c.RobotStarts = make([]Point, 0, warehouseTransportCount)
 	for x := 0; x < c.Width; x += 2 {
 		c.RobotStarts = append(c.RobotStarts, Point{x, 12})
 		c.Walls = append(c.Walls, Point{x + 1, 12})

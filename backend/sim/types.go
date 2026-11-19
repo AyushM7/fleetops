@@ -27,6 +27,29 @@ const (
 	RobotOffline  RobotStatus = "offline"
 )
 
+type RobotRole string
+
+const (
+	RoleTransport   RobotRole = "transport"
+	RoleMaintenance RobotRole = "maintenance"
+)
+
+type RobotActivity string
+
+const (
+	ActivityAvailable         RobotActivity = "AVAILABLE"
+	ActivityGoingToPickup     RobotActivity = "GOING_TO_PICKUP"
+	ActivityPickingUp         RobotActivity = "PICKING_UP"
+	ActivityDelivering        RobotActivity = "DELIVERING"
+	ActivityWaitingForTraffic RobotActivity = "WAITING_FOR_TRAFFIC"
+	ActivityGoingToCharge     RobotActivity = "GOING_TO_CHARGE"
+	ActivityCharging          RobotActivity = "CHARGING"
+	ActivityRelocating        RobotActivity = "RELOCATING"
+	ActivityParked            RobotActivity = "PARKED"
+	ActivityFaulted           RobotActivity = "FAULTED"
+	ActivityOutOfService      RobotActivity = "OUT_OF_SERVICE"
+)
+
 type JobStatus string
 
 const (
@@ -45,15 +68,17 @@ const (
 )
 
 type RobotState struct {
-	ID          string      `json:"id"`
-	X           int         `json:"x"`
-	Y           int         `json:"y"`
-	Battery     int         `json:"battery"` // Integer percentage, 0..100.
-	Status      RobotStatus `json:"status"`
-	JobID       string      `json:"jobId"` // Empty means no assignment.
-	WaitTicks   int         `json:"waitTicks"`
-	Blocked     bool        `json:"blocked"`
-	Maintenance bool        `json:"maintenance,omitempty"`
+	ID          string        `json:"id"`
+	X           int           `json:"x"`
+	Y           int           `json:"y"`
+	Battery     int           `json:"battery"` // Integer percentage, 0..100.
+	Status      RobotStatus   `json:"status"`
+	JobID       string        `json:"jobId"` // Empty means no assignment.
+	WaitTicks   int           `json:"waitTicks"`
+	Blocked     bool          `json:"blocked"`
+	Maintenance bool          `json:"maintenance,omitempty"`
+	Role        RobotRole     `json:"role,omitempty"`
+	Activity    RobotActivity `json:"activity,omitempty"`
 }
 
 type JobState struct {

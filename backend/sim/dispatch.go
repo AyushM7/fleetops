@@ -12,7 +12,7 @@ func (s *Sim) assignPending(skip []bool) {
 	var idle []scheduler.RobotInfo
 	robots := make(map[int]int)
 	for i, robot := range s.state.Robots {
-		if skip[i] || robot.Maintenance || robot.Status != RobotIdle || robot.JobID != "" {
+		if skip[i] || robot.Role == RoleMaintenance || robot.Status != RobotIdle || robot.JobID != "" {
 			continue
 		}
 		number := idNumber(robot.ID)
