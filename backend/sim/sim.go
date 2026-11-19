@@ -23,6 +23,7 @@ func New(cfg Config, seed int64) (*Sim, error) {
 		return nil, err
 	}
 	cfg = cfg.Clone()
+	starts := cfg.robotStarts()
 	s := &Sim{
 		cfg:               cfg,
 		rng:               rand.New(rand.NewSource(seed)),
@@ -33,22 +34,26 @@ func New(cfg Config, seed int64) (*Sim, error) {
 		protected:         protectedCells(cfg),
 		state: State{
 			Seed:     seed,
-			Robots:   make([]RobotState, 0, len(cfg.RobotStarts)),
+			Robots:   make([]RobotState, 0, len(starts)),
 			Jobs:     make([]JobState, 0, cfg.MaxJobs),
 			Stations: make([]StationState, 0, len(cfg.Stations)),
 			Faults:   []FaultState{},
 		},
 	}
-	for i, p := range cfg.RobotStarts {
+	for i, p := range starts {
 		id := fmt.Sprintf("R%d", i+1)
 		s.state.Robots = append(s.state.Robots, RobotState{
-			ID: id, X: p.X, Y: p.Y, Battery: 100, Status: RobotIdle,
+			ID: id, X: p.X, Y: p.Y, Battery: 100, Status: RobotIdle, Maintenance: i == len(cfg.RobotStarts),
 		})
 		s.unresponsiveTicks[id] = 0
 	}
+	stationPrefix := "S"
+	if cfg.MaintenanceBay != nil {
+		stationPrefix = "C"
+	}
 	for i, p := range cfg.Stations {
 		s.state.Stations = append(s.state.Stations, StationState{
-			ID: fmt.Sprintf("S%d", i+1), X: p.X, Y: p.Y,
+			ID: fmt.Sprintf("%s%d", stationPrefix, i+1), X: p.X, Y: p.Y,
 		})
 	}
 	for i := 0; i < cfg.InitialJobs; i++ {

@@ -14,6 +14,7 @@ type Config struct {
 	Walls                 []Point
 	Stations              []Point
 	RobotStarts           []Point
+	MaintenanceBay        *Point // Enables the V2 fleet, with transport robots starting in their parking cells.
 	InitialJobs           int
 	NewJobEvery           int
 	MaxJobs               int
@@ -79,6 +80,10 @@ func (c Config) CellTypeAt(p Point) CellType {
 		return CellStation
 	case p.Y >= c.AisleYMin && p.Y <= c.AisleYMax && slices.Contains(c.AisleColumns, p.X):
 		return CellAisle
+	case c.MaintenanceBay != nil && p == *c.MaintenanceBay:
+		return CellMaintenanceBay
+	case c.MaintenanceBay != nil && slices.Contains(c.RobotStarts, p):
+		return CellParking
 	default:
 		return CellFree
 	}
@@ -109,7 +114,18 @@ func (c Config) Clone() Config {
 	c.Walls = slices.Clone(c.Walls)
 	c.Stations = slices.Clone(c.Stations)
 	c.RobotStarts = slices.Clone(c.RobotStarts)
+	if c.MaintenanceBay != nil {
+		bay := *c.MaintenanceBay
+		c.MaintenanceBay = &bay
+	}
 	return c
+}
+
+func (c Config) robotStarts() []Point {
+	if c.MaintenanceBay == nil {
+		return c.RobotStarts
+	}
+	return append(slices.Clone(c.RobotStarts), *c.MaintenanceBay)
 }
 
 func (c Config) Validate() error {
@@ -198,16 +214,21 @@ func (c Config) validateLayout() error {
 	if len(c.Stations) < 1 || len(c.Stations) > 4 {
 		return fmt.Errorf("%w: station count must be in [1,4]", ErrInvalidConfig)
 	}
-	if len(c.RobotStarts) < 5 || len(c.RobotStarts) > 8 {
+	if c.MaintenanceBay != nil {
+		if len(c.RobotStarts) != 10 || len(c.Stations) != 4 {
+			return fmt.Errorf("%w: V2 requires 10 transport starts and 4 stations", ErrInvalidConfig)
+		}
+	} else if len(c.RobotStarts) < 5 || len(c.RobotStarts) > 8 {
 		return fmt.Errorf("%w: robot start count must be in [5,8]", ErrInvalidConfig)
 	}
+	starts := c.robotStarts()
 	for _, group := range []struct {
 		name   string
 		points []Point
 	}{
 		{"stations", c.Stations},
 		{"walls", c.Walls},
-		{"robot starts", c.RobotStarts},
+		{"robot starts", starts},
 	} {
 		seen := make(map[Point]bool, len(group.points))
 		for _, p := range group.points {
@@ -227,9 +248,12 @@ func (c Config) validateLayout() error {
 			return fmt.Errorf("%w: wall %v overlaps an aisle or station", ErrInvalidConfig, p)
 		}
 	}
-	for _, p := range c.RobotStarts {
+	for _, p := range starts {
 		if slices.Contains(c.Walls, p) {
 			return fmt.Errorf("%w: robot start %v is on a wall", ErrInvalidConfig, p)
+		}
+		if c.MaintenanceBay != nil && (c.onAisle(p) || slices.Contains(c.Stations, p)) {
+			return fmt.Errorf("%w: V2 bay %v overlaps an aisle or station", ErrInvalidConfig, p)
 		}
 	}
 	return nil

@@ -8,11 +8,13 @@ type Point struct {
 type CellType string
 
 const (
-	CellFree        CellType = "free"
-	CellAisle       CellType = "aisle"
-	CellStation     CellType = "station"
-	CellWall        CellType = "wall"
-	CellOutOfBounds CellType = "out_of_bounds"
+	CellFree           CellType = "free"
+	CellAisle          CellType = "aisle"
+	CellStation        CellType = "station"
+	CellParking        CellType = "parking"
+	CellMaintenanceBay CellType = "maintenance_bay"
+	CellWall           CellType = "wall"
+	CellOutOfBounds    CellType = "out_of_bounds"
 )
 
 type RobotStatus string
@@ -43,14 +45,15 @@ const (
 )
 
 type RobotState struct {
-	ID        string      `json:"id"`
-	X         int         `json:"x"`
-	Y         int         `json:"y"`
-	Battery   int         `json:"battery"` // Integer percentage, 0..100.
-	Status    RobotStatus `json:"status"`
-	JobID     string      `json:"jobId"` // Empty means no assignment.
-	WaitTicks int         `json:"waitTicks"`
-	Blocked   bool        `json:"blocked"`
+	ID          string      `json:"id"`
+	X           int         `json:"x"`
+	Y           int         `json:"y"`
+	Battery     int         `json:"battery"` // Integer percentage, 0..100.
+	Status      RobotStatus `json:"status"`
+	JobID       string      `json:"jobId"` // Empty means no assignment.
+	WaitTicks   int         `json:"waitTicks"`
+	Blocked     bool        `json:"blocked"`
+	Maintenance bool        `json:"maintenance,omitempty"`
 }
 
 type JobState struct {

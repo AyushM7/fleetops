@@ -75,7 +75,7 @@ func (s *Sim) reassignmentEntities(jobID, fromRobotID, toRobotID string) (*JobSt
 	if source.Status != RobotMoving || source.Battery < 30 || source.JobID != job.ID || !source.Blocked || source.WaitTicks < s.cfg.BlockedAfter || job.Status != JobAssigned || job.AssignedRobot != source.ID || (Point{source.X, source.Y}) == job.From {
 		return nil, nil, nil, ErrReassignment
 	}
-	if recipient.Status != RobotIdle || recipient.Battery < 30 || recipient.JobID != "" || s.unresponsiveTicks[source.ID] > 0 || s.unresponsiveTicks[recipient.ID] > 0 {
+	if recipient.Maintenance || recipient.Status != RobotIdle || recipient.Battery < 30 || recipient.JobID != "" || s.unresponsiveTicks[source.ID] > 0 || s.unresponsiveTicks[recipient.ID] > 0 {
 		return nil, nil, nil, ErrReassignment
 	}
 	for _, other := range s.state.Robots {

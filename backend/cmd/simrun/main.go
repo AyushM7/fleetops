@@ -19,7 +19,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	flags.SetOutput(stderr)
 	seed := flags.Int64("seed", 42, "random seed")
 	ticks := flags.Int("ticks", 200, "number of ticks (0–100000)")
-	layout := flags.String("layout", "default", "layout (default|warehouse)")
+	layout := flags.String("layout", "default", "layout (default|warehouse|warehouse-v2)")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -36,8 +36,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "default":
 	case "warehouse":
 		cfg = sim.WarehouseConfig()
+	case "warehouse-v2":
+		cfg = sim.WarehouseV2Config()
 	default:
-		fmt.Fprintln(stderr, "simrun: layout must be default or warehouse")
+		fmt.Fprintln(stderr, "simrun: layout must be default, warehouse, or warehouse-v2")
 		return 2
 	}
 	s, err := sim.New(cfg, *seed)
