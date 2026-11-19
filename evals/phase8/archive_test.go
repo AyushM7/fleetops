@@ -25,14 +25,15 @@ type visitorSchemaOwner struct {
 }
 
 type visitorArchive struct {
-	Version    int               `json:"version"`
-	Schema     string            `json:"schema"`
-	SchemaOID  uint32            `json:"schemaOid"`
-	TableNames []string          `json:"tableNames"`
-	Proposals  []json.RawMessage `json:"proposals"`
-	Audit      []json.RawMessage `json:"audit"`
-	AgentRuns  []json.RawMessage `json:"agentRuns"`
-	Migrations []json.RawMessage `json:"migrations"`
+	Version        int               `json:"version"`
+	Schema         string            `json:"schema"`
+	SchemaOID      uint32            `json:"schemaOid"`
+	TableNames     []string          `json:"tableNames"`
+	Proposals      []json.RawMessage `json:"proposals"`
+	Audit          []json.RawMessage `json:"audit"`
+	AgentRuns      []json.RawMessage `json:"agentRuns"`
+	AutomaticAudit []json.RawMessage `json:"automaticAudit"`
+	Migrations     []json.RawMessage `json:"migrations"`
 }
 
 func retainVisitorSchema(schema visitorSchemaOwner, cause error) error {
@@ -67,6 +68,7 @@ func (f visitorFactory) archive(pool *db.Pool, schema visitorSchemaOwner, dir st
  'proposals',(SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY id),'[]') FROM fleet_proposals p),
  'audit',(SELECT coalesce(jsonb_agg(to_jsonb(a) ORDER BY id),'[]') FROM fleet_audit a),
  'agentRuns',(SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY id),'[]') FROM fleet_agent_runs r),
+ 'automaticAudit',(SELECT coalesce(jsonb_agg(to_jsonb(c) ORDER BY id),'[]') FROM fleet_automatic_audit c),
  'migrations',(SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY version),'[]') FROM schema_migrations m))`).Scan(&records)
 	if err != nil {
 		return err
@@ -100,8 +102,8 @@ func verifyVisitorArchive(raw []byte, schema visitorSchemaOwner) error {
 	var archive visitorArchive
 	err := json.Unmarshal(raw, &archive)
 	if err != nil || archive.Version != 1 || archive.Schema != schema.name || archive.SchemaOID != schema.oid ||
-		strings.Join(archive.TableNames, ",") != "fleet_agent_runs,fleet_audit,fleet_proposals,schema_migrations" ||
-		archive.Proposals == nil || archive.Audit == nil || archive.AgentRuns == nil || len(archive.Migrations) == 0 {
+		strings.Join(archive.TableNames, ",") != "fleet_agent_runs,fleet_audit,fleet_automatic_audit,fleet_proposals,schema_migrations" ||
+		archive.Proposals == nil || archive.Audit == nil || archive.AgentRuns == nil || archive.AutomaticAudit == nil || len(archive.Migrations) == 0 {
 		return errors.New("visitor archive completeness unconfirmed")
 	}
 	return nil

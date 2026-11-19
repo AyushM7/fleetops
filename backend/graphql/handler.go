@@ -56,6 +56,10 @@ func NewHandler(service Service, credentials *auth.Authenticator) http.Handler {
 			http.Error(w, "unauthorized", 401)
 			return
 		}
+		if principal, _ := auth.FromContext(ctx); principal.Role == auth.Automatic {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 		if r.ContentLength > 65536 {
 			http.Error(w, "request too large", 413)
 			return

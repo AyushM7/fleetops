@@ -28,6 +28,9 @@ func automaticFixture(t *testing.T) (*Service, *db.Pool, *time.Time, context.Con
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := s.SetAutomaticCommandsEnabled(true); err != nil {
+		t.Fatal(err)
+	}
 	return s, pool, &now, automaticContext(t, s.RuntimeID())
 }
 

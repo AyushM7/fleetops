@@ -67,6 +67,7 @@ type Service struct {
 	poisoned          bool
 	layout            LayoutView
 	warehouseV2       bool
+	automaticEnabled  bool
 	automaticVersions map[string]commandEntity
 	automaticReads    []commandObservation
 }

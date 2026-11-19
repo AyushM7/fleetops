@@ -17,6 +17,7 @@ var (
 	ErrAutomaticExpired     = errors.New("automatic command has expired or exceeds its freshness window")
 	ErrAutomaticKeyConflict = errors.New("automatic command key already belongs to a different request")
 	ErrAutomaticPriorDenial = errors.New("automatic command was previously rejected")
+	ErrAutomaticDisabled    = errors.New("V2 automatic commands are disabled")
 )
 
 const automaticMaxTTL = 30 * time.Second
@@ -36,6 +37,21 @@ type AutomaticResult struct {
 	PriorAuditID   int64     `json:"priorAuditId,omitempty"`
 	Execution      Execution `json:"execution"`
 	AuditCommitted bool      `json:"auditCommitted"`
+}
+
+// SetAutomaticCommandsEnabled is only for the trusted Go host. Disabling
+// invalidates outstanding observations without removing durable receipts.
+func (s *Service) SetAutomaticCommandsEnabled(enabled bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if enabled && !s.warehouseV2 {
+		return ErrUnauthorized
+	}
+	s.automaticEnabled = enabled
+	if !enabled {
+		s.automaticReads, s.automaticVersions = nil, nil
+	}
+	return nil
 }
 
 func (c AutomaticCommand) validate() error {
@@ -174,6 +190,9 @@ func (s *Service) ExecuteAutomatic(ctx context.Context, command AutomaticCommand
 func (s *Service) automaticAccess(principal auth.Principal, runtimeID string) error {
 	if !s.warehouseV2 || principal.Role != auth.Automatic || principal.RuntimeID != s.runtimeID || runtimeID != s.runtimeID {
 		return ErrUnauthorized
+	}
+	if !s.automaticEnabled {
+		return ErrAutomaticDisabled
 	}
 	return nil
 }
