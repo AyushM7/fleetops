@@ -44,6 +44,8 @@ const (
 	ActivityWaitingForTraffic RobotActivity = "WAITING_FOR_TRAFFIC"
 	ActivityGoingToCharge     RobotActivity = "GOING_TO_CHARGE"
 	ActivityCharging          RobotActivity = "CHARGING"
+	ActivityUndocking         RobotActivity = "UNDOCKING"
+	ActivityGoingToPark       RobotActivity = "GOING_TO_PARK"
 	ActivityRelocating        RobotActivity = "RELOCATING"
 	ActivityParked            RobotActivity = "PARKED"
 	ActivityFaulted           RobotActivity = "FAULTED"

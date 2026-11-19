@@ -124,7 +124,7 @@ func checkRobotInvariants(robot RobotState, cfg Config, jobs map[string]JobState
 			return fmt.Errorf("I6: %s is %s with a job", robot.ID, robot.Status)
 		}
 	case RobotMoving:
-		if robot.JobID == "" && !cfg.AutoCharge {
+		if robot.JobID == "" && !cfg.AutoCharge && cfg.MaintenanceBay == nil {
 			return fmt.Errorf("I6: %s moving without a job", robot.ID)
 		}
 	case RobotFaulted:
@@ -147,13 +147,15 @@ func checkReservationInvariants(s State, cfg Config, robots map[string]RobotStat
 			}
 			robot, exists := robots[id]
 			arrived := len(nav.route) == 0 && nav.target == (Point{X: robot.X, Y: robot.Y})
-			if !exists || !cfg.Recovery || robot.Status != RobotMoving || robot.JobID != "" || cfg.CellTypeAt(nav.target) != CellFree || !arrived && (len(nav.route) == 0 || nav.route[len(nav.route)-1] != nav.target) {
+			targetKind := cfg.CellTypeAt(nav.target)
+			parking := targetKind == CellParking || targetKind == CellMaintenanceBay
+			if !exists || (!cfg.Recovery && cfg.MaintenanceBay == nil) || robot.Status != RobotMoving || robot.JobID != "" || targetKind != CellFree && !parking || !arrived && (len(nav.route) == 0 || nav.route[len(nav.route)-1] != nav.target) {
 				return fmt.Errorf("I6: %s has invalid relocation trip", id)
 			}
 			previous := Point{X: robot.X, Y: robot.Y}
 			for _, point := range nav.route {
 				dx, dy := point.X-previous.X, point.Y-previous.Y
-				if dx*dx+dy*dy != 1 || cfg.CellTypeAt(point) != CellFree && cfg.CellTypeAt(point) != CellAisle {
+				if dx*dx+dy*dy != 1 || cfg.CellTypeAt(point) != CellFree && cfg.CellTypeAt(point) != CellAisle && !(parking && point == nav.target) {
 					return fmt.Errorf("I6: %s has invalid relocation route", id)
 				}
 				previous = point
@@ -243,7 +245,7 @@ func checkStationInvariants(stations []StationState, robots map[string]RobotStat
 			continue
 		}
 		robot, exists := robots[station.OccupiedBy]
-		if !exists || robot.X != station.X || robot.Y != station.Y || (robot.Status != RobotCharging && robot.Status != RobotOffline) {
+		if !exists || robot.X != station.X || robot.Y != station.Y || (robot.Status != RobotCharging && robot.Status != RobotOffline && robot.Activity != ActivityUndocking) {
 			return fmt.Errorf("I7: station %s has invalid occupant %s", station.ID, station.OccupiedBy)
 		}
 		occupancy[robot.ID]++

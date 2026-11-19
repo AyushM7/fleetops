@@ -32,6 +32,8 @@ type Config struct {
 	ReserveBattery        int
 	AutoCharge            bool
 	ChargeBelow           int
+	ChargeRelease         int
+	ParkingGraceTicks     int
 	Recovery              bool
 	RecoverAfter          int
 	HoldTicks             int
@@ -195,6 +197,14 @@ func (c Config) validateWarehouseSettings() error {
 	}
 	if c.AutoCharge && (c.ChargeBelow <= c.MinAssignBattery || c.ChargeBelow > 100) {
 		return fmt.Errorf("%w: V14 AutoCharge requires MinAssignBattery < ChargeBelow <= 100", ErrInvalidConfig)
+	}
+	if c.MaintenanceBay != nil {
+		if c.AutoCharge && (c.ChargeRelease <= c.ChargeBelow || c.ChargeRelease > 100) {
+			return fmt.Errorf("%w: V2 requires ChargeBelow < ChargeRelease <= 100", ErrInvalidConfig)
+		}
+		if c.ParkingGraceTicks < 0 {
+			return fmt.Errorf("%w: V2 ParkingGraceTicks must be nonnegative", ErrInvalidConfig)
+		}
 	}
 	if c.Recovery && (!c.AutoCharge || c.RecoverAfter <= c.BlockedAfter) {
 		return fmt.Errorf("%w: Recovery requires AutoCharge and RecoverAfter > BlockedAfter", ErrInvalidConfig)

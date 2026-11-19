@@ -23,7 +23,7 @@ func (s *Sim) routeAffordable(robot RobotState, target Point, steps int) bool {
 		return true
 	}
 	if robot.JobID == "" {
-		if s.navigation[robot.ID].relocation {
+		if s.navigation[robot.ID].relocation || s.isBay(target) {
 			return s.relocationAffordable(robot, target, steps)
 		}
 		// Admission retains one unit; the arrival safety net remains in stepChargeTrip.

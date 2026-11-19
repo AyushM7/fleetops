@@ -73,7 +73,9 @@ func (s *Sim) prepareNavigation(robot *RobotState, target Point) {
 	if _, exists := s.navigation[robot.ID]; !s.cfg.AutoCharge || !exists {
 		s.navigation[robot.ID] = robotNavigation{target: target}
 	}
-	s.planNavigation(robot, target, false)
+	if s.cfg.MaintenanceBay == nil || !s.planNavigation(robot, target, true) {
+		s.planNavigation(robot, target, false)
+	}
 }
 
 func (s *Sim) waitForNavigation(robot *RobotState, target Point) {

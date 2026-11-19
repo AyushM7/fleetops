@@ -13,6 +13,7 @@ type Sim struct {
 	rng               *rand.Rand
 	jobCells          []Point
 	jobSequence       int
+	idleTicks         map[string]int
 	unresponsiveTicks map[string]int
 	navigation        map[string]robotNavigation
 	recovery          map[string]robotRecovery
@@ -58,6 +59,7 @@ func New(cfg Config, seed int64) (*Sim, error) {
 	stationPrefix := "S"
 	if cfg.MaintenanceBay != nil {
 		stationPrefix = "C"
+		s.idleTicks = make(map[string]int, len(starts))
 	}
 	for i, p := range cfg.Stations {
 		s.state.Stations = append(s.state.Stations, StationState{

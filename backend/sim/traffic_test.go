@@ -39,6 +39,22 @@ func TestWarehouseV2TrafficPriorityAgesAndRotates(t *testing.T) {
 	}
 }
 
+func TestWarehouseV2KeepsAisleMouthClearForExit(t *testing.T) {
+	s := newTestSim(t, WarehouseV2Config(), 42)
+	r1, r2 := &s.state.Robots[0], &s.state.Robots[1]
+	r1.X, r1.Y = 13, 1
+	r2.X, r2.Y = 14, 2
+	if blocker := s.crossingBlocker(*r1, []Point{{14, 1}, {14, 2}}); blocker != 1 {
+		t.Fatalf("should wait outside an occupied aisle mouth, blocker = %d", blocker)
+	}
+	r1.X, r1.Y = 14, 10
+	r2.X, r2.Y = 14, 1
+	route := []Point{{14, 9}, {14, 8}, {14, 7}, {14, 6}, {14, 5}, {14, 4}, {14, 3}, {14, 2}, {14, 1}}
+	if blocker := s.crossingBlocker(*r1, route); blocker != 1 {
+		t.Fatalf("should wait before an aisle with an occupied planned exit, blocker = %d", blocker)
+	}
+}
+
 func TestWarehouseV2DetectsAndClearsAisleMouthDeadlock(t *testing.T) {
 	s := recoverySim(t, WarehouseV2Config(), []Point{{4, 2}, {4, 1}}, []Point{{3, 1}, {4, 3}}, [][]Point{{{4, 1}, {3, 1}}, {{4, 2}, {4, 3}}})
 	s.Tick()
@@ -65,14 +81,18 @@ func TestWarehouseV2CongestionSafety(t *testing.T) {
 	for _, seed := range []int64{1, 42, 99} {
 		t.Run(fmt.Sprint(seed), func(t *testing.T) {
 			s := newTestSim(t, WarehouseV2Config(), seed)
-			for range 1000 {
+			lastCompleted := 0
+			for tick := 1; tick <= 2500; tick++ {
 				before := s.Snapshot()
 				s.Tick()
 				assertInvariants(t, s, s.cfg)
 				assertV2TrafficStep(t, before, s.Snapshot())
-			}
-			if s.Snapshot().CompletedJobs < 40 {
-				t.Fatalf("fleet made insufficient progress under congestion: %d completions; dependencies %v; routes %v", s.Snapshot().CompletedJobs, s.recoveryBlockers(s.recoveryOrder()), s.navigation)
+				if tick%500 == 0 {
+					if s.state.CompletedJobs-lastCompleted < 10 {
+						t.Fatalf("only %d deliveries in ticks %d–%d; dependencies %v; routes %v", s.state.CompletedJobs-lastCompleted, tick-499, tick, s.recoveryBlockers(s.recoveryOrder()), s.navigation)
+					}
+					lastCompleted = s.state.CompletedJobs
+				}
 			}
 		})
 	}

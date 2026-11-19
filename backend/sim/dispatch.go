@@ -15,12 +15,18 @@ func (s *Sim) assignPending(skip []bool) {
 		if skip[i] || robot.Role == RoleMaintenance || robot.Status != RobotIdle || robot.JobID != "" {
 			continue
 		}
+		if s.cfg.MaintenanceBay != nil && (s.occupiedStation(robot.ID) != nil || s.cfg.AutoCharge && s.needsCharge(robot)) {
+			continue
+		}
 		number := idNumber(robot.ID)
 		robots[number] = i
 		idle = append(idle, scheduler.RobotInfo{Num: number, Pos: scheduler.Cell{X: robot.X, Y: robot.Y}, Battery: robot.Battery})
 	}
+	if len(idle) == 0 {
+		return
+	}
 	var pending []scheduler.JobInfo
-	distance := s.dispatchDistance()
+	distance := s.travelDistance(s.cfg.MaintenanceBay != nil)
 	jobs := make(map[int]int)
 	for i, job := range s.state.Jobs {
 		if job.Status != JobPending {
@@ -46,9 +52,13 @@ func (s *Sim) assignPending(skip []bool) {
 }
 
 func (s *Sim) dispatchDistance() scheduler.Distance {
+	return s.travelDistance(false)
+}
+
+func (s *Sim) travelDistance(liveOccupancy bool) scheduler.Distance {
 	blocked := make(map[Point]bool)
 	for _, robot := range s.state.Robots {
-		if robot.Status != RobotOffline && robot.Status != RobotFaulted && robot.Status != RobotCharging {
+		if !liveOccupancy && robot.Status != RobotOffline && robot.Status != RobotFaulted && robot.Status != RobotCharging {
 			continue
 		}
 		position := Point{X: robot.X, Y: robot.Y}

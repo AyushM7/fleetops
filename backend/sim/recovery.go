@@ -113,7 +113,8 @@ func (s *Sim) recoveryBlockers(order []int) []int {
 			}
 		}
 		if blockers[i] == -1 {
-			blockers[i] = s.crossingBlocker(s.navigation[s.state.Robots[i].ID].route)
+			robot := s.state.Robots[i]
+			blockers[i] = s.crossingBlocker(robot, s.navigation[robot.ID].route)
 		}
 		if blockers[i] >= 0 || !s.cfg.onAisle(next) {
 			continue

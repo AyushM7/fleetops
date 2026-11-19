@@ -42,8 +42,29 @@ func (s *Sim) reserveMove(robot RobotState, to Point) bool {
 	return true
 }
 
-func (s *Sim) crossingBlocker(route []Point) int {
-	if s.cfg.MaintenanceBay == nil || len(route) < 2 || s.cfg.CellTypeAt(route[0]) != CellFree {
+func (s *Sim) crossingBlocker(mover RobotState, route []Point) int {
+	if s.cfg.MaintenanceBay == nil || len(route) < 2 {
+		return -1
+	}
+	first, second := route[0], route[1]
+	position := Point{mover.X, mover.Y}
+	if s.cfg.onAisle(first) && (!s.cfg.onAisle(position) || first.X != position.X) {
+		// Enter an aisle only if its planned exit is free.
+		for _, point := range route[1:] {
+			if !s.cfg.onAisle(point) || point.X != first.X {
+				return s.robotIndexAt(point)
+			}
+		}
+		return -1
+	}
+	if first.X == second.X && !s.cfg.onAisle(first) && s.cfg.onAisle(second) && !s.cfg.onAisle(position) {
+		for i, robot := range s.state.Robots {
+			if robot.X == second.X && s.cfg.onAisle(Point{robot.X, robot.Y}) {
+				return i
+			}
+		}
+	}
+	if s.cfg.CellTypeAt(first) != CellFree {
 		return -1
 	}
 	x, y := route[0].X, route[0].Y
@@ -55,8 +76,12 @@ func (s *Sim) crossingBlocker(route []Point) int {
 		return -1
 	}
 	// Wait outside a one-cell pinch until there is room to leave it.
+	return s.robotIndexAt(second)
+}
+
+func (s *Sim) robotIndexAt(position Point) int {
 	for i, robot := range s.state.Robots {
-		if (Point{robot.X, robot.Y}) == route[1] {
+		if (Point{robot.X, robot.Y}) == position {
 			return i
 		}
 	}
@@ -64,7 +89,7 @@ func (s *Sim) crossingBlocker(route []Point) int {
 }
 
 func (s *Sim) nextStepBlocked(robot RobotState, route []Point) bool {
-	return s.navigationBlocked(robot, route[0], true) || s.crossingBlocker(route) >= 0
+	return s.navigationBlocked(robot, route[0], true) || s.crossingBlocker(robot, route) >= 0
 }
 
 func (s *Sim) movementOrder() []int {

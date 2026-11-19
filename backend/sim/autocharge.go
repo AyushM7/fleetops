@@ -13,7 +13,7 @@ func (s *Sim) seekCharging(skip []bool) {
 	}
 	candidates := []int{}
 	for i, robot := range s.state.Robots {
-		if !skip[i] && robot.Status == RobotIdle && robot.JobID == "" && robot.Battery < s.cfg.ChargeBelow {
+		if !skip[i] && robot.Status == RobotIdle && robot.JobID == "" && s.needsCharge(robot) {
 			candidates = append(candidates, i)
 		}
 	}
@@ -36,6 +36,10 @@ func (s *Sim) seekCharging(skip []bool) {
 		station.ReservedBy, robot.Status = robot.ID, RobotMoving
 		s.navigation[robot.ID] = robotNavigation{target: Point{X: station.X, Y: station.Y}, route: route}
 	}
+}
+
+func (s *Sim) needsCharge(robot RobotState) bool {
+	return robot.Battery < s.cfg.ChargeBelow || s.cfg.MaintenanceBay != nil && robot.Battery == s.cfg.ChargeBelow
 }
 
 func (s *Sim) chargeAtCurrentStation(robot *RobotState) bool {
@@ -83,7 +87,7 @@ func (s *Sim) stationFreeFor(station StationState, _ string) bool {
 func (s *Sim) chargingRoute(robot RobotState, station StationState) ([]Point, bool) {
 	route, err := routing.FindPath(routingGrid{cfg: s.cfg}, routing.Cell{X: robot.X, Y: robot.Y}, routing.Cell{X: station.X, Y: station.Y}, routing.Options{
 		Blocked: func(cell routing.Cell) bool {
-			return s.navigationBlocked(robot, Point{X: cell.X, Y: cell.Y}, false)
+			return s.navigationBlocked(robot, Point{X: cell.X, Y: cell.Y}, s.cfg.MaintenanceBay != nil)
 		},
 	})
 	if err != nil || robot.Battery-len(route)*s.cfg.MovingDrain < 1 {
@@ -103,6 +107,28 @@ func (s *Sim) reservedStation(robotID string) *StationState {
 		}
 	}
 	return nil
+}
+
+func (s *Sim) occupiedStation(robotID string) *StationState {
+	for i := range s.state.Stations {
+		if s.state.Stations[i].OccupiedBy == robotID {
+			return &s.state.Stations[i]
+		}
+	}
+	return nil
+}
+
+func (s *Sim) releaseVacatedStations() {
+	for i := range s.state.Stations {
+		station := &s.state.Stations[i]
+		if station.OccupiedBy == "" {
+			continue
+		}
+		robot := s.faultRobot(station.OccupiedBy)
+		if robot == nil || robot.X != station.X || robot.Y != station.Y {
+			station.OccupiedBy = ""
+		}
+	}
 }
 
 func (s *Sim) beginCharging(robot *RobotState, station *StationState) {

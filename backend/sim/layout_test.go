@@ -77,6 +77,8 @@ func TestValidateWarehouseV2(t *testing.T) {
 		{"isolated parking", func(c *Config) { c.Walls = append(c.Walls, Point{0, 11}) }, "must have exactly one corridor entrance"},
 		{"isolated maintenance bay", func(c *Config) { c.Walls = append(c.Walls, Point{9, 1}) }, "must have exactly one corridor entrance"},
 		{"isolated charger", func(c *Config) { c.Walls = append(c.Walls, Point{0, 0}, Point{2, 0}, Point{1, 1}) }, "V12 station"},
+		{"release does not exceed charge threshold", func(c *Config) { c.ChargeRelease = c.ChargeBelow }, "ChargeBelow < ChargeRelease"},
+		{"negative parking grace", func(c *Config) { c.ParkingGraceTicks = -1 }, "ParkingGraceTicks must be nonnegative"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := WarehouseV2Config()

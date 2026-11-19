@@ -20,6 +20,7 @@ func WarehouseConfig() Config {
 func WarehouseV2Config() Config {
 	c := WarehouseConfig()
 	c.Height = 13
+	c.ChargeRelease, c.ParkingGraceTicks = 85, 10
 	c.Stations = []Point{{1, 0}, {6, 0}, {12, 0}, {18, 0}}
 	c.MaintenanceBay = &Point{9, 0}
 	c.Walls = append(c.Walls, Point{8, 0}, Point{10, 0})
