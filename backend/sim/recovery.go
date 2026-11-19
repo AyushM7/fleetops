@@ -364,6 +364,9 @@ func (s *Sim) retreatRobot(robot *RobotState, cycle []int) bool {
 		if s.cfg.CellTypeAt(point) != CellFree || s.navigationBlocked(*robot, point, true) {
 			continue
 		}
+		if s.cfg.MaintenanceBay != nil && s.cfg.narrowPassage(point) {
+			continue
+		}
 		required := false
 		for _, i := range cycle {
 			next, ok := s.requiredCell(i)

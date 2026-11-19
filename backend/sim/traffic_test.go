@@ -55,6 +55,23 @@ func TestWarehouseV2KeepsAisleMouthClearForExit(t *testing.T) {
 	}
 }
 
+func TestWarehouseV2NarrowPassageKeepsItsExitAndHasNoJobStops(t *testing.T) {
+	cfg := WarehouseV2Config()
+	s := newTestSim(t, cfg, 42)
+	passage, exit := Point{10, 1}, Point{11, 1}
+	if slices.Contains(s.jobCells, passage) || !slices.Contains(cfg.JobCells(), passage) {
+		t.Fatal("narrow passage should be a transit cell but never a job stop")
+	}
+	r1, r2 := &s.state.Robots[0], &s.state.Robots[1]
+	r1.X, r1.Y, r1.Status = passage.X, passage.Y, RobotMoving
+	r2.X, r2.Y = 12, 1
+	s.navigation[r1.ID] = robotNavigation{target: exit, route: []Point{exit}}
+	s.traffic = newTrafficReservations(s.state.Robots)
+	if s.reserveMove(*r2, exit) || !s.reserveMove(*r1, exit) {
+		t.Fatal("another robot can take the exit from a robot inside the narrow passage")
+	}
+}
+
 func TestWarehouseV2DetectsAndClearsAisleMouthDeadlock(t *testing.T) {
 	s := recoverySim(t, WarehouseV2Config(), []Point{{4, 2}, {4, 1}}, []Point{{3, 1}, {4, 3}}, [][]Point{{{4, 1}, {3, 1}}, {{4, 2}, {4, 3}}})
 	s.Tick()
@@ -94,6 +111,35 @@ func TestWarehouseV2CongestionSafety(t *testing.T) {
 					lastCompleted = s.state.CompletedJobs
 				}
 			}
+		})
+	}
+}
+
+func TestWarehouseV2SustainsDeliveriesAfterCongestion(t *testing.T) {
+	for _, seed := range []int64{1, 2, 3, 42, 99} {
+		t.Run(fmt.Sprint(seed), func(t *testing.T) {
+			s := newTestSim(t, WarehouseV2Config(), seed)
+			lastCompleted := 0
+			for tick := 1; tick <= 5000; tick++ {
+				s.Tick()
+				for _, robot := range s.state.Robots {
+					if robot.Status == RobotFaulted {
+						t.Fatalf("tick %d: %s depleted its battery", tick, robot.ID)
+					}
+				}
+				if tick%500 != 0 {
+					continue
+				}
+				if s.state.CompletedJobs == lastCompleted {
+					t.Fatalf("no deliveries in ticks %d–%d; robots %+v; dependencies %v; routes %v", tick-499, tick, s.Snapshot().Robots, s.recoveryBlockers(s.recoveryOrder()), s.navigation)
+				}
+				lastCompleted = s.state.CompletedJobs
+			}
+			longestWait := 0
+			for _, robot := range s.state.Robots {
+				longestWait = max(longestWait, robot.WaitTicks)
+			}
+			t.Logf("%d ticks, %d completed deliveries, longest current wait %d ticks", s.state.Tick, s.state.CompletedJobs, longestWait)
 		})
 	}
 }

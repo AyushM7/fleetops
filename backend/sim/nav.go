@@ -43,6 +43,11 @@ func (s *Sim) planNavigation(robot *RobotState, target Point, dynamic bool) bool
 	if !ok {
 		return false
 	}
+	if s.cfg.MaintenanceBay != nil {
+		if exit, restricted := s.passageExit(Point{robot.X, robot.Y}, points); restricted && s.exitBlocker(*robot, exit) >= 0 {
+			return false
+		}
+	}
 	s.navigation[robot.ID] = robotNavigation{target: target, route: points, relocation: s.navigation[robot.ID].relocation}
 	return true
 }

@@ -173,7 +173,7 @@ func (c Config) Validate() error {
 	if c.MaxJobs < 1 || c.MaxJobs > 200 || c.InitialJobs < 0 || c.InitialJobs > c.MaxJobs {
 		return fmt.Errorf("%w: MaxJobs must be in [1,200] and InitialJobs in [0,MaxJobs]", ErrInvalidConfig)
 	}
-	if len(c.JobCells()) < 2 {
+	if len(c.jobEndpoints()) < 2 {
 		return fmt.Errorf("%w: at least two eligible job cells are required", ErrInvalidConfig)
 	}
 	if err := c.validateConnectivity(); err != nil {

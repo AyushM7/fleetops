@@ -92,6 +92,10 @@ func (s *Sim) stepCharging(robot *RobotState) {
 }
 
 func (s *Sim) stepIdle(robot *RobotState) {
+	if s.cfg.MaintenanceBay != nil && s.cfg.AutoCharge && s.needsCharge(*robot) {
+		// Low-power standby preserves the energy needed to reach a dock after traffic clears.
+		return
+	}
 	if s.queuedForCharging(*robot) {
 		return
 	}

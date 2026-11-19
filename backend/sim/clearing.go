@@ -216,6 +216,9 @@ func (s *Sim) claimedRelocationRoute(robot RobotState, claimed map[Point]string)
 			if target == (Point{X: robot.X, Y: robot.Y}) || s.cfg.CellTypeAt(target) != CellFree || s.protected[target] || claimed[target] != "" && claimed[target] != robot.ID || s.navigationBlocked(robot, target, true) {
 				continue
 			}
+			if s.cfg.MaintenanceBay != nil && s.cfg.narrowPassage(target) {
+				continue
+			}
 			route, err := routing.FindPath(routingGrid{cfg: s.cfg}, routing.Cell{X: robot.X, Y: robot.Y}, routing.Cell{X: x, Y: y}, routing.Options{
 				Blocked: func(c routing.Cell) bool { return s.navigationBlocked(robot, Point{X: c.X, Y: c.Y}, true) },
 			})

@@ -8,6 +8,18 @@ import (
 
 const retainedCompletedJobs = 100
 
+func (c Config) jobEndpoints() []Point {
+	cells := c.JobCells()
+	if c.MaintenanceBay != nil {
+		cells = slices.DeleteFunc(cells, func(p Point) bool {
+			// Reserve narrow passages and aisle mouths for continuous travel.
+			return c.narrowPassage(p) || c.onAisle(p) ||
+				c.onAisle(Point{p.X, p.Y - 1}) || c.onAisle(Point{p.X, p.Y + 1})
+		})
+	}
+	return cells
+}
+
 func (s *Sim) addJob() {
 	count := len(s.state.Jobs)
 	if s.cfg.MaintenanceBay != nil {

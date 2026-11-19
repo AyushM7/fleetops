@@ -31,7 +31,7 @@ func New(cfg Config, seed int64) (*Sim, error) {
 	s := &Sim{
 		cfg:               cfg,
 		rng:               rand.New(rand.NewSource(seed)),
-		jobCells:          cfg.JobCells(),
+		jobCells:          cfg.jobEndpoints(),
 		unresponsiveTicks: make(map[string]int),
 		navigation:        make(map[string]robotNavigation),
 		recovery:          make(map[string]robotRecovery),

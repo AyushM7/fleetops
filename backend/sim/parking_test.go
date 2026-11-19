@@ -2,6 +2,24 @@ package sim
 
 import "testing"
 
+func TestWarehouseV2LowBatteryWaitsInStandbyWhenChargersBlocked(t *testing.T) {
+	cfg := WarehouseV2Config()
+	cfg.InitialJobs = 0
+	s := newTestSim(t, cfg, 42)
+	for i, station := range s.state.Stations {
+		blocker := &s.state.Robots[i+1]
+		blocker.X, blocker.Y, blocker.Status = station.X, station.Y, RobotOffline
+	}
+	robot := &s.state.Robots[0]
+	robot.Battery = cfg.ChargeBelow
+	for range 2 * cfg.IdleDrainEvery {
+		s.Tick()
+	}
+	if robot.Battery != cfg.ChargeBelow || robot.Status != RobotIdle {
+		t.Fatalf("waiting for an unblocked charger consumed the robot's energy: %+v", robot)
+	}
+}
+
 func TestWarehouseV2ChargesAndUndocksBeforeReturningToBay(t *testing.T) {
 	cfg := WarehouseV2Config()
 	cfg.InitialJobs, cfg.AutoDispatch = 0, false
@@ -51,6 +69,7 @@ func TestWarehouseV2ChargesAndUndocksBeforeReturningToBay(t *testing.T) {
 func TestWarehouseV2ParkingGraceAndDeparture(t *testing.T) {
 	cfg := WarehouseV2Config()
 	cfg.InitialJobs = 0
+	cfg.NewJobEvery = 2 * cfg.ParkingGraceTicks
 	s := newTestSim(t, cfg, 42)
 	robot := &s.state.Robots[0]
 	robot.Y = 10
@@ -99,6 +118,24 @@ func TestWarehouseV2LimitsChargingReservations(t *testing.T) {
 		if station.ReservedBy == "" {
 			t.Fatalf("unreserved charger despite eligible waiters: %+v", station)
 		}
+	}
+}
+
+func TestWarehouseV2SwapsCrossingChargerReservations(t *testing.T) {
+	cfg := WarehouseV2Config()
+	cfg.InitialJobs, cfg.AutoDispatch = 0, false
+	s := newTestSim(t, cfg, 42)
+	left, right := &s.state.Robots[0], &s.state.Robots[1]
+	left.X, left.Y, left.Status, left.Battery = 7, 1, RobotMoving, 15
+	right.X, right.Y, right.Status, right.Battery = 9, 1, RobotMoving, 15
+	left.WaitTicks, left.Blocked = cfg.RecoverAfter, true
+	s.state.Stations[1].ReservedBy, s.state.Stations[2].ReservedBy = right.ID, left.ID
+	s.navigation[left.ID] = robotNavigation{target: Point{12, 0}, route: []Point{{8, 1}, {9, 1}, {10, 1}, {11, 1}, {11, 0}, {12, 0}}}
+	s.navigation[right.ID] = robotNavigation{target: Point{6, 0}, route: []Point{{8, 1}, {7, 1}, {7, 0}, {6, 0}}}
+	s.Tick()
+	assertInvariants(t, s, cfg)
+	if s.state.Stations[1].ReservedBy != left.ID || s.state.Stations[2].ReservedBy != right.ID {
+		t.Fatalf("crossing charger trips failed to swap reservations: %+v", s.state.Stations)
 	}
 }
 

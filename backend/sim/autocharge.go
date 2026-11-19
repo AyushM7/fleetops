@@ -11,6 +11,9 @@ func (s *Sim) seekCharging(skip []bool) {
 	if !s.cfg.AutoCharge {
 		return
 	}
+	if s.cfg.MaintenanceBay != nil {
+		s.rebalanceCharging()
+	}
 	candidates := []int{}
 	for i, robot := range s.state.Robots {
 		if !skip[i] && robot.Status == RobotIdle && robot.JobID == "" && s.needsCharge(robot) {
@@ -35,6 +38,41 @@ func (s *Sim) seekCharging(skip []bool) {
 		}
 		station.ReservedBy, robot.Status = robot.ID, RobotMoving
 		s.navigation[robot.ID] = robotNavigation{target: Point{X: station.X, Y: station.Y}, route: route}
+	}
+}
+
+func (s *Sim) rebalanceCharging() {
+	for i := range s.state.Stations {
+		a := &s.state.Stations[i]
+		if a.ReservedBy == "" {
+			continue
+		}
+		left := s.faultRobot(a.ReservedBy)
+		if left == nil || left.Status != RobotMoving {
+			continue
+		}
+		for j := i + 1; j < len(s.state.Stations); j++ {
+			b := &s.state.Stations[j]
+			if b.ReservedBy == "" {
+				continue
+			}
+			right := s.faultRobot(b.ReservedBy)
+			if right == nil || right.Status != RobotMoving || max(left.WaitTicks, right.WaitTicks) < s.cfg.RecoverAfter {
+				continue
+			}
+			leftRoute, leftOK := s.chargingRoute(*left, *b)
+			rightRoute, rightOK := s.chargingRoute(*right, *a)
+			baseline := len(s.navigation[left.ID].route) + len(s.navigation[right.ID].route)
+			if !leftOK || !rightOK || len(leftRoute)+len(rightRoute) >= baseline {
+				continue
+			}
+			a.ReservedBy, b.ReservedBy = right.ID, left.ID
+			s.clearNavigation(left)
+			s.clearNavigation(right)
+			s.navigation[left.ID] = robotNavigation{target: Point{b.X, b.Y}, route: leftRoute}
+			s.navigation[right.ID] = robotNavigation{target: Point{a.X, a.Y}, route: rightRoute}
+			return
+		}
 	}
 }
 
