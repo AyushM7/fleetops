@@ -2,6 +2,7 @@ package visitor
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,27 @@ import (
 	"testing"
 	"time"
 )
+
+type blockedWarehouseWriter struct {
+	*httptest.ResponseRecorder
+	deadline time.Time
+	started  chan time.Time
+	release  chan struct{}
+}
+
+func (w *blockedWarehouseWriter) SetWriteDeadline(deadline time.Time) error {
+	w.deadline = deadline
+	return nil
+}
+
+func (w *blockedWarehouseWriter) Write(data []byte) (int, error) {
+	if bytes.HasPrefix(data, []byte("id: ")) {
+		w.started <- w.deadline
+		<-w.release
+		return 0, context.DeadlineExceeded
+	}
+	return w.ResponseRecorder.Write(data)
+}
 
 func TestWarehouseEventReplayAndSnapshotReconciliation(t *testing.T) {
 	run, err := warehouseTestRun(42)
@@ -163,6 +185,96 @@ func TestWarehouseEventStreamIntegration(t *testing.T) {
 	}
 	if err := otherReader.Err(); err != nil {
 		t.Fatalf("expiry did not promptly close its stream: %v", err)
+	}
+}
+
+func TestWarehouseStreamBackpressureAndExpiryIntegration(t *testing.T) {
+	g, cleaned := visitorUnitGateway(t)
+	a, b := openVisitor(t, g), openVisitor(t, g)
+	session := g.manager.lookup(a.Value)
+	run, err := warehouseTestRun(42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session.mu.Lock()
+	session.controller.run, session.controller.interactive = run, true
+	session.mu.Unlock()
+	if w := visitorRequest(g, a, "/demo/play", run.generation, "{}", nil); w.Code != http.StatusOK {
+		t.Fatal(w.Code, w.Body.String())
+	}
+
+	writer := &blockedWarehouseWriter{
+		ResponseRecorder: httptest.NewRecorder(), started: make(chan time.Time, 1), release: make(chan struct{}),
+	}
+	defer func() {
+		select {
+		case <-writer.release:
+		default:
+			close(writer.release)
+		}
+	}()
+	req := rawRequest(g, "/demo/events")
+	req.AddCookie(a)
+	streamDone := make(chan struct{})
+	go func() {
+		defer close(streamDone)
+		g.ServeHTTP(writer, req)
+	}()
+	select {
+	case deadline := <-writer.started:
+		if remaining := time.Until(deadline); remaining <= 0 || remaining > warehouseWriteTimeout {
+			t.Fatalf("blocked stream write did not have a bounded deadline: %s", remaining)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("stream did not reach the blocked socket write")
+	}
+
+	tickDeadline := time.Now().Add(5 * time.Second)
+	for run.warehouse().Tick < 3 {
+		if time.Now().After(tickDeadline) {
+			t.Fatal("simulation stopped progressing while writing to an SSE subscriber")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if w := visitorRequest(g, b, "/demo/status", "", "{}", nil); w.Code != http.StatusOK {
+		t.Fatalf("blocked SSE write affected another visitor, status %d", w.Code)
+	}
+
+	expiryDeadline := time.Now().Add(5 * time.Second)
+	for !session.mu.TryLock() {
+		if time.Now().After(expiryDeadline) {
+			t.Fatal("blocked SSE write held the session gate")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	session.deadline = time.Now().Add(-time.Second)
+	session.mu.Unlock()
+	for {
+		g.manager.mu.Lock()
+		released := g.manager.owned == 1 && g.manager.sessions[a.Value] == nil
+		g.manager.mu.Unlock()
+		if released && cleaned.Load() == 1 {
+			break
+		}
+		if time.Now().After(expiryDeadline) {
+			t.Fatal("expired visitor did not release its runtime and admission slot while the writer was blocked")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if w := visitorRequest(g, a, "/demo/status", "", "{}", nil); w.Code != http.StatusUnauthorized {
+		t.Fatalf("expired visitor returned %d", w.Code)
+	}
+	close(writer.release)
+	select {
+	case <-streamDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("stream did not exit after the socket write timed out")
+	}
+	session.mu.Lock()
+	streams := session.streams
+	session.mu.Unlock()
+	if streams != 0 || len(g.concurrency) != 0 {
+		t.Fatalf("stream or HTTP admission slot leaked: streams=%d HTTP=%d", streams, len(g.concurrency))
 	}
 }
 
