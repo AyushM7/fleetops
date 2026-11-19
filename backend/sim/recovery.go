@@ -381,33 +381,72 @@ func (s *Sim) retreatRobot(robot *RobotState, cycle []int) bool {
 			continue
 		}
 		target := s.recoveryTarget(proposed)
+		nav := s.navigation[robot.ID]
+		if s.cfg.MaintenanceBay != nil && s.cfg.chargerPocket(point) &&
+			slices.ContainsFunc(cycle, func(i int) bool {
+				other := s.state.Robots[i]
+				return other.ID != robot.ID && other.JobID != "" && s.recoveryTarget(other) == point
+			}) {
+			// A single-exit refuge cannot clear this cycle if its peer needs to enter it.
+			if nav.relocation && robot.JobID == "" && s.redirectParking(robot) {
+				return true
+			}
+			continue
+		}
 		// Budget the remaining mission using R1's parked-obstacle estimates;
 		// dynamic replanning follows the hold after cycle members can move away.
 		route, ok := s.navigationRoute(proposed, target, false)
-		nav := s.navigation[robot.ID]
 		cancelParking := !ok && s.cfg.MaintenanceBay != nil && nav.relocation && s.relocationAffordable(proposed, point, 0)
 		if (!ok && !cancelParking) || !s.reserveMove(*robot, point) {
 			continue
 		}
 		*robot = proposed
 		robot.WaitTicks, robot.Blocked = 0, false
-		recovery := s.recovery[robot.ID]
-		recovery.retreats = slices.DeleteFunc(recovery.retreats, func(tick int) bool { return tick <= s.state.Tick-200 })
-		recovery.retreats = append(recovery.retreats, s.state.Tick)
 		if cancelParking {
 			robot.Status = RobotIdle
 			delete(s.navigation, robot.ID)
 			delete(s.idleTicks, robot.ID)
-			recovery.hold, recovery.resume = 0, false
 		} else {
 			nav.target, nav.route = target, route
 			s.navigation[robot.ID] = nav
-			recovery.hold, recovery.resume = s.cfg.HoldTicks, true
 		}
-		s.recovery[robot.ID] = recovery
+		s.recordRetreat(robot.ID, !cancelParking)
 		return true
 	}
 	return false
+}
+
+func (s *Sim) redirectParking(robot *RobotState) bool {
+	// Prefer an energy-feasible route to a new parking cell before retreating
+	// somewhere that can be reached again only through the current conflict.
+	nav, ok := s.relocationRoute(*robot)
+	if !ok || len(nav.route) == 0 || s.nextStepBlocked(*robot, nav.route) || !s.reserveMove(*robot, nav.route[0]) {
+		return false
+	}
+	next := nav.route[0]
+	robot.X, robot.Y = next.X, next.Y
+	robot.Battery -= s.cfg.MovingDrain
+	robot.WaitTicks, robot.Blocked = 0, false
+	nav.route = nav.route[1:]
+	if next == nav.target {
+		robot.Status = RobotIdle
+		delete(s.navigation, robot.ID)
+	} else {
+		s.navigation[robot.ID] = nav
+	}
+	s.recordRetreat(robot.ID, false)
+	return true
+}
+
+func (s *Sim) recordRetreat(id string, hold bool) {
+	recovery := s.recovery[id]
+	recovery.retreats = slices.DeleteFunc(recovery.retreats, func(tick int) bool { return tick <= s.state.Tick-200 })
+	recovery.retreats = append(recovery.retreats, s.state.Tick)
+	recovery.hold, recovery.resume = 0, hold
+	if hold {
+		recovery.hold = s.cfg.HoldTicks
+	}
+	s.recovery[id] = recovery
 }
 
 func (event recoveryEvent) String() string {

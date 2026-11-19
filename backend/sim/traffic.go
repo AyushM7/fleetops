@@ -63,6 +63,17 @@ func (s *Sim) crossingBlocker(mover RobotState, route []Point) int {
 				return i
 			}
 		}
+		// Keep a mouth free for opposing traffic when a reserved charger
+		// trip has only enough battery for its current route and reserve.
+		if exit, ok := s.passageExit(second, route[2:]); ok &&
+			mover.Battery-(len(route)+1)*s.cfg.MovingDrain < 1 && s.reservedStation(mover.ID) != nil {
+			if other := s.robotIndexAt(exit); other >= 0 {
+				opposing := s.navigation[s.state.Robots[other].ID].route
+				if len(opposing) > 0 && opposing[0].X == second.X && s.cfg.onAisle(opposing[0]) {
+					return other
+				}
+			}
+		}
 	}
 	if !s.cfg.narrowPassage(first) && !(s.navigation[mover.ID].undocking && s.cfg.chargerPocket(first)) {
 		return -1
