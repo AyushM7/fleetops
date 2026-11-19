@@ -19,7 +19,7 @@ type Config struct {
 	MaintenanceBay        *Point  // Enables V2 and is the sole maintenance start.
 	InitialJobs           int
 	NewJobEvery           int
-	MaxJobs               int
+	MaxJobs               int // Caps active jobs in V2 and total retained jobs in legacy scenarios.
 	MovingDrain           int
 	IdleDrainEvery        int
 	ChargeGain            int

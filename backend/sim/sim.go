@@ -11,6 +11,7 @@ type Sim struct {
 	state             State
 	rng               *rand.Rand
 	jobCells          []Point
+	jobSequence       int
 	unresponsiveTicks map[string]int
 	navigation        map[string]robotNavigation
 	recovery          map[string]robotRecovery
@@ -71,10 +72,13 @@ func New(cfg Config, seed int64) (*Sim, error) {
 // Tick is DYNAMICS: it advances the background simulation, not an operator command.
 func (s *Sim) Tick() {
 	s.state.Tick++
-	if s.state.Tick%s.cfg.NewJobEvery == 0 && len(s.state.Jobs) < s.cfg.MaxJobs {
+	if s.state.Tick%s.cfg.NewJobEvery == 0 {
 		s.addJob()
 	}
 	s.stepRobots()
+	if s.cfg.MaintenanceBay != nil {
+		s.trimCompletedJobs()
+	}
 	s.state.Aisles = s.snapshotAisles()
 }
 

@@ -125,7 +125,7 @@ func (s *Sim) stepMoving(robot *RobotState) {
 			s.prepareNavigation(robot, job.To)
 			return
 		}
-		if updateArrival(robot, job) {
+		if s.updateArrival(robot, job) {
 			return
 		}
 		target := job.From
@@ -137,7 +137,7 @@ func (s *Sim) stepMoving(robot *RobotState) {
 		}
 		previousStatus := job.Status
 		if s.cfg.MaintenanceBay == nil || previousStatus == JobInProgress {
-			updateArrival(robot, job)
+			s.updateArrival(robot, job)
 		}
 		robot.Battery = max(0, robot.Battery-s.cfg.MovingDrain)
 		if previousStatus == JobAssigned && job.Status == JobInProgress {
@@ -189,7 +189,7 @@ func (s *Sim) robotActivity(robot RobotState) RobotActivity {
 	return ActivityAvailable
 }
 
-func updateArrival(robot *RobotState, job *JobState) bool {
+func (s *Sim) updateArrival(robot *RobotState, job *JobState) bool {
 	position := Point{robot.X, robot.Y}
 	if job.Status == JobAssigned && position == job.From {
 		job.Status = JobInProgress
@@ -197,6 +197,9 @@ func updateArrival(robot *RobotState, job *JobState) bool {
 	if job.Status == JobInProgress && position == job.To {
 		job.Status = JobDone
 		robot.Status, robot.JobID = RobotIdle, ""
+		if s.cfg.MaintenanceBay != nil {
+			s.state.CompletedJobs++
+		}
 		return true
 	}
 	return false

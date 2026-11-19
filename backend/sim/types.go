@@ -111,11 +111,12 @@ type FaultState struct {
 }
 
 type State struct {
-	Tick     int            `json:"tick"`
-	Seed     int64          `json:"seed"`
-	Robots   []RobotState   `json:"robots"`
-	Jobs     []JobState     `json:"jobs"`
-	Stations []StationState `json:"stations"`
-	Faults   []FaultState   `json:"faults"`
-	Aisles   []AisleState   `json:"aisles"`
+	CompletedJobs int            `json:"completedJobs,omitempty"`
+	Tick          int            `json:"tick"`
+	Seed          int64          `json:"seed"`
+	Robots        []RobotState   `json:"robots"`
+	Jobs          []JobState     `json:"jobs"`
+	Stations      []StationState `json:"stations"`
+	Faults        []FaultState   `json:"faults"`
+	Aisles        []AisleState   `json:"aisles"`
 }

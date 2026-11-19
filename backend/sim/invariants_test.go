@@ -9,8 +9,16 @@ import (
 )
 
 func checkInvariants(s State, cfg Config, navigation ...map[string]robotNavigation) error {
-	if len(s.Jobs) > cfg.MaxJobs {
-		return fmt.Errorf("I10: %d jobs exceed limit %d", len(s.Jobs), cfg.MaxJobs)
+	jobsAgainstLimit := len(s.Jobs)
+	if cfg.MaintenanceBay != nil {
+		active, completed := countJobs(s.Jobs)
+		jobsAgainstLimit = active
+		if completed > retainedCompletedJobs || completed > s.CompletedJobs {
+			return fmt.Errorf("I10: %d retained completions exceed the history bound or completion total %d", completed, s.CompletedJobs)
+		}
+	}
+	if jobsAgainstLimit > cfg.MaxJobs {
+		return fmt.Errorf("I10: %d jobs exceed limit %d", jobsAgainstLimit, cfg.MaxJobs)
 	}
 	robots := make(map[string]RobotState, len(s.Robots))
 	jobs := make(map[string]JobState, len(s.Jobs))
