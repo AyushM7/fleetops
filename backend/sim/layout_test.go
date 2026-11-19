@@ -93,15 +93,31 @@ func TestWarehouseV2KeepsMaintenanceOutOfTransport(t *testing.T) {
 		t.Fatalf("transport job assigned to %q with R11 job %q", assigned, s.state.Robots[10].JobID)
 	}
 
-	s = newTestSim(t, cfg, 42)
-	s.state.Jobs = []JobState{{ID: "J1", From: Point{9, 1}, To: Point{9, 2}, Status: JobAssigned, AssignedRobot: "R1"}}
-	source := &s.state.Robots[0]
-	source.Status, source.JobID, source.Blocked, source.WaitTicks = RobotMoving, "J1", true, cfg.BlockedAfter
-	if _, err := s.PreviewReassignment("J1", "R1", "R2"); err != nil {
-		t.Fatalf("transport robot should be eligible for reassignment: %v", err)
-	}
-	if err := s.ReassignUnstartedJob("J1", "R1", "R11"); !errors.Is(err, ErrReassignment) {
-		t.Fatalf("reassignment to R11 = %v, want ErrReassignment", err)
+	for _, tc := range []struct {
+		name     string
+		from, to int
+		want     error
+	}{
+		{"transport only", 0, 1, nil},
+		{"maintenance source", 10, 1, ErrReassignment},
+		{"maintenance recipient", 0, 10, ErrReassignment},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestSim(t, cfg, 42)
+			source, recipient := &s.state.Robots[tc.from], &s.state.Robots[tc.to]
+			s.state.Jobs = []JobState{{ID: "J1", From: Point{9, 1}, To: Point{9, 2}, Status: JobAssigned, AssignedRobot: source.ID}}
+			source.Status, source.JobID, source.Blocked, source.WaitTicks = RobotMoving, "J1", true, cfg.BlockedAfter
+			before := s.Snapshot()
+			if _, err := s.PreviewReassignment("J1", source.ID, recipient.ID); !errors.Is(err, tc.want) {
+				t.Errorf("preview %s → %s = %v, want %v", source.ID, recipient.ID, err, tc.want)
+			}
+			if err := s.ReassignUnstartedJob("J1", source.ID, recipient.ID); !errors.Is(err, tc.want) {
+				t.Errorf("reassignment %s → %s = %v, want %v", source.ID, recipient.ID, err, tc.want)
+			}
+			if tc.want != nil && !reflect.DeepEqual(before, s.Snapshot()) {
+				t.Fatal("rejected command mutated state")
+			}
+		})
 	}
 }
 
