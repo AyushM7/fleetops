@@ -25,6 +25,7 @@ type visitorSession struct {
 	done       chan struct{}
 	operations int
 	restarts   int
+	streams    int
 }
 
 type visitorManager struct {
@@ -293,4 +294,5 @@ func (s *visitorSession) stopRuntime() {
 	s.controller.mu.Lock()
 	defer s.controller.mu.Unlock()
 	s.controller.ready, s.controller.running = false, false
+	s.controller.run.events.signal()
 }

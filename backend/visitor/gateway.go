@@ -216,6 +216,10 @@ func (g *visitorGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "request rate exceeded", 429)
 		return
 	}
+	if r.URL.Path == "/demo/events" {
+		g.warehouseEvents(w, r)
+		return
+	}
 	if r.URL.Path == "/graphql" || strings.HasPrefix(r.URL.Path, "/demo/") {
 		g.operation(w, r)
 		return

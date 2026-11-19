@@ -21,7 +21,7 @@ func warehouseTestRun(seed int64) (*demoRun, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &demoRun{scenarioID: warehouseScenario, generation: demoRandom(),
+	return &demoRun{scenarioID: warehouseScenario, generation: demoRandom(), runtimeID: service.RuntimeID(),
 		capture:   func(context.Context) error { return nil },
 		step:      func(context.Context) error { return service.Tick() },
 		warehouse: service.Snapshot}, nil

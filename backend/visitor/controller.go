@@ -21,12 +21,14 @@ const warehouseScenario = "warehouse-v2"
 type demoRun struct {
 	scenarioID string
 	generation string
+	runtimeID  string
 	handler    http.Handler
 	capture    func(context.Context) error
 	advance    func(context.Context) error
 	inspect    func(context.Context) (*model.FleetState, bool, error)
 	step       func(context.Context) error
 	warehouse  func() sim.State
+	events     warehouseEvents
 	evidence   *demoExplanation
 }
 
@@ -145,6 +147,7 @@ func (c *demoController) restart(w http.ResponseWriter, r *http.Request) {
 	// A failed replacement leaves the old runtime inaccessible, including poison.
 	c.ready = false
 	c.running = false
+	c.run.events.signal()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if !selecting {
@@ -201,6 +204,7 @@ func (c *demoController) replaceScenario(ctx context.Context, id string) error {
 	c.ticks = 0
 	c.stopped = false
 	c.running, c.speed, c.nextTick, c.lastStep = false, "1", time.Time{}, time.Time{}
+	c.publishWarehouse("snapshot")
 	return nil
 }
 

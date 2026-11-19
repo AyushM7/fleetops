@@ -41,9 +41,11 @@ func (c *demoController) advanceInteractive(ctx context.Context, now time.Time) 
 		}
 		if err := c.run.step(ctx); err != nil {
 			c.ready, c.running = false, false
+			c.run.events.signal()
 			return err
 		}
 		c.nextTick = now.Add(warehouseTickInterval)
+		c.publishWarehouse("tick")
 		return nil
 	}
 	status, err := c.status(ctx)
@@ -132,7 +134,12 @@ func (c *demoController) control(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if c.run.warehouse != nil {
+		before := c.warehouseState()
+		c.ensureWarehouseSnapshot()
 		if c.applyWarehouseControl(w, r.URL.Path) {
+			if c.warehouseState() != before {
+				c.publishWarehouse("state")
+			}
 			_ = c.writeStatus(w, r.Context())
 		}
 		return

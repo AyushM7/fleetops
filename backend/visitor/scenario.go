@@ -94,7 +94,7 @@ func (f demoFactory) createScenario(ctx context.Context, id string) (*demoRun, e
 	if s.proposalID != "" {
 		source = demoSourceGoScripted
 	}
-	run := &demoRun{scenarioID: id, generation: s.generation, handler: handler, capture: s.capture,
+	run := &demoRun{scenarioID: id, generation: s.generation, runtimeID: s.runtimeID, handler: handler, capture: s.capture,
 		inspect: s.inspect, step: func(context.Context) error { return service.Tick() },
 		evidence: &demoExplanation{Generation: s.generation, RuntimeID: s.runtimeID, ScenarioID: id,
 			ProposalID: s.proposalID, ProposalSource: source, Observation: observation}}
