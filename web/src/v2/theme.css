@@ -1,29 +1,29 @@
 .v2-shell {
   color-scheme: dark;
-  --v2-bg: #101824;
-  --v2-rail: #152130;
-  --v2-toolbar: #192638;
-  --v2-panel: #1e2b3d;
-  --v2-raised: #27384e;
-  --v2-inspector: #26364b;
-  --v2-inspector-card: #2b3e56;
+  --v2-bg: #101113;
+  --v2-rail: #17181b;
+  --v2-toolbar: #191a1d;
+  --v2-panel: #1e2023;
+  --v2-raised: #282a2d;
+  --v2-inspector: #2b2c2f;
+  --v2-inspector-card: #333437;
   --v2-float-surface: var(--v2-inspector);
-  --v2-float-shadow: 0 12px 32px #080f1c99;
-  --v2-popup-shadow: 0 6px 20px #080f1c88;
-  --v2-scrim: #080f1bb3;
+  --v2-float-shadow: 0 12px 32px #08080999;
+  --v2-popup-shadow: 0 6px 20px #08080988;
+  --v2-scrim: #080809b3;
 
-  --v2-text: #eff5fd;
-  --v2-muted: #b9c8da;
-  --v2-border: #394c63;
-  --v2-control-border: #627991;
-  --v2-inspector-border: #4b627c;
-  --v2-focus: #dbe9ff;
+  --v2-text: #f3f3f4;
+  --v2-muted: #c0c1c4;
+  --v2-border: #383a3e;
+  --v2-control-border: #686b70;
+  --v2-inspector-border: #515357;
+  --v2-focus: #eceef0;
   --v2-selected: #294469;
   --v2-selection-ink: #94bbff;
-  --v2-hover: #30445f;
+  --v2-hover: #303236;
   --v2-pressed: #35527c;
-  --v2-disabled-ink: #93a4b9;
-  --v2-disabled-fill: #1a2636;
+  --v2-disabled-ink: #a0a1a5;
+  --v2-disabled-fill: #202124;
 
   --v2-moving: #7cd7e4;
   --v2-charging: #86d8ab;
@@ -39,20 +39,20 @@
   --v2-waiting-fill: #4f3d29;
   --v2-fault-fill: #55333a;
 
-  --v2-plot: #141e2a;
-  --v2-floor: #273038;
-  --v2-aisle: #2b363e;
-  --v2-wall: #36424c;
-  --v2-map-grid: #3a4753;
-  --v2-wall-line: #4d5c69;
-  --v2-floor-edge: #677c90;
-  --v2-fixture-fill: #2d3a46;
-  --v2-fixture-edge: #72869a;
-  --v2-marker-fill: #344453;
-  --v2-maintenance-fill: #3a4c5d;
-  --v2-marker-edge: #8297aa;
-  --v2-meter-track: #3a4b60;
-  --v2-meter-fill: #a0b8cf;
+  --v2-plot: #151618;
+  --v2-floor: #222529;
+  --v2-aisle: #292b2e;
+  --v2-wall: #343638;
+  --v2-map-grid: #37393c;
+  --v2-wall-line: #4c4e51;
+  --v2-floor-edge: #77797c;
+  --v2-fixture-fill: #2d2f32;
+  --v2-fixture-edge: #7b7e82;
+  --v2-marker-fill: #3b3d40;
+  --v2-maintenance-fill: #434548;
+  --v2-marker-edge: #909297;
+  --v2-meter-track: #46484c;
+  --v2-meter-fill: #a9aaad;
 }
 
 .v2-shell [data-tone="moving"] { --tone: var(--v2-moving); --tone-wash: var(--v2-moving-wash); --tone-fill: var(--v2-moving-fill); }
@@ -68,14 +68,14 @@
 @media (prefers-contrast: more) {
   .v2-shell {
     --v2-text: #fff;
-    --v2-muted: #e1ecfa;
-    --v2-border: #859bb4;
-    --v2-control-border: #a5bed9;
+    --v2-muted: #e7e8ea;
+    --v2-border: #96979b;
+    --v2-control-border: #b1b2b5;
     --v2-inspector-border: var(--v2-control-border);
-    --v2-floor-edge: #9aafc3;
-    --v2-map-grid: #546773;
-    --v2-wall-line: #697d8f;
-    --v2-fixture-edge: #a6bad0;
+    --v2-floor-edge: #aeb0b3;
+    --v2-map-grid: #65676a;
+    --v2-wall-line: #787a7d;
+    --v2-fixture-edge: #b7b8bb;
     --v2-marker-edge: var(--v2-fixture-edge);
     --v2-focus: #fff;
     --v2-selection-ink: #bad5ff;

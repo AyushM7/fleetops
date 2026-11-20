@@ -1,25 +1,36 @@
 import { describe, expect, it } from "vitest";
 import theme from "./theme.css?raw";
 
-function luminance(hex: string): number {
-  const channels = [0, 2, 4].map(index => Number.parseInt(hex.slice(index, index + 2), 16) / 255);
-  const [red, green, blue] = channels.map(value =>
-    value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+function color(role: string): number[] {
+  const hex = theme.match(new RegExp("--v2-" + role + ": #([0-9a-f]{6});"))?.[1];
+  if (!hex) throw new Error("Missing color for " + role);
+  return [0, 2, 4].map(index => Number.parseInt(hex.slice(index, index + 2), 16));
+}
+
+function luminance(role: string): number {
+  const [red, green, blue] = color(role).map(channel => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
 function ratio(foreground: string, background: string): number {
-  const value = (role: string) => {
-    const hex = theme.match(new RegExp("--v2-" + role + ": #([0-9a-f]{6});"))?.[1];
-    if (!hex) throw new Error("Missing color for " + role);
-    return luminance(hex);
-  };
-  const a = value(foreground);
-  const b = value(background);
+  const a = luminance(foreground);
+  const b = luminance(background);
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
 describe("Warehouse appearance", () => {
+  it("keeps the graphite layers neutral and separates them by luminance", () => {
+    const layers = ["bg", "plot", "rail", "toolbar", "panel", "floor", "raised", "inspector", "inspector-card"];
+    for (const [index, role] of layers.entries()) {
+      const channels = color(role);
+      expect(Math.max(...channels) - Math.min(...channels), role).toBeLessThanOrEqual(7);
+      if (index > 0) expect(luminance(role), role).toBeGreaterThan(luminance(layers[index - 1]));
+    }
+  });
+
   it("keeps primary and secondary text readable across surface levels", () => {
     for (const surface of ["bg", "rail", "toolbar", "panel", "raised", "inspector", "inspector-card", "plot"]) {
       expect(ratio("text", surface), surface).toBeGreaterThanOrEqual(4.5);
