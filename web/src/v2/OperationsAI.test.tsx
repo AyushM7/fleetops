@@ -52,6 +52,7 @@ describe("Operations AI with telemetry fixtures", () => {
     expect(html.indexOf("Proposed to Go")).toBeLessThan(html.indexOf("Budget denied"));
     expect(html).toContain('data-tone="assisted">Model decision');
     expect(html).toContain("Go observation");
+    expect(html).toContain("Observed at tick 20");
     for (const entry of [budget, reserved, observed]) expect(withActivities(entry)).not.toContain('data-tone="assisted"');
     expect(withActivities(reserved)).toContain("Model response unconfirmed");
     expect(withActivities(observed)).toContain("Checking assistance");

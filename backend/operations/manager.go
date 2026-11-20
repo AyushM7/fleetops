@@ -128,6 +128,10 @@ func (m *Manager) Decide(ctx context.Context, runtimeID string, observation flee
 		}
 		return out
 	}
+	if result.Usage == nil && (result.Failure == "model_unavailable" || result.Failure == "invalid_output") {
+		out.Status = result.Failure
+		return out
+	}
 	cost, err := m.ledger.settle(settlement, r, result.Usage)
 	if err != nil {
 		out.Status = "usage_unconfirmed"

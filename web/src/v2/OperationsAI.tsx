@@ -236,7 +236,7 @@ function ActivityGroup({ title, entries, selected, pick, empty, description }: {
             onClick={event => pick({ key: entry.key, pointer: event.detail > 0 }, event.currentTarget)}>
             <Icon name={entry.source === "delivery" ? "package" : "activity"} size={18} />
             <span className="v2-ops-row-title"><strong>{entry.title}</strong>
-              <span>{references}{entry.references.length > 4 ? " +" + (entry.references.length - 4) : ""}{references && " · "}Tick {entry.tick}</span>
+              <span>{references}{entry.references.length > 4 ? " +" + (entry.references.length - 4) : ""}{references && " · "}{entry.source === "decision" ? "Observed at tick " : "Tick "}{entry.tick}</span>
             </span>
             <span className="v2-ops-row-status"><StateChip entry={entry} /><span data-tone={source.tone}>{source.label}</span></span>
             <Icon name="arrow-right" size={15} />
@@ -308,7 +308,7 @@ export function OperationsAI({ feed, inspect }: { feed: WarehouseFeed; inspect: 
           {detail && snapshot && <>
             {feed.phase !== "live" && <p className="v2-directory-notice">Last confirmed at tick {snapshot.tick}.</p>}
             <div className="v2-ops-inspector-summary">
-              <StateChip entry={detail} /><span>Tick {detail.tick}</span>
+              <StateChip entry={detail} /><span>{detail.source === "decision" ? "Observed at tick " : "Tick "}{detail.tick}</span>
               {detail.source === "decision" && <span data-tone={activitySource(detail.activity).tone}>{activitySource(detail.activity).label}</span>}
             </div>
             {detail.source === "decision" ? <DecisionDetails activity={detail.activity} snapshot={snapshot} inspect={inspect} />
