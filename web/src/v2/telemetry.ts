@@ -14,24 +14,24 @@ const modes = ["deterministic", "checking_assistance", "ai_assisted"] as const;
 const runStates = ["paused", "running", "stopped"] as const;
 export const warehouseEvents = ["snapshot", "tick", "state", "operations"] as const;
 
-type Point = { x: number; y: number };
+export type Point = { x: number; y: number };
 type Cell = Point & { kind: typeof cellKinds[number] };
-type Layout = { width: number; height: number; cells: Cell[] };
-type Robot = Point & {
+export type Layout = { width: number; height: number; cells: Cell[] };
+export type Robot = Point & {
   id: string; status: typeof robotStates[number]; activity: typeof activities[number];
   role: "transport" | "maintenance"; battery: number; jobId: string; blocked: boolean; waitTicks: number;
 };
-type Job = {
+export type Job = {
   id: string; status: typeof jobStates[number]; type: typeof jobTypes[number]; assignedRobot: string;
   from: Point; to: Point; deadlineMissed?: boolean; deadlineTick?: number; createdTick?: number;
   assignedTick?: number; queueAgeTicks?: number; cargoRobotId?: string;
   completedTick?: number; outcome?: typeof outcomes[number];
 };
-type Station = Point & { id: string; occupiedBy: string; reservedBy: string };
+export type Station = Point & { id: string; occupiedBy: string; reservedBy: string };
 type Fault = { id: string; type: string; robots: string[]; tick: number; aisle?: number };
 type Aisle = { id: number; occupiedBy: string };
 type Deadlock = { robots: string[]; yieldingRobot?: string };
-type Snapshot = {
+export type Snapshot = {
   tick: number; seed: number; completedJobs?: number; priorityDeadlinesMet?: number;
   priorityDeadlinesMissed?: number; robots: Robot[]; jobs: Job[]; stations: Station[];
   faults: Fault[]; aisles: Aisle[]; trafficDeadlocks?: Deadlock[];
@@ -55,7 +55,7 @@ type WarehouseData = {
 export type WarehouseStatus = { generation: string; ready: false } |
   ({ generation: string; runtimeId: string; ready: true; layout: Layout } & WarehouseData);
 export type WarehouseFrame = {
-  type: typeof warehouseEvents[number]; runtimeId: string; generation: string; eventId: number;
+  type: typeof warehouseEvents[number]; runtimeId: string; generation: string; eventId: number; layout: Layout;
 } & WarehouseData;
 
 const record = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -197,5 +197,5 @@ export function parseWarehouseFrame(event: MessageEvent<string>, status: Extract
       event.lastEventId !== status.generation + ":" + value.eventId) return invalid();
   const data = parseData(value, value.snapshot, status.layout);
   if (value.tick !== data.snapshot.tick || data.snapshot.seed !== status.snapshot.seed) return invalid();
-  return { ...data, type: event.type, generation: status.generation, runtimeId: status.runtimeId, eventId: value.eventId };
+  return { ...data, type: event.type, generation: status.generation, runtimeId: status.runtimeId, eventId: value.eventId, layout: status.layout };
 }

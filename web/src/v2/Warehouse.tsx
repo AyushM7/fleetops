@@ -1,0 +1,88 @@
+import { useCallback, useEffect, useRef } from "react";
+import { Icon } from "./WarehouseIcon";
+import { WarehouseInspector } from "./WarehouseInspector";
+import { WarehouseMap } from "./WarehouseMap";
+import { activityLabels, findEntity, warehouseCounts, type PickEntity, type Selection } from "./warehousePresentation";
+import type { Snapshot, WarehouseFrame } from "./telemetry";
+
+function WarehouseMetrics({ snapshot }: { snapshot?: Snapshot }) {
+  const counts = snapshot ? warehouseCounts(snapshot) : null;
+  return <dl className="v2-metrics" aria-label="Warehouse summary">
+    <div className="v2-panel v2-metric">
+      <dt><span className="v2-metric-icon"><Icon name="package" size={18} /></span>Completed deliveries</dt>
+      <dd>{counts?.completed ?? "—"}</dd>
+    </div>
+    <div className="v2-panel v2-metric">
+      <dt><span className="v2-metric-icon"><Icon name="clock" size={18} /></span>Priority overdue</dt>
+      <dd className={counts?.overdue ? "v2-amber" : undefined}>{counts?.overdue ?? "—"}</dd>
+    </div>
+    <div className="v2-panel v2-metric">
+      <dt><span className="v2-metric-icon v2-charging-icon"><Icon name="bolt" size={18} /></span>Charging robots</dt>
+      <dd>{counts?.charging ?? "—"}</dd>
+    </div>
+  </dl>;
+}
+
+function FleetStrip({ robots, selection, pick, viewFleet }: {
+  robots: Snapshot["robots"]; selection: Selection | null; pick: PickEntity; viewFleet: () => void;
+}) {
+  return <section className="v2-panel v2-fleet" aria-labelledby="v2-fleet-title">
+    <header><h2 id="v2-fleet-title">Fleet</h2><p>{robots.length} robots</p>
+      <button type="button" className="v2-fleet-link" onClick={viewFleet}>View fleet<Icon name="arrow-right" size={13} /></button></header>
+    <ul>{robots.map(robot => <li key={robot.id}>
+      <button type="button" className="v2-robot-card" aria-pressed={selection?.kind === "robot" && selection.id === robot.id}
+        aria-label={'Inspect ' + robot.id + (robot.role === "maintenance" ? " maintenance robot" : "")}
+        onClick={event => pick({ kind: "robot", id: robot.id }, event.currentTarget)}>
+        <strong>{robot.id}{robot.role === "maintenance" && <Icon name="diamond" size={13} />}</strong>
+        <span className="v2-card-charge">{robot.battery}%</span>
+        <span className={'v2-card-activity v2-activity-' + robot.activity}>{activityLabels[robot.activity]}</span>
+      </button>
+    </li>)}</ul>
+  </section>;
+}
+
+export function Warehouse({ frame, selection, selectEntity, viewFleet, hidden }: {
+  frame: WarehouseFrame | null; selection: Selection | null; selectEntity: (selection: Selection | null) => void;
+  viewFleet: () => void; hidden: boolean;
+}) {
+  const opener = useRef<HTMLElement | SVGElement | null>(null);
+  const surface = useRef<HTMLDivElement>(null);
+  const entity = frame ? findEntity(frame.snapshot, selection) : null;
+  const hasInspector = entity !== null;
+  const job = entity?.kind === "job" ? entity.job
+    : entity?.kind === "robot" ? frame?.snapshot.jobs.find(item => item.id === entity.robot.jobId) : undefined;
+
+  const close = useCallback(() => {
+    selectEntity(null);
+    if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
+    else surface.current?.querySelector<HTMLElement>(".v2-map-stage")?.focus({ preventScroll: true });
+    opener.current = null;
+  }, [selectEntity]);
+
+  useEffect(() => {
+    if (!hasInspector || hidden) return;
+    function dismiss(event: KeyboardEvent) {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      close();
+    }
+    document.addEventListener("keydown", dismiss);
+    return () => document.removeEventListener("keydown", dismiss);
+  }, [hasInspector, hidden, close]);
+
+  const pick: PickEntity = (nextSelection, source) => {
+    opener.current = source;
+    selectEntity(nextSelection);
+  };
+
+  return <div className="v2-warehouse" hidden={hidden} ref={surface}>
+    <WarehouseMetrics snapshot={frame?.snapshot} />
+    {frame ? <>
+      <div className={'v2-map-row' + (entity ? ' has-inspector' : '')}>
+        <WarehouseMap frame={frame} selection={selection} job={job} pick={pick} />
+        {entity && !hidden && <WarehouseInspector entity={entity} job={job} inspect={selectEntity} close={close} />}
+      </div>
+      <FleetStrip robots={frame.snapshot.robots} selection={selection} pick={pick} viewFleet={viewFleet} />
+    </> : <section className="v2-panel v2-empty"><h2>Warehouse map</h2><p>Waiting for confirmed warehouse telemetry.</p></section>}
+  </div>;
+}

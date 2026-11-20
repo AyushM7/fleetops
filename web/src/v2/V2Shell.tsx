@@ -2,10 +2,14 @@ import { createContext, useContext, useEffect, useRef, useState, type JSX } from
 import { DemoError, selectScenario } from "../restart";
 import type { ScenarioID } from "../scenarios";
 import { subscribeWarehouse, type WarehouseFeed } from "./session";
+import { Warehouse } from "./Warehouse";
+import { Icon } from "./WarehouseIcon";
+import type { Selection } from "./warehousePresentation";
+import "./styles.css";
 
 const pages = ["Warehouse", "Fleet", "Jobs", "Operations AI"] as const;
+const pageIcons = { Warehouse: "building-warehouse", Fleet: "robot", Jobs: "clipboard-list", "Operations AI": "activity" } as const;
 type Page = typeof pages[number];
-type Selection = { kind: "robot" | "job" | "station"; id: string };
 
 type Workspace = {
   page: Page;
@@ -15,6 +19,7 @@ type Workspace = {
   feed: WarehouseFeed;
 };
 
+type LegacyExit = { returning: boolean; returnError: string | null; onReturn: () => void };
 const WorkspaceContext = createContext<Workspace | null>(null);
 
 export function useV2Workspace(): Workspace {
@@ -31,28 +36,67 @@ const connectionLabel = {
   unavailable: "Warehouse V2 is unavailable. Retrying session status…",
   expired: "Visitor session ended. Clear this site's cookies to begin a new visit.",
 };
+const modeLabel = {
+  deterministic: "Deterministic dispatch",
+  checking_assistance: "Checking AI assistance",
+  ai_assisted: "AI-assisted dispatch",
+} as const;
 
-function SessionView(): JSX.Element {
-  const { page, navigate, feed } = useV2Workspace();
-  return <>
-    <nav aria-label="Warehouse V2 pages">
-      {pages.map(item => <button type="button" key={item} aria-current={item === page ? "page" : undefined}
-        onClick={() => { navigate(item); }}>{item}</button>)}
-    </nav>
-    <main id="main-content" tabIndex={-1}>
-      <h1>{page === "Warehouse" ? "Warehouse V2" : page}</h1>
-      <p role="status">{connectionLabel[feed.phase]}</p>
-      {feed.frame && <p>{feed.phase === "live" ? "Simulation" : "Last confirmed"} tick {feed.frame.snapshot.tick}</p>}
-      {feed.phase === "live" && feed.frame?.mode === "deterministic" && <p>Deterministic dispatch</p>}
-    </main>
-  </>;
+function Toolbar({ page, feed }: { page: Page; feed: WarehouseFeed }) {
+  const live = feed.phase === "live" ? feed.frame : null;
+  const running = live?.state === "running";
+  return <header className="v2-toolbar">
+    <div className="v2-page-title"><span>FleetOps</span><span aria-hidden="true">/</span><h1>{page}</h1></div>
+    <div className="v2-toolbar-state">
+      {live && <span className="v2-mode"><Icon name="activity" size={16} />{modeLabel[live.mode]}</span>}
+      <p className={'v2-connection v2-connection-' + feed.phase + (running ? ' is-running' : '')} role="status">
+        {live ? "Simulation " + live.state : connectionLabel[feed.phase]}
+      </p>
+    </div>
+    <div className="v2-sim-controls" role="group" aria-label="Simulation controls" aria-describedby="v2-control-note">
+      <span id="v2-control-note">Controls pending</span>
+      <button type="button" disabled title="Simulation controls are not connected">
+        <Icon name={running ? "pause" : "player-play"} size={16} />{running ? "Pause" : "Play"}
+      </button>
+      <button type="button" disabled title="Simulation controls are not connected">
+        <Icon name="player-stop" size={16} />Stop
+      </button>
+    </div>
+  </header>;
 }
 
-function WorkspaceView({ feed }: { feed: WarehouseFeed }): JSX.Element {
+function SessionView({ returning, returnError, onReturn }: LegacyExit): JSX.Element {
+  const { page, navigate, feed, selection, selectEntity } = useV2Workspace();
+  return <div className="v2-shell">
+    <a className="skip-link" href="#main-content">Skip to warehouse</a>
+    <aside className="v2-rail">
+      <div className="v2-brand-mark" aria-label="FleetOps V2"><Icon name="layout-grid" size={23} /></div>
+      <nav aria-label="Warehouse V2 pages">
+        {pages.map(item => <button type="button" key={item} aria-current={item === page ? "page" : undefined}
+          onClick={() => navigate(item)}><Icon name={pageIcons[item]} size={19} /><span>{item}</span></button>)}
+      </nav>
+      <button className="v2-legacy-link" type="button" disabled={returning || feed.phase !== "live"}
+        aria-label="Return to V1 demo" onClick={onReturn}>
+        <Icon name="arrow-right" size={15} />{returning ? "Returning…" : "V1 demo"}
+      </button>
+    </aside>
+    <Toolbar page={page} feed={feed} />
+    <main id="main-content" className="v2-workspace" tabIndex={-1}>
+      {returnError && <p className="v2-return-error" role="alert">{returnError}</p>}
+      <Warehouse frame={feed.frame} selection={selection} selectEntity={selectEntity} viewFleet={() => navigate("Fleet")} hidden={page !== "Warehouse"} />
+      {page !== "Warehouse" && <section className="v2-panel v2-empty" aria-label={page}>
+        <h2>{page}</h2><p>This view is planned for a later phase of the frontend rebuild.</p>
+        <button type="button" className="v2-inspector-link" onClick={() => navigate("Warehouse")}>Return to Warehouse</button>
+      </section>}
+    </main>
+  </div>;
+}
+
+function WorkspaceView({ feed, ...exit }: { feed: WarehouseFeed } & LegacyExit): JSX.Element {
   const [page, navigate] = useState<Page>("Warehouse");
   const [selection, selectEntity] = useState<Selection | null>(null);
   return <WorkspaceContext.Provider value={{ page, navigate, selection, selectEntity, feed }}>
-    <SessionView />
+    <SessionView {...exit} />
   </WorkspaceContext.Provider>;
 }
 
@@ -83,14 +127,6 @@ export default function V2Shell({ previous = "blocked-reassignment", onLegacy }:
     }
   }
 
-  return <div className="app-shell">
-    <a className="skip-link" href="#main-content">Skip to warehouse</a>
-    <header className="topbar">
-      <span className="brand">FleetOps</span>
-      <button type="button" className="secondary-button" disabled={returning || feed.phase !== "live"}
-        onClick={() => { void returnToLegacy(); }}>{returning ? "Returning to V1…" : "Return to V1 demo"}</button>
-      {returnError && <p role="alert">{returnError}</p>}
-    </header>
-    <WorkspaceView key={feed.status?.generation ?? feed.frame?.generation} feed={feed} />
-  </div>;
+  return <WorkspaceView key={feed.status?.generation ?? feed.frame?.generation} feed={feed} returning={returning}
+    returnError={returnError} onReturn={() => { void returnToLegacy(); }} />;
 }
