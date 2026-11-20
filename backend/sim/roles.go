@@ -3,6 +3,7 @@ package sim
 // Reader exposes read-only simulator operations.
 type Reader interface {
 	Snapshot() State
+	OperationsAssignments(jobs []JobState) []AssignmentOption
 	CellAt(Point) CellType
 	PlanRoute(from, to Point) ([]Point, error)
 	AisleOccupant(aisleID int) (string, error)

@@ -34,6 +34,10 @@ type commandEntity struct {
 func (s *Service) ReadAutomaticState(ctx context.Context) (AutomaticObservation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.readAutomaticStateLocked(ctx)
+}
+
+func (s *Service) readAutomaticStateLocked(ctx context.Context) (AutomaticObservation, error) {
 	principal, _ := auth.FromContext(ctx)
 	if err := s.automaticAccess(principal, s.runtimeID); err != nil {
 		return AutomaticObservation{}, err

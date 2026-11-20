@@ -72,19 +72,8 @@ func (s *Sim) AssignJobBatch(request AssignJobBatchRequest) error {
 			return fmt.Errorf("%w: %s to %s", ErrAssignmentConflict, assignment.JobID, assignment.RobotID)
 		}
 		job, robot := &s.state.Jobs[ji], &s.state.Robots[ri]
-		if job.Status != JobPending || job.AssignedRobot != "" || !s.canAcceptJob(*robot) ||
-			s.reservedStation(robot.ID) != nil || s.unresponsiveTicks[robot.ID] > 0 {
-			return fmt.Errorf("%w: %s to %s", ErrAssignmentConflict, job.ID, robot.ID)
-		}
-		info := scheduler.JobInfo{
-			Num: idNumber(job.ID), From: scheduler.Cell{X: job.From.X, Y: job.From.Y}, To: scheduler.Cell{X: job.To.X, Y: job.To.Y},
-		}
-		if s.cfg.AutoCharge {
-			info.ExitCost = s.chargingExitDistance(job.To, robot.ID, distance)
-		}
-		candidate := scheduler.RobotInfo{Num: idNumber(robot.ID), Pos: scheduler.Cell{X: robot.X, Y: robot.Y}, Battery: robot.Battery}
-		if len(scheduler.Assign([]scheduler.RobotInfo{candidate}, []scheduler.JobInfo{info}, distance, params)) == 0 {
-			return fmt.Errorf("%w: %s to %s", ErrAssignmentInfeasible, job.ID, robot.ID)
+		if _, err := s.previewAssignment(*job, *robot, distance, params); err != nil {
+			return fmt.Errorf("%w: %s to %s", err, job.ID, robot.ID)
 		}
 		checked = append(checked, pair{robot, job})
 	}
@@ -92,4 +81,53 @@ func (s *Sim) AssignJobBatch(request AssignJobBatchRequest) error {
 		s.beginJob(assignment.robot, assignment.job)
 	}
 	return nil
+}
+
+type AssignmentOption struct {
+	JobAssignment
+	PickupSteps       int `json:"pickupSteps"`
+	DeliverySteps     int `json:"deliverySteps"`
+	ChargingExitSteps int `json:"chargingExitSteps"`
+	RequiredBattery   int `json:"requiredBattery"`
+}
+
+// OperationsAssignments previews the same admission rules used by AssignJobBatch.
+func (s *Sim) OperationsAssignments(jobs []JobState) []AssignmentOption {
+	options := []AssignmentOption{}
+	distance, params := s.travelDistance(true), s.assignmentParams()
+	for _, job := range jobs {
+		if job.Status != JobPending {
+			continue
+		}
+		for _, robot := range s.state.Robots {
+			option, err := s.previewAssignment(job, robot, distance, params)
+			if err == nil {
+				options = append(options, option)
+			}
+		}
+	}
+	return options
+}
+
+func (s *Sim) previewAssignment(job JobState, robot RobotState, distance scheduler.Distance, params scheduler.Params) (AssignmentOption, error) {
+	if job.Status != JobPending || job.AssignedRobot != "" || !s.canAcceptJob(robot) ||
+		s.reservedStation(robot.ID) != nil || s.unresponsiveTicks[robot.ID] > 0 {
+		return AssignmentOption{}, ErrAssignmentConflict
+	}
+	from, to := scheduler.Cell{X: job.From.X, Y: job.From.Y}, scheduler.Cell{X: job.To.X, Y: job.To.Y}
+	info := scheduler.JobInfo{Num: idNumber(job.ID), From: from, To: to}
+	if s.cfg.AutoCharge {
+		info.ExitCost = s.chargingExitDistance(job.To, robot.ID, distance)
+	}
+	candidate := scheduler.RobotInfo{Num: idNumber(robot.ID), Pos: scheduler.Cell{X: robot.X, Y: robot.Y}, Battery: robot.Battery}
+	if len(scheduler.Assign([]scheduler.RobotInfo{candidate}, []scheduler.JobInfo{info}, distance, params)) == 0 {
+		return AssignmentOption{}, ErrAssignmentInfeasible
+	}
+	pickup, _ := distance(candidate.Pos, from)
+	delivery, _ := distance(from, to)
+	return AssignmentOption{
+		JobAssignment: JobAssignment{JobID: job.ID, RobotID: robot.ID},
+		PickupSteps:   pickup, DeliverySteps: delivery, ChargingExitSteps: info.ExitCost,
+		RequiredBattery: max(params.MinBattery, (pickup+delivery+info.ExitCost)*params.MovingDrain+params.ReserveBattery),
+	}, nil
 }
