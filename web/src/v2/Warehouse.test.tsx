@@ -149,6 +149,38 @@ describe("Warehouse V2", () => {
     expect(mapTargetVisible(crowded[0], { ...camera, x: -100 }, bounds)).toBe(false);
   });
 
+  it("places a crowded phone cluster around charger and job glyphs", () => {
+    const bounds = { width: 365, height: 219 };
+    const camera = fitWarehouseCamera(layout, bounds.width, bounds.height);
+    const chargers = stations.slice(2);
+    const crowded = [
+      { ...robots[5], x: 12, y: 1, blocked: true },
+      { ...robots[7], x: 17, y: 1 },
+      { ...robots[9], x: 18, y: 1, blocked: true },
+    ];
+    const pin = { anchor: { x: 18.32, y: .68 }, size: .13 };
+    const labels = placeMapLabels(crowded, chargers, camera, bounds, "R10", [pin]);
+    expect(labels.size).toBe(5);
+    expect(labels.get("R6")).toMatchObject({ x: 0, y: 0 });
+    const placed = [...crowded, ...chargers].map(entity => {
+      const label = labels.get(entity.id)!;
+      expect(label.font * camera.scale).toBeCloseTo(11);
+      return { x: entity.x + label.x, y: entity.y + label.y, width: label.width, height: label.height };
+    });
+    for (const [index, label] of placed.entries()) {
+      for (const other of placed.slice(index + 1)) {
+        expect(Math.abs(label.x - other.x) >= (label.width + other.width) / 2 ||
+          Math.abs(label.y - other.y) >= (label.height + other.height) / 2).toBe(true);
+      }
+      expect(Math.abs(label.x - pin.anchor.x) >= label.width / 2 + pin.size ||
+        Math.abs(label.y - pin.anchor.y) >= label.height / 2 + pin.size).toBe(true);
+    }
+  });
+
+  it("keeps native fleet list and card semantics", () => {
+    expect(render()).toContain('<ul class="v2-fleet-scroll" aria-label="Fleet robots">');
+  });
+
   it("provides a map-independent finder for every kind of entity", () => {
     const output = render();
     expect(output).toContain("<summary>Find entity</summary>");

@@ -1,13 +1,21 @@
 import type { Point, Robot, Station } from "./telemetry";
+import { robotTone } from "./warehousePresentation";
 
 export type Camera = Point & { scale: number };
 type Viewport = { width: number; height: number };
 type Box = Point & Viewport;
 export type MapLabel = Box & { font: number };
+type Pin = { anchor: Point; size: number };
+
+function screenPoint(point: Point, camera: Camera): Point {
+  return {
+    x: camera.x + (point.x + 0.5) * camera.scale,
+    y: camera.y + (point.y + 0.5) * camera.scale,
+  };
+}
 
 export function mapTargetVisible(point: Point, camera: Camera, viewport: Viewport): boolean {
-  const x = camera.x + (point.x + 0.5) * camera.scale;
-  const y = camera.y + (point.y + 0.5) * camera.scale;
+  const { x, y } = screenPoint(point, camera);
   return x >= 6 && x <= viewport.width - 6 && y >= 6 && y <= viewport.height - 6;
 }
 
@@ -16,41 +24,61 @@ function overlaps(a: Box, b: Box): boolean {
     Math.abs(a.y - b.y) < (a.height + b.height) / 2 + 1;
 }
 
-export function placeMapLabels(robots: Robot[], stations: Station[], camera: Camera, viewport: Viewport): Map<string, MapLabel> {
-  const { scale } = camera;
-  const anchors = [
-    ...stations.map(station => ({ ...station, charger: true, width: .8, height: .8 })),
-    ...robots.map(robot => ({ ...robot, charger: false, width: robot.role === "maintenance" ? .84 : .76, height: .58 })),
-  ].map(anchor => ({ ...anchor, center: {
-    x: camera.x + (anchor.x + .5) * scale,
-    y: camera.y + (anchor.y + .5) * scale,
-    width: anchor.width * scale, height: anchor.height * scale,
-  } }));
-  const occupied: Box[] = [];
-  const labels = new Map<string, MapLabel>();
+function nearbySlots(dx: number, dy: number): Point[] {
+  return [
+    { x: 0, y: dy }, { x: dx, y: 0 }, { x: -dx, y: 0 }, { x: 0, y: -dy },
+    { x: dx, y: dy }, { x: -dx, y: dy }, { x: dx, y: -dy }, { x: -dx, y: -dy },
+  ];
+}
 
-  for (const { id, x, y, charger, center } of anchors) {
-    if (!mapTargetVisible({ x, y }, camera, viewport)) continue;
+export function placeMapLabels(
+  robots: Robot[], stations: Station[], camera: Camera, viewport: Viewport, selectedId?: string, pins: readonly Pin[] = [],
+): Map<string, MapLabel> {
+  const { scale } = camera;
+  const entities = [
+    ...stations.map(station => ({ ...station, charger: true, glyph: false, width: .8, height: .8, priority: 0 })),
+    ...robots.map(robot => ({ ...robot, charger: false, glyph: !!robotTone(robot),
+      width: robot.role === "maintenance" ? .84 : .76, height: .58,
+      priority: robot.id === selectedId ? 0 : robotTone(robot) ? 1 : 2 })),
+  ];
+  const anchors = entities.map(entity => {
+    const center = { ...screenPoint(entity, camera), width: entity.width * scale, height: entity.height * scale };
+    const glyph = { x: center.x + .37 * scale, y: center.y - .34 * scale, width: .31 * scale, height: .29 * scale };
+    return { ...entity, center, obstacles: entity.glyph ? [center, glyph] : [center] };
+  });
+  const occupied: Box[] = pins.map(({ anchor, size }) => ({
+    ...screenPoint(anchor, camera), width: (size * 2 + .05) * scale, height: (size * 2 + .05) * scale,
+  }));
+  const labels = new Map<string, MapLabel>();
+  const robotAnchors = anchors.filter(anchor => !anchor.charger).sort((a, b) => a.priority - b.priority);
+
+  function place(anchor: typeof anchors[number], centeredOnly: boolean): void {
+    const { id, x, y, charger, center } = anchor;
+    if (!mapTargetVisible(anchor, camera, viewport)) return;
     const font = Math.max(11, Math.min(16, scale * (charger ? .34 : .37)));
     const width = Math.max(charger ? 0 : center.width, id.length * font * .64 + 4);
     const height = Math.max(charger ? 0 : center.height, font + 3);
     const dx = (center.width + width) / 2 + 2;
     const dy = (center.height + height) / 2 + 2;
-    const offsets = [
-      ...(!charger ? [{ x: 0, y: 0 }] : []),
-      { x: 0, y: dy }, { x: dx, y: 0 }, { x: -dx, y: 0 }, { x: 0, y: -dy },
-      { x: dx, y: dy }, { x: -dx, y: dy }, { x: dx, y: -dy }, { x: -dx, y: -dy },
-    ];
+    const offsets = centeredOnly ? [{ x: 0, y: 0 }]
+      : [...nearbySlots(dx, dy), { x: 0, y: dy + height + 2 }, { x: 0, y: -dy - height - 2 },
+        { x: dx + width + 2, y: 0 }, { x: -dx - width - 2, y: 0 }];
     for (const offset of offsets) {
       const box = { x: center.x + offset.x, y: center.y + offset.y, width, height };
       if (box.x - width / 2 < 1 || box.x + width / 2 > viewport.width - 1 ||
           box.y - height / 2 < 1 || box.y + height / 2 > viewport.height - 1) continue;
       if (occupied.some(other => overlaps(box, other))) continue;
-      if (anchors.some(other => other.id !== id && (other.x !== x || other.y !== y) && overlaps(box, other.center))) continue;
+      if (anchors.some(other => (other.x !== x || other.y !== y) &&
+          other.obstacles.some(footprint => overlaps(box, footprint)))) continue;
       occupied.push(box);
       labels.set(id, { x: offset.x / scale, y: offset.y / scale, width: width / scale, height: height / scale, font: font / scale });
-      break;
+      return;
     }
   }
+
+  // Keep names on their markers where they fit before reserving space for captions and displaced names.
+  robotAnchors.forEach(anchor => place(anchor, true));
+  anchors.filter(anchor => anchor.charger).forEach(anchor => place(anchor, false));
+  robotAnchors.filter(anchor => !labels.has(anchor.id)).forEach(anchor => place(anchor, false));
   return labels;
 }

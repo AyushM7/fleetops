@@ -102,12 +102,20 @@ function RobotMarker({ robot, selection, pick, label, visible }: MarkerProps & {
   </MapTarget>;
 }
 
-function JobMarker({ job, point, label, selection, pick, occupied, isVisible }: {
-  job: Job; point: Point; label: "Pickup" | "Drop-off"; selection: Selection | null; pick: PickEntity; occupied: boolean; isVisible: (point: Point) => boolean;
-}) {
+function jobPin(point: Point, occupied: boolean) {
   // Keep markers visible in the same cell when a robot or charger occupies its center.
-  const anchor = occupied ? { x: point.x + 0.32, y: point.y - 0.32 } : point;
-  const size = occupied ? 0.13 : 0.3;
+  return {
+    anchor: occupied ? { x: point.x + 0.32, y: point.y - 0.32 } : point,
+    size: occupied ? 0.13 : 0.3,
+    occupied,
+  };
+}
+
+function JobMarker({ job, pin, label, selection, pick, isVisible }: {
+  job: Job; pin: ReturnType<typeof jobPin>; label: "Pickup" | "Drop-off"; selection: Selection | null;
+  pick: PickEntity; isVisible: (point: Point) => boolean;
+}) {
+  const { anchor, size, occupied } = pin;
   return <MapTarget target={{ kind: "job", id: job.id }} point={anchor} label={label + " for " + job.id} selection={selection} pick={pick}
     radius={occupied ? 0.17 : 0.48} visible={isVisible(anchor)}>
     {label === "Pickup"
@@ -162,7 +170,8 @@ export function WarehouseMap({ frame, selection, job, pick }: { frame: Warehouse
   const maxScale = fit.scale * 4;
   const bounds = { width: stageWidth, height: viewport.height };
   const isVisible = (point: Point) => mapTargetVisible(point, camera, bounds);
-  const labels = placeMapLabels(snapshot.robots, snapshot.stations, camera, bounds);
+  const pins = job ? [jobPin(job.from, occupied(job.from)), jobPin(job.to, occupied(job.to))] : [];
+  const labels = placeMapLabels(snapshot.robots, snapshot.stations, camera, bounds, selection?.id, pins);
 
   useLayoutEffect(() => {
     const panel = stage.current;
@@ -277,8 +286,8 @@ export function WarehouseMap({ frame, selection, job, pick }: { frame: Warehouse
             label={labels.get(station.id)} visible={isVisible(station)} />)}
           {snapshot.robots.map(robot => <RobotMarker key={robot.id} robot={robot} selection={selection} pick={pick}
             label={labels.get(robot.id)} visible={isVisible(robot)} />)}
-          {job && <><JobMarker job={job} point={job.from} label="Pickup" selection={selection} pick={pick} occupied={occupied(job.from)} isVisible={isVisible} />
-            <JobMarker job={job} point={job.to} label="Drop-off" selection={selection} pick={pick} occupied={occupied(job.to)} isVisible={isVisible} /></>}
+          {job && <><JobMarker job={job} pin={pins[0]} label="Pickup" selection={selection} pick={pick} isVisible={isVisible} />
+            <JobMarker job={job} pin={pins[1]} label="Drop-off" selection={selection} pick={pick} isVisible={isVisible} /></>}
         </g>
       </svg>
     </div>

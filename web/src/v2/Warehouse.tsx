@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "./WarehouseIcon";
 import { WarehouseInspector } from "./WarehouseInspector";
 import { WarehouseMap } from "./WarehouseMap";
@@ -26,10 +26,24 @@ function WarehouseMetrics({ snapshot }: { snapshot?: Snapshot }) {
 function FleetStrip({ robots, selection, pick, viewFleet }: {
   robots: Snapshot["robots"]; selection: Selection | null; pick: PickEntity; viewFleet: () => void;
 }) {
+  const strip = useRef<HTMLUListElement>(null);
+  const [overflowing, setOverflowing] = useState(false);
+  useLayoutEffect(() => {
+    const list = strip.current;
+    if (!list) return;
+    const measure = () => setOverflowing(list.scrollWidth > list.clientWidth + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [robots.length]);
+
   return <section className="v2-panel v2-fleet" aria-labelledby="v2-fleet-title">
     <header><h2 id="v2-fleet-title">Fleet</h2><p>{robots.length} robots</p>
       <button type="button" className="v2-fleet-link" onClick={viewFleet}>View fleet<Icon name="arrow-right" size={13} /></button></header>
-    <ul>{robots.map(robot => <li key={robot.id}>
+    <ul ref={strip} className="v2-fleet-scroll" aria-label="Fleet robots"
+      aria-description={overflowing ? "Scroll horizontally to see more robots." : undefined} tabIndex={overflowing ? 0 : undefined}>
+      {robots.map(robot => <li key={robot.id}>
       <button type="button" className="v2-robot-card" aria-pressed={selection?.kind === "robot" && selection.id === robot.id}
         data-tone={robotTone(robot)} aria-label={'Inspect ' + robot.id + (robot.role === "maintenance" ? " maintenance robot" : "")}
         aria-describedby={"v2-fleet-activity-" + robot.id + " v2-fleet-battery-" + robot.id}
