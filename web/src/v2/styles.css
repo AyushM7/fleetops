@@ -36,7 +36,7 @@
 }
 
 .v2-shell button:disabled { opacity: .55; }
-.v2-shell button:active:not(:disabled) { background-color: var(--v2-selected); }
+.v2-shell button:active:not(:disabled, [aria-disabled=true]) { background-color: var(--v2-selected); }
 .v2-shell .skip-link { background: var(--v2-blue); }
 .v2-icon { display: block; flex: 0 0 auto; }
 
@@ -137,7 +137,9 @@
 .v2-connection.is-running { color: var(--v2-green); }
 .v2-connection:is(.v2-connection-reconnecting, .v2-connection-unavailable, .v2-connection-expired) { color: var(--v2-amber); }
 .v2-sim-controls { display: flex; gap: 8px; align-items: center; }
-.v2-sim-controls > span { color: var(--v2-muted); font-size: .6875rem; white-space: nowrap; }
+.v2-control-note { color: var(--v2-muted); font-size: .6875rem; }
+.v2-control-note:empty { display: none; }
+.v2-sim-controls button[aria-disabled=true] { opacity: .55; cursor: not-allowed; }
 .v2-sim-controls button {
   display: inline-flex;
   align-items: center;
@@ -381,7 +383,7 @@ section.v2-inspector-group { padding-block-start: 10px; }
 @media (max-width: 760px) {
   .v2-shell { grid-template: "toolbar" auto "rail" auto "workspace" 1fr / minmax(0, 1fr); }
   .v2-toolbar { padding: 11px 12px; }
-  .v2-toolbar-state { order: 2; margin-inline-start: 0; inline-size: 100%; }
+  .v2-toolbar-state { order: 2; margin-inline-start: 0; inline-size: 100%; min-block-size: 2.25rem; gap: 4px 8px; align-content: center; }
   .v2-page-title h1 { font-size: 1.25rem; }
   .v2-sim-controls { margin-inline-start: auto; }
   .v2-rail { flex-direction: row; padding: 5px 10px; gap: 8px; border: 0; border-block-end: 1px solid var(--v2-border); }
@@ -401,7 +403,6 @@ section.v2-inspector-group { padding-block-start: 10px; }
 @media (max-width: 430px) {
   .v2-metric { flex-direction: column; align-items: start; justify-content: space-between; gap: 6px; }
   .v2-sim-controls { gap: 4px; }
-  .v2-sim-controls > span { max-inline-size: 44px; white-space: normal; line-height: 1.1; }
   .v2-sim-controls button { padding: 0 5px; }
   .v2-sim-controls .v2-icon { display: none; }
   .v2-page-title { gap: 6px; }

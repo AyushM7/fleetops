@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useRef, useState, type JSX } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type JSX } from "react";
 import { DemoError, selectScenario } from "../restart";
 import type { ScenarioID } from "../scenarios";
-import { subscribeWarehouse, type WarehouseFeed } from "./session";
+import { allowsWarehouseAction, subscribeWarehouse, type WarehouseAction, type WarehouseFeed } from "./session";
 import { Warehouse } from "./Warehouse";
 import { Icon } from "./WarehouseIcon";
 import type { Selection } from "./warehousePresentation";
@@ -19,7 +19,10 @@ type Workspace = {
   feed: WarehouseFeed;
 };
 
-type LegacyExit = { returning: boolean; returnError: string | null; onReturn: () => void };
+type SessionActions = {
+  returning: boolean; returnError: string | null;
+  onReturn: () => void; onControl: (action: WarehouseAction) => void;
+};
 const WorkspaceContext = createContext<Workspace | null>(null);
 
 export function useV2Workspace(): Workspace {
@@ -28,7 +31,7 @@ export function useV2Workspace(): Workspace {
   return workspace;
 }
 
-const initialFeed: WarehouseFeed = { phase: "connecting", status: null, frame: null };
+const initialFeed: WarehouseFeed = { phase: "connecting", status: null, frame: null, pending: null, controlWarning: null };
 const connectionLabel = {
   connecting: "Connecting to Warehouse V2…",
   reconnecting: "Reconnecting. Showing only the last confirmed data.",
@@ -42,30 +45,50 @@ const modeLabel = {
   ai_assisted: "AI-assisted dispatch",
 } as const;
 
-function Toolbar({ page, feed }: { page: Page; feed: WarehouseFeed }) {
-  const live = feed.phase === "live" ? feed.frame : null;
-  const running = live?.state === "running";
+const pendingLabel: Record<WarehouseAction, string> = {
+  play: "Starting…", pause: "Pausing…", stop: "Stopping…", restart: "Restarting…",
+};
+
+function Toolbar({ page, feed, returning, onControl }: {
+  page: Page; feed: WarehouseFeed; returning: boolean; onControl: (action: WarehouseAction) => void;
+}) {
+  const live = feed.phase === "live";
+  const state = feed.frame?.state;
+  const running = state === "running";
+  const primary = running ? "pause" : "play";
+  const blocked = (action: WarehouseAction) =>
+    !live || returning || !!feed.pending || state === undefined || !allowsWarehouseAction(state, action);
+  const feedback = feed.controlWarning ?? (feed.pending ? pendingLabel[feed.pending]
+    : state === "stopped" && live ? "Restart to play" : !live ? "Waiting for Go" : "");
+
+  function trigger(action: WarehouseAction): void {
+    if (!blocked(action)) onControl(action);
+  }
+
   return <header className="v2-toolbar">
     <div className="v2-page-title"><span>FleetOps</span><span aria-hidden="true">/</span><h1>{page}</h1></div>
     <div className="v2-toolbar-state">
-      {live && <span className="v2-mode"><Icon name="activity" size={16} />{modeLabel[live.mode]}</span>}
-      <p className={'v2-connection v2-connection-' + feed.phase + (running ? ' is-running' : '')} role="status">
-        {live ? "Simulation " + live.state : connectionLabel[feed.phase]}
+      {live && feed.frame && <span className="v2-mode"><Icon name="activity" size={16} />{modeLabel[feed.frame.mode]}</span>}
+      <p className={'v2-connection v2-connection-' + feed.phase + (live && running ? ' is-running' : '')} role="status">
+        {live && state ? "Simulation " + state
+          : feed.pending && feed.phase === "reconnecting" && !feed.controlWarning ? "Confirming with Go…" : connectionLabel[feed.phase]}
       </p>
+      {!live && state && <span>Last confirmed: {state}</span>}
+      <span id="v2-control-note" className="v2-control-note" role="status">{feedback}</span>
     </div>
     <div className="v2-sim-controls" role="group" aria-label="Simulation controls" aria-describedby="v2-control-note">
-      <span id="v2-control-note">Controls pending</span>
-      <button type="button" disabled title="Simulation controls are not connected">
+      <button type="button" aria-disabled={blocked(primary)} onClick={() => trigger(primary)}>
         <Icon name={running ? "pause" : "player-play"} size={16} />{running ? "Pause" : "Play"}
       </button>
-      <button type="button" disabled title="Simulation controls are not connected">
+      <button type="button" aria-disabled={blocked("stop")} onClick={() => trigger("stop")}>
         <Icon name="player-stop" size={16} />Stop
       </button>
+      <button type="button" aria-disabled={blocked("restart")} onClick={() => trigger("restart")}>Restart</button>
     </div>
   </header>;
 }
 
-function SessionView({ returning, returnError, onReturn }: LegacyExit): JSX.Element {
+function SessionView({ returning, returnError, onReturn, onControl }: SessionActions): JSX.Element {
   const { page, navigate, feed, selection, selectEntity } = useV2Workspace();
   return <div className="v2-shell">
     <a className="skip-link" href="#main-content">Skip to warehouse</a>
@@ -75,12 +98,12 @@ function SessionView({ returning, returnError, onReturn }: LegacyExit): JSX.Elem
         {pages.map(item => <button type="button" key={item} aria-current={item === page ? "page" : undefined}
           onClick={() => navigate(item)}><Icon name={pageIcons[item]} size={19} /><span>{item}</span></button>)}
       </nav>
-      <button className="v2-legacy-link" type="button" disabled={returning || feed.phase !== "live"}
+      <button className="v2-legacy-link" type="button" disabled={returning || !!feed.pending || feed.phase !== "live"}
         aria-label="Return to V1 demo" onClick={onReturn}>
         <Icon name="arrow-right" size={15} />{returning ? "Returning…" : "V1 demo"}
       </button>
     </aside>
-    <Toolbar page={page} feed={feed} />
+    <Toolbar page={page} feed={feed} returning={returning} onControl={onControl} />
     <main id="main-content" className="v2-workspace" tabIndex={-1}>
       {returnError && <p className="v2-return-error" role="alert">{returnError}</p>}
       <Warehouse frame={feed.frame} selection={selection} selectEntity={selectEntity} viewFleet={() => navigate("Fleet")} hidden={page !== "Warehouse"} />
@@ -92,11 +115,16 @@ function SessionView({ returning, returnError, onReturn }: LegacyExit): JSX.Elem
   </div>;
 }
 
-function WorkspaceView({ feed, ...exit }: { feed: WarehouseFeed } & LegacyExit): JSX.Element {
+function WorkspaceView({ feed, ...actions }: { feed: WarehouseFeed } & SessionActions): JSX.Element {
   const [page, navigate] = useState<Page>("Warehouse");
-  const [selection, selectEntity] = useState<Selection | null>(null);
+  const generation = feed.status?.generation ?? feed.frame?.generation;
+  const [selected, setSelected] = useState<{ generation: string | undefined; entity: Selection } | null>(null);
+  const selection = selected?.generation === generation ? selected?.entity ?? null : null;
+  const selectEntity = useCallback((entity: Selection | null) => {
+    setSelected(entity ? { generation, entity } : null);
+  }, [generation]);
   return <WorkspaceContext.Provider value={{ page, navigate, selection, selectEntity, feed }}>
-    <SessionView {...exit} />
+    <SessionView {...actions} />
   </WorkspaceContext.Provider>;
 }
 
@@ -108,10 +136,22 @@ export default function V2Shell({ previous = "blocked-reassignment", onLegacy }:
   const [returnError, setReturnError] = useState<string | null>(null);
   const returnInFlight = useRef(false);
 
-  useEffect(() => subscribeWarehouse(setFeed, onLegacy), [onLegacy]);
+  const session = useRef<ReturnType<typeof subscribeWarehouse> | null>(null);
+  useEffect(() => {
+    const current = subscribeWarehouse(setFeed, onLegacy);
+    session.current = current;
+    return () => {
+      session.current = null;
+      current.close();
+    };
+  }, [onLegacy]);
+
+  function runControl(action: WarehouseAction): void {
+    if (!returnInFlight.current && feed.frame) void session.current?.control(action, feed.frame.generation);
+  }
 
   async function returnToLegacy(): Promise<void> {
-    if (returnInFlight.current || feed.phase !== "live" || !feed.status) return;
+    if (returnInFlight.current || !feed.status || !session.current?.canControl(feed.status.generation)) return;
     returnInFlight.current = true;
     setReturning(true);
     setReturnError(null);
@@ -127,6 +167,6 @@ export default function V2Shell({ previous = "blocked-reassignment", onLegacy }:
     }
   }
 
-  return <WorkspaceView key={feed.status?.generation ?? feed.frame?.generation} feed={feed} returning={returning}
-    returnError={returnError} onReturn={() => { void returnToLegacy(); }} />;
+  return <WorkspaceView feed={feed} returning={returning} returnError={returnError} onControl={runControl}
+    onReturn={() => { void returnToLegacy(); }} />;
 }

@@ -5,17 +5,28 @@ import {
   type WarehouseFrame, type WarehouseStatus,
 } from "./telemetry";
 
+export type WarehouseAction = "play" | "pause" | "stop" | "restart";
+const expectedState = { play: "running", pause: "paused", stop: "stopped", restart: "paused" } as const;
+
+export function allowsWarehouseAction(state: WarehouseFrame["state"], action: WarehouseAction): boolean {
+  return action === "restart" || (state !== "stopped" && (action === "stop" || action === (state === "running" ? "pause" : "play")));
+}
+
+type PendingControl = { action: WarehouseAction; generation: string; expectedGeneration?: string };
+
 export type WarehouseFeed = {
   phase: "connecting" | "reconnecting" | "live" | "unavailable" | "expired";
   status: Extract<WarehouseStatus, { ready: true }> | null;
   frame: WarehouseFrame | null;
+  pending: WarehouseAction | null;
+  controlWarning: string | null;
 };
 
 const retryDelay = 2000;
 const statusTimeout = 8000;
 class VisitorExpired extends Error {}
 
-async function request(path: "/demo/status" | "/demo/scenario/warehouse-v2", generation: string, signal: AbortSignal): Promise<unknown> {
+async function request(path: "/demo/status" | "/demo/scenario/warehouse-v2" | `/demo/${WarehouseAction}`, generation: string, signal: AbortSignal): Promise<unknown> {
   const response = await postVisitor(path, generation, signal);
   if (response.status === 401 || response.status === 403) throw new VisitorExpired();
   if (!response.ok) throw new Error("Warehouse V2 session request failed.");
@@ -33,15 +44,55 @@ export async function openWarehouse(generation: string): Promise<void> {
   throw new Error("Warehouse V2 switch was not confirmed. Refresh session status before trying again.");
 }
 
-export function subscribeWarehouse(emit: (feed: WarehouseFeed) => void, onLegacy: () => void): () => void {
+export function subscribeWarehouse(emit: (feed: WarehouseFeed) => void, onLegacy: () => void) {
   const lifetime = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let stream: EventSource | undefined;
   let status: WarehouseFeed["status"] = null;
   let frame: WarehouseFrame | null = null;
+  let phase: WarehouseFeed["phase"] = "connecting";
+  let pending: PendingControl | null = null;
+  let controlWarning: string | null = null;
 
-  function publish(phase: WarehouseFeed["phase"]): void {
-    emit({ phase, status, frame });
+  function publish(nextPhase: WarehouseFeed["phase"]): void {
+    phase = nextPhase;
+    emit({ phase, status, frame, pending: pending?.action ?? null, controlWarning });
+  }
+
+  function canControl(generation: string | undefined): boolean {
+    return !lifetime.signal.aborted && phase === "live" && pending === null && !!status && status.generation === generation;
+  }
+
+  async function control(action: WarehouseAction, generation: string): Promise<void> {
+    if (!canControl(generation) || !status || !frame || !allowsWarehouseAction(frame.state, action)) return;
+    const runtimeId = status.runtimeId;
+    const attempt: PendingControl = { action, generation };
+    pending = attempt;
+    controlWarning = null;
+    closeStream();
+    publish("reconnecting");
+
+    try {
+      const timeout = AbortSignal.timeout(action === "restart" ? 65000 : statusTimeout);
+      const reply = await request(`/demo/${action}`, generation, AbortSignal.any([lifetime.signal, timeout]));
+      if (action === "restart") {
+        const identity = parseVisitorIdentity(reply);
+        if (!identity.ready || identity.scenarioId !== warehouseScenario || identity.generation === generation) {
+          throw new Error("Unconfirmed restart");
+        }
+        attempt.expectedGeneration = identity.generation;
+      } else {
+        const confirmation = parseWarehouseStatus(reply);
+        if (!confirmation.ready || confirmation.generation !== generation || confirmation.runtimeId !== runtimeId ||
+            confirmation.state !== expectedState[action]) throw new Error("Unconfirmed simulation control");
+        attempt.expectedGeneration = generation;
+      }
+    } catch {
+      controlWarning = "Result unconfirmed";
+      if (!lifetime.signal.aborted) publish("reconnecting");
+    }
+    // Read the current status and full snapshot even if the mutation response was lost.
+    if (!lifetime.signal.aborted) void connect();
   }
 
   function closeStream(): void {
@@ -77,6 +128,11 @@ export function subscribeWarehouse(emit: (feed: WarehouseFeed) => void, onLegacy
             return;
           }
           reconciled = true;
+          if (pending?.expectedGeneration &&
+              (pending.expectedGeneration !== next.generation || expectedState[pending.action] !== next.state)) {
+            controlWarning = "Run changed during confirmation";
+          }
+          pending = null;
         } else if (frame) {
           if (next.eventId <= frame.eventId) return;
           const expectedTick = frame.snapshot.tick + (next.type === "tick" ? 1 : 0);
@@ -109,10 +165,14 @@ export function subscribeWarehouse(emit: (feed: WarehouseFeed) => void, onLegacy
         return;
       }
       const next = parseWarehouseStatus(raw);
+      if (pending?.action === "restart" && pending.expectedGeneration && next.generation === pending.generation) {
+        retry("reconnecting");
+        return;
+      }
       if (frame && (frame.generation !== next.generation || (next.ready && frame.runtimeId !== next.runtimeId))) frame = null;
       status = next.ready ? next : null;
       if (!next.ready) { retry("unavailable"); return; }
-      publish(frame ? "reconnecting" : "connecting");
+      publish(pending || frame ? "reconnecting" : "connecting");
       listen(next);
     } catch (error) {
       if (lifetime.signal.aborted) return;
@@ -120,6 +180,7 @@ export function subscribeWarehouse(emit: (feed: WarehouseFeed) => void, onLegacy
         closeStream();
         status = null;
         frame = null;
+        pending = null;
         publish("expired");
       } else {
         retry("reconnecting");
@@ -129,8 +190,12 @@ export function subscribeWarehouse(emit: (feed: WarehouseFeed) => void, onLegacy
 
   publish("connecting");
   void connect();
-  return () => {
-    lifetime.abort();
-    closeStream();
+  return {
+    canControl,
+    control,
+    close() {
+      lifetime.abort();
+      closeStream();
+    },
   };
 }

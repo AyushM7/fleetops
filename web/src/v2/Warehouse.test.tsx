@@ -121,7 +121,9 @@ describe("Warehouse V2", () => {
     expect(loading.match(/<dd>—<\/dd>/g)).toHaveLength(3);
     expect(loading).toContain("Waiting for confirmed warehouse telemetry");
     const shell = renderToStaticMarkup(<V2Shell onLegacy={vi.fn()} />);
-    expect(shell).toContain("Controls pending");
-    expect(shell.match(/disabled="" title="Simulation controls are not connected"/g)).toHaveLength(2);
+    expect(shell).toContain("Waiting for Go");
+    expect(shell).toContain('aria-describedby="v2-control-note"');
+    expect(shell.match(/<button type="button" aria-disabled="true">/g)).toHaveLength(3);
+    expect(shell).not.toContain("Controls pending");
   });
 });

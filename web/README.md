@@ -158,3 +158,10 @@ real PostgreSQL integration tests, Go race tests, non-soak regressions, and vet
 all passed. The known Phase 2 soak failure was not changed or rerun. Existing
 approved P3-07 working-tree changes are preserved. No new package dependencies
 or lockfile changes are needed.
+
+## Warehouse V2 polish follow-ups
+
+- At a 390 px viewport, robot IDs on the fitted map measure about 6.33 px.
+  Zoom increases map label size, and fleet-strip IDs remain 14 px.
+- A robot in the cell directly below a charger can partially cover the charger
+  caption. Chrome reproduced this with R10 directly below C4.

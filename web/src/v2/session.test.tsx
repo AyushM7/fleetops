@@ -2,6 +2,7 @@ import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { pollDemoStatus } from "../restart";
 import { openWarehouse, subscribeWarehouse } from "./session";
+import type { WarehouseFrame } from "./telemetry";
 import { isWarehouseStatus, parseWarehouseFrame, parseWarehouseStatus } from "./telemetry";
 import V2Shell from "./V2Shell";
 
@@ -63,6 +64,7 @@ afterEach(() => {
   subscriptions.splice(0).forEach(stop => stop());
   FakeSource.opened = [];
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -142,7 +144,7 @@ describe("Warehouse V2 stream lifecycle", () => {
     const request = mockSession();
     request.mockResolvedValueOnce(json(status())).mockResolvedValueOnce(json(status(generation, 4)));
     const emit = vi.fn();
-    subscriptions.push(subscribeWarehouse(emit, vi.fn()));
+    subscriptions.push(subscribeWarehouse(emit, vi.fn()).close);
     await vi.advanceTimersByTimeAsync(0);
     expect(request).toHaveBeenCalledWith("/demo/status", expect.objectContaining({ method: "POST", credentials: "same-origin", body: "{}" }));
     const [first] = FakeSource.opened;
@@ -172,7 +174,7 @@ describe("Warehouse V2 stream lifecycle", () => {
     const request = mockSession();
     request.mockResolvedValueOnce(json(status()));
     const emit = vi.fn();
-    subscriptions.push(subscribeWarehouse(emit, vi.fn()));
+    subscriptions.push(subscribeWarehouse(emit, vi.fn()).close);
     await vi.advanceTimersByTimeAsync(0);
     const [source] = FakeSource.opened;
     source.send("snapshot", wire());
@@ -193,7 +195,7 @@ describe("Warehouse V2 stream lifecycle", () => {
     request.mockResolvedValueOnce(json(status())).mockResolvedValueOnce(json(status(replacement)))
       .mockResolvedValueOnce(new Response("", { status: 401 }));
     const emit = vi.fn();
-    subscriptions.push(subscribeWarehouse(emit, vi.fn()));
+    subscriptions.push(subscribeWarehouse(emit, vi.fn()).close);
     await vi.advanceTimersByTimeAsync(0);
     FakeSource.opened[0].send("snapshot", wire());
     FakeSource.opened[0].onerror?.();
@@ -202,7 +204,7 @@ describe("Warehouse V2 stream lifecycle", () => {
     FakeSource.opened[1].send("snapshot", wire());
     expect(FakeSource.opened[1].close).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(10000);
-    expect(emit).toHaveBeenLastCalledWith({ phase: "expired", frame: null, status: null });
+    expect(emit).toHaveBeenLastCalledWith({ phase: "expired", frame: null, status: null, pending: null, controlWarning: null });
     expect(request).toHaveBeenCalledTimes(3);
   });
 
@@ -210,7 +212,7 @@ describe("Warehouse V2 stream lifecycle", () => {
     const request = mockSession();
     request.mockResolvedValueOnce(json({ generation, scenarioId: "routine-charging", ready: true }));
     const onLegacy = vi.fn();
-    subscriptions.push(subscribeWarehouse(vi.fn(), onLegacy));
+    subscriptions.push(subscribeWarehouse(vi.fn(), onLegacy).close);
     await vi.advanceTimersByTimeAsync(10000);
     expect(onLegacy).toHaveBeenCalledOnce();
     expect(request).toHaveBeenCalledOnce();
@@ -221,7 +223,7 @@ describe("Warehouse V2 stream lifecycle", () => {
     const request = mockSession();
     request.mockResolvedValueOnce(json(status()));
     const emit = vi.fn();
-    const stop = subscribeWarehouse(emit, vi.fn());
+    const stop = subscribeWarehouse(emit, vi.fn()).close;
     await vi.advanceTimersByTimeAsync(0);
     stop();
     FakeSource.opened[0].send("snapshot", wire());
@@ -237,5 +239,182 @@ describe("Warehouse V2 stream lifecycle", () => {
     for (const label of ["Warehouse V2", "Fleet", "Jobs", "Operations AI", "Connecting", 'aria-current="page"']) expect(html).toContain(label);
     expect(html).not.toContain("Approval inbox");
     expect(html).not.toContain("Simulation tick");
+  });
+});
+
+describe("Warehouse V2 simulation controls", () => {
+  type RunState = WarehouseFrame["state"];
+  const runStatus = (state: RunState, tick = 0, gen = generation) => ({ ...status(gen, tick), state });
+  const sample = (state: RunState, eventId: number, tick = 0, gen = generation) => ({ ...wire(eventId, tick, gen), state });
+  const paths = (request: ReturnType<typeof mockSession>) => request.mock.calls.map(([path]) => path);
+
+  async function connected(state: RunState = "paused") {
+    const request = mockSession().mockResolvedValueOnce(json(runStatus(state)));
+    const emit = vi.fn();
+    const session = subscribeWarehouse(emit, vi.fn());
+    subscriptions.push(session.close);
+    await vi.advanceTimersByTimeAsync(0);
+    FakeSource.opened[0].send("snapshot", sample(state, 1));
+    return { request, emit, session };
+  }
+
+  it("serializes Play, Pause, and Play and waits for a new snapshot each time", async () => {
+    const { request, emit, session } = await connected();
+    let acknowledge: (response: Response) => void = () => { throw new Error("Play was not sent"); };
+    request.mockImplementationOnce(() => new Promise(resolve => { acknowledge = resolve; }))
+      .mockResolvedValueOnce(json(runStatus("running")));
+    const play = session.control("play", generation);
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
+      phase: "reconnecting", pending: "play", frame: expect.objectContaining({ state: "paused" }),
+    }));
+    await Promise.all([session.control("play", generation), session.control("stop", generation), session.control("restart", generation)]);
+    expect(paths(request)).toEqual(["/demo/status", "/demo/play"]);
+    expect(request.mock.calls[1]?.[1]).toMatchObject({
+      method: "POST", credentials: "same-origin", body: "{}",
+      headers: { "X-FleetOps-Demo": "1", "X-FleetOps-Generation": generation },
+    });
+    acknowledge(json(runStatus("running")));
+    await play;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.canControl(generation)).toBe(false);
+    FakeSource.opened[0].send("state", sample("running", 2));
+    FakeSource.opened[1].send("tick", sample("running", 3, 1));
+    expect(session.canControl(generation)).toBe(false);
+    FakeSource.opened[1].send("snapshot", sample("running", 2));
+    expect(session.canControl(generation)).toBe(true);
+    FakeSource.opened[1].send("tick", sample("running", 3, 1));
+
+    request.mockResolvedValueOnce(json(runStatus("paused", 1))).mockResolvedValueOnce(json(runStatus("paused", 1)));
+    await session.control("pause", generation);
+    await vi.advanceTimersByTimeAsync(0);
+    FakeSource.opened[2].send("snapshot", sample("paused", 4, 1));
+    request.mockResolvedValueOnce(json(runStatus("running", 1))).mockResolvedValueOnce(json(runStatus("running", 1)));
+    await session.control("play", generation);
+    await vi.advanceTimersByTimeAsync(0);
+    FakeSource.opened[3].send("snapshot", sample("running", 5, 1));
+    expect(paths(request)).toEqual([
+      "/demo/status", "/demo/play", "/demo/status", "/demo/pause", "/demo/status", "/demo/play", "/demo/status",
+    ]);
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
+      phase: "live", pending: null, controlWarning: null, frame: expect.objectContaining({ state: "running", generation }),
+    }));
+  });
+
+  it("denies Play after Stop and accepts only a fresh status and snapshot after Restart", async () => {
+    const { request, emit, session } = await connected("running");
+    request.mockResolvedValueOnce(json(runStatus("stopped"))).mockResolvedValueOnce(json(runStatus("stopped")));
+    await session.control("stop", generation);
+    await vi.advanceTimersByTimeAsync(0);
+    FakeSource.opened[1].send("snapshot", sample("stopped", 2));
+    await session.control("play", generation);
+    expect(paths(request)).toEqual(["/demo/status", "/demo/stop", "/demo/status"]);
+
+    request.mockResolvedValueOnce(json({ scenarioId: "warehouse-v2", generation: replacement, ready: true }))
+      .mockResolvedValueOnce(json(runStatus("stopped")))
+      .mockResolvedValueOnce(json(runStatus("paused", 0, replacement)));
+    await session.control("restart", generation);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(FakeSource.opened).toHaveLength(2);
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "reconnecting", pending: "restart" }));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "reconnecting", frame: null, pending: "restart" }));
+    expect(session.canControl(replacement)).toBe(false);
+    FakeSource.opened[2].send("snapshot", sample("paused", 1, 0, replacement));
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
+      phase: "live", pending: null, frame: expect.objectContaining({ generation: replacement, state: "paused" }),
+    }));
+    expect(session.canControl(generation)).toBe(false);
+    expect(session.canControl(replacement)).toBe(true);
+  });
+
+  it("keeps a stopped run stopped when Restart cannot be confirmed", async () => {
+    const { request, emit, session } = await connected("stopped");
+    request.mockResolvedValueOnce(json({ scenarioId: "warehouse-v2", generation, ready: true }))
+      .mockResolvedValueOnce(json(runStatus("stopped")));
+    await session.control("restart", generation);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.canControl(generation)).toBe(false);
+    FakeSource.opened[1].send("snapshot", sample("stopped", 1));
+    await session.control("play", generation);
+    expect(paths(request)).toEqual(["/demo/status", "/demo/restart", "/demo/status"]);
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
+      phase: "live", pending: null, controlWarning: "Result unconfirmed", frame: expect.objectContaining({ state: "stopped", generation }),
+    }));
+  });
+
+  it("uses authoritative status for a rejected stale generation and discards the old run", async () => {
+    const { request, emit, session } = await connected();
+    request.mockResolvedValueOnce(new Response("scenario changed", { status: 409 }))
+      .mockResolvedValueOnce(json(runStatus("paused", 0, replacement)));
+    await session.control("play", generation);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
+      phase: "reconnecting", frame: null, controlWarning: "Result unconfirmed",
+    }));
+    FakeSource.opened[0].send("tick", sample("running", 2, 1));
+    FakeSource.opened[1].send("snapshot", sample("paused", 1, 0, replacement));
+    await session.control("play", generation);
+    expect(paths(request)).toEqual(["/demo/status", "/demo/play", "/demo/status"]);
+    expect(session.canControl(replacement)).toBe(true);
+  });
+
+  it("times out a single mutation, reads until ready, and unlocks only after a snapshot", async () => {
+    const { request, emit, session } = await connected();
+    vi.spyOn(AbortSignal, "timeout").mockImplementationOnce(delay => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(new DOMException("timeout", "TimeoutError")), delay);
+      return controller.signal;
+    });
+    request.mockImplementationOnce((_url, init) => new Promise((_, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+    })).mockResolvedValueOnce(json({ ...runStatus("paused"), ready: false }))
+      .mockResolvedValueOnce(json(runStatus("running", 2)));
+    const play = session.control("play", generation);
+    await vi.advanceTimersByTimeAsync(7999);
+    expect(paths(request)).toEqual(["/demo/status", "/demo/play"]);
+    await vi.advanceTimersByTimeAsync(1);
+    await play;
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
+      phase: "unavailable", frame: expect.objectContaining({ state: "paused" }), controlWarning: "Result unconfirmed",
+    }));
+    await session.control("restart", generation);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(session.canControl(generation)).toBe(false);
+    FakeSource.opened[1].send("snapshot", sample("running", 4, 2));
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
+      phase: "live", pending: null, controlWarning: "Result unconfirmed", frame: expect.objectContaining({ state: "running" }),
+    }));
+    expect(paths(request)).toEqual(["/demo/status", "/demo/play", "/demo/status", "/demo/status"]);
+    expect(session.canControl(generation)).toBe(true);
+  });
+
+  it.each(["network failure", "malformed acknowledgement"] as const)("reconciles a %s without retrying the mutation", async failure => {
+    const { request, emit, session } = await connected("running");
+    if (failure === "network failure") request.mockRejectedValueOnce(new TypeError("connection closed"));
+    else request.mockResolvedValueOnce(new Response("malformed"));
+    request.mockResolvedValueOnce(json(runStatus("paused")));
+    await session.control("pause", generation);
+    await vi.advanceTimersByTimeAsync(0);
+    await session.control("stop", generation);
+    FakeSource.opened[1].send("snapshot", sample("paused", 2));
+    expect(paths(request)).toEqual(["/demo/status", "/demo/pause", "/demo/status"]);
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
+      phase: "live", pending: null, controlWarning: "Result unconfirmed", frame: expect.objectContaining({ state: "paused" }),
+    }));
+  });
+
+  it.each(["paused", "running"] as const)("keeps %s separate from connection loss and locks controls during reconnect", async state => {
+    const { request, emit, session } = await connected(state);
+    request.mockResolvedValueOnce(json(runStatus(state)));
+    FakeSource.opened[0].onerror?.();
+    await session.control("stop", generation);
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
+      phase: "reconnecting", frame: expect.objectContaining({ state }), pending: null,
+    }));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(session.canControl(generation)).toBe(false);
+    FakeSource.opened[1].send("snapshot", sample(state, 1));
+    expect(paths(request)).toEqual(["/demo/status", "/demo/status"]);
+    expect(session.canControl(generation)).toBe(true);
   });
 });
