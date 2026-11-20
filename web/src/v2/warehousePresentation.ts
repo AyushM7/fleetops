@@ -1,4 +1,4 @@
-import type { Job, Robot, Snapshot, Station } from "./telemetry";
+import type { Job, Point, Robot, Snapshot, Station } from "./telemetry";
 
 export type Selection = { kind: "robot" | "job" | "station"; id: string };
 export type PickEntity = (selection: Selection, opener: HTMLElement | SVGElement) => void;
@@ -13,6 +13,9 @@ export const activityLabels: Record<Robot["activity"], string> = {
   UNDOCKING: "Undocking", GOING_TO_PARK: "To parking", RELOCATING: "Relocating",
   PARKED: "Parked", FAULTED: "Faulted", OUT_OF_SERVICE: "Out of service",
 };
+
+export const cellLabel = (point: Point): string => "Cell " + point.x + ", " + point.y;
+export const robotRoleLabel = (robot: Robot): string => robot.role === "maintenance" ? "Maintenance robot" : "Transport robot";
 
 export type RobotTone = "moving" | "charging" | "waiting" | "fault";
 
@@ -36,6 +39,14 @@ export const jobLabels: Record<Job["status"], string> = {
   pending: "Pending", assigned: "Assigned", in_progress: "In progress", done: "Completed",
 };
 
+export const jobOutcomeLabels: Record<NonNullable<Job["outcome"]>, string> = {
+  DELIVERED: "Delivered", ON_TIME: "On time", LATE: "Late",
+};
+
+export function isPriorityOverdue(job: Job): boolean {
+  return job.type === "PRIORITY" && job.status !== "done" && job.deadlineMissed === true;
+}
+
 export function chargerStatus(station: Station): "Occupied" | "Reserved" | "Available" {
   if (station.occupiedBy) return "Occupied";
   return station.reservedBy ? "Reserved" : "Available";
@@ -44,7 +55,7 @@ export function chargerStatus(station: Station): "Occupied" | "Reserved" | "Avai
 export function warehouseCounts(snapshot: Snapshot) {
   return {
     completed: snapshot.completedJobs ?? 0,
-    overdue: snapshot.jobs.filter(job => job.type === "PRIORITY" && job.status !== "done" && job.deadlineMissed).length,
+    overdue: snapshot.jobs.filter(isPriorityOverdue).length,
     charging: snapshot.robots.filter(robot => robot.activity === "CHARGING").length,
   };
 }

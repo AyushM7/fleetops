@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "./WarehouseIcon";
-import { WarehouseInspector } from "./WarehouseInspector";
+import { WarehouseInspector, useInspectorFocus } from "./WarehouseInspector";
 import { WarehouseMap } from "./WarehouseMap";
 import { findEntity, robotActivityLabel, robotTone, warehouseCounts, type PickEntity, type Selection } from "./warehousePresentation";
 import type { Snapshot, WarehouseFrame } from "./telemetry";
@@ -60,52 +60,17 @@ export function Warehouse({ frame, selection, selectEntity, viewFleet, hidden }:
   frame: WarehouseFrame | null; selection: Selection | null; selectEntity: (selection: Selection | null) => void;
   viewFleet: () => void; hidden: boolean;
 }) {
-  const opener = useRef<HTMLElement | SVGElement | null>(null);
-  const surface = useRef<HTMLDivElement>(null);
-  const restore = useRef(false);
+  const { surface, pick, close, restoreFocus } = useInspectorFocus(selectEntity, ".v2-map-stage", !hidden);
   const entity = frame ? findEntity(frame.snapshot, selection) : null;
-  const hasInspector = entity !== null;
   const job = entity?.kind === "job" ? entity.job
     : entity?.kind === "robot" ? frame?.snapshot.jobs.find(item => item.id === entity.robot.jobId) : undefined;
-
-  const close = useCallback(() => {
-    restore.current = true;
-    selectEntity(null);
-  }, [selectEntity]);
-
-  useLayoutEffect(() => {
-    if (hasInspector || !restore.current) return;
-    const source = opener.current;
-    restore.current = false;
-    opener.current = null;
-    if (!hidden) {
-      if (source?.isConnected && source.getAttribute("tabindex") !== "-1") source.focus({ preventScroll: true });
-      else surface.current?.querySelector<HTMLElement>(".v2-map-stage")?.focus({ preventScroll: true });
-    }
-  }, [hasInspector, hidden]);
-
-  useEffect(() => {
-    if (!hasInspector || hidden) return;
-    function dismiss(event: KeyboardEvent) {
-      if (event.key !== "Escape" || event.defaultPrevented || window.matchMedia("(max-width: 1179px)").matches) return;
-      event.preventDefault();
-      close();
-    }
-    document.addEventListener("keydown", dismiss);
-    return () => document.removeEventListener("keydown", dismiss);
-  }, [hasInspector, hidden, close]);
-
-  const pick: PickEntity = (nextSelection, source) => {
-    opener.current = source;
-    selectEntity(nextSelection);
-  };
 
   return <div className="v2-warehouse" hidden={hidden} ref={surface}>
     <WarehouseMetrics snapshot={frame?.snapshot} />
     {frame ? <>
       <div className={'v2-map-row' + (entity ? ' has-inspector' : '')}>
         <WarehouseMap frame={frame} selection={selection} job={job} pick={pick} />
-        <WarehouseInspector entity={hidden ? null : entity} job={job} inspect={selectEntity} close={close} />
+        <WarehouseInspector entity={hidden ? null : entity} job={job} inspect={selectEntity} close={close} restoreFocus={restoreFocus} />
       </div>
       <FleetStrip robots={frame.snapshot.robots} selection={selection} pick={pick} viewFleet={viewFleet} />
     </> : <section className="v2-panel v2-empty"><h2>Warehouse map</h2><p>Waiting for confirmed warehouse telemetry.</p></section>}

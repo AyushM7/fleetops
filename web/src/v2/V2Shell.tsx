@@ -1,11 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type JSX } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type JSX } from "react";
 import { DemoError, selectScenario } from "../restart";
 import type { ScenarioID } from "../scenarios";
 import { allowsWarehouseAction, subscribeWarehouse, type WarehouseAction, type WarehouseFeed } from "./session";
+import { EntityDirectory } from "./EntityDirectory";
 import { Warehouse } from "./Warehouse";
 import { Icon } from "./WarehouseIcon";
-import type { Selection } from "./warehousePresentation";
+import { findEntity, type Selection } from "./warehousePresentation";
 import "./styles.css";
+import "./directory.css";
 
 const pages = ["Warehouse", "Fleet", "Jobs", "Operations AI"] as const;
 const pageIcons = { Warehouse: "building-warehouse", Fleet: "robot", Jobs: "clipboard-list", "Operations AI": "activity" } as const;
@@ -97,8 +99,24 @@ function Toolbar({ page, feed, returning, onControl }: {
 
 function SessionView({ returning, returnError, onReturn, onControl }: SessionActions): JSX.Element {
   const { page, navigate, feed, selection, selectEntity } = useV2Workspace();
+  const main = useRef<HTMLElement>(null);
+  const previousPage = useRef(page);
+
+  useLayoutEffect(() => {
+    if (previousPage.current === page) return;
+    previousPage.current = page;
+    if (document.activeElement === document.body) main.current?.focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+  }, [page]);
+
+  function inspectRelated(entity: Selection): void {
+    if (!feed.frame || !findEntity(feed.frame.snapshot, entity)) return;
+    selectEntity(entity);
+    navigate(entity.kind === "job" ? "Jobs" : "Fleet");
+  }
+
   return <div className="v2-shell">
-    <a className="skip-link" href="#main-content">Skip to warehouse</a>
+    <a className="skip-link" href="#main-content">Skip to main content</a>
     <aside className="v2-rail">
       <div className="v2-brand-mark" aria-label="FleetOps V2"><Icon name="layout-grid" size={23} /></div>
       <nav aria-label="Warehouse V2 pages">
@@ -111,10 +129,12 @@ function SessionView({ returning, returnError, onReturn, onControl }: SessionAct
       </button>
     </aside>
     <Toolbar page={page} feed={feed} returning={returning} onControl={onControl} />
-    <main id="main-content" className="v2-workspace" tabIndex={-1}>
+    <main ref={main} id="main-content" className="v2-workspace" tabIndex={-1}>
       {returnError && <p className="v2-return-error" role="alert">{returnError}</p>}
       <Warehouse frame={feed.frame} selection={selection} selectEntity={selectEntity} viewFleet={() => navigate("Fleet")} hidden={page !== "Warehouse"} />
-      {page !== "Warehouse" && <section className="v2-panel v2-empty" aria-label={page}>
+      {(page === "Fleet" || page === "Jobs") && <EntityDirectory key={page} page={page} feed={feed}
+        selection={selection} selectEntity={selectEntity} viewWarehouse={() => navigate("Warehouse")} inspectRelated={inspectRelated} />}
+      {page === "Operations AI" && <section className="v2-panel v2-empty" aria-label={page}>
         <h2>{page}</h2><p>This view is planned for a later phase of the frontend rebuild.</p>
         <button type="button" className="v2-inspector-link" onClick={() => navigate("Warehouse")}>Return to Warehouse</button>
       </section>}
@@ -126,7 +146,9 @@ function WorkspaceView({ feed, ...actions }: { feed: WarehouseFeed } & SessionAc
   const [page, navigate] = useState<Page>("Warehouse");
   const generation = feed.status?.generation ?? feed.frame?.generation;
   const [selected, setSelected] = useState<{ generation: string | undefined; entity: Selection } | null>(null);
-  const selection = selected?.generation === generation ? selected?.entity ?? null : null;
+  const selection = selected && selected.generation === generation && feed.frame && findEntity(feed.frame.snapshot, selected.entity)
+    ? selected.entity : null;
+  if (selected && !selection) setSelected(null);
   const selectEntity = useCallback((entity: Selection | null) => {
     setSelected(entity ? { generation, entity } : null);
   }, [generation]);

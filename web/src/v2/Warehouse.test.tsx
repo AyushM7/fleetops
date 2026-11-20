@@ -87,7 +87,7 @@ describe("Warehouse V2", () => {
     expect(selected).toContain('aria-label="Drop-off for J18"');
     expect(selected).toContain("View job");
     expect(selected).toContain('class="v2-status-chip" data-tone="moving"');
-    expect(selected).toContain('<dialog class="v2-panel v2-inspector" aria-labelledby="v2-inspector-title">');
+    expect(selected).toMatch(/<dialog class="v2-panel v2-inspector" aria-labelledby="([^"]+)"><header[^>]+><h2 id="\1"[^>]+>Robot details/);
   });
 
   it("keeps a job marker visible within its real cell when a robot occupies the center", () => {
