@@ -9,6 +9,9 @@ import { controlSimulation, DemoError, pollDemoStatus, restartScenario, selectSc
 import { ScenarioSelector, type ScenarioID } from "./scenarios";
 import SimulationControls from "./SimulationControls";
 import AgentActivity from "./AgentActivity";
+import { openWarehouse } from "./v2/session";
+import { isWarehouseStatus, warehouseScenario } from "./v2/telemetry";
+import V2Shell from "./v2/V2Shell";
 
 export { Warehouse } from "./Warehouse";
 
@@ -48,6 +51,13 @@ export function Dashboard({ feed, decisionPanel, simulationControls, agentActivi
 }
 
 export default function App(): JSX.Element {
+  const [warehouse, setWarehouse] = useState<{ previous?: ScenarioID } | null>(null);
+  const enterWarehouse = useCallback((previous?: ScenarioID) => setWarehouse({ previous }), []);
+  const returnToLegacy = useCallback(() => setWarehouse(null), []);
+  return warehouse ? <V2Shell previous={warehouse.previous} onLegacy={returnToLegacy} /> : <LegacyApp onWarehouse={enterWarehouse} />;
+}
+
+function LegacyApp({ onWarehouse }: { onWarehouse: (previous?: ScenarioID) => void }): JSX.Element {
   const [demo] = useState(isLocalDemo);
   const [token, setToken] = useState(() => isLocalDemo() ? "local-demo-session" : "");
   const [draft, setDraft] = useState("");
@@ -56,6 +66,7 @@ export default function App(): JSX.Element {
   const [refresh, setRefresh] = useState(0);
   const [generation, setGeneration] = useState("");
   const generationRef = useRef("");
+  const scenarioRef = useRef<ScenarioID | undefined>(undefined);
   const [scenarioReady, setScenarioReady] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const restartInFlight = useRef(false);
@@ -74,6 +85,7 @@ export default function App(): JSX.Element {
       setGeneration(status.generation); setFeed(emptyFeed); setRestartError(null);
       setControlError(null);
     }
+    scenarioRef.current = status.scenarioId;
     setScenarioReady(status.ready);
     setSimulationStatus(status);
     if (status.snapshot) setFeed({ phase: "live", snapshot: status.snapshot, updatedAt: new Date() });
@@ -86,8 +98,12 @@ export default function App(): JSX.Element {
       setStatusKnown(status !== null);
       if (status) acceptStatus(status); else setScenarioReady(false);
       if (!status?.ready) setFeed(previous => previous.snapshot ? { ...previous, phase: "unavailable" } : previous);
-    }, onUnauthorized, 250);
-  }, [demo, token, restarting, controlling, refresh, acceptStatus, onUnauthorized]);
+    }, onUnauthorized, 250, body => {
+      if (!isWarehouseStatus(body)) return false;
+      if (!restartInFlight.current && !controlInFlight.current) onWarehouse(scenarioRef.current);
+      return true;
+    });
+  }, [demo, token, restarting, controlling, refresh, acceptStatus, onUnauthorized, onWarehouse]);
   useEffect(() => {
     if (!token || restarting || demo) return;
     return pollFleet(demo ? generation : token, next => setFeed(previous => next.snapshot === null && previous.snapshot !== null ? { ...next, snapshot: previous.snapshot, updatedAt: previous.updatedAt } : next), onUnauthorized);
@@ -106,11 +122,18 @@ export default function App(): JSX.Element {
       if (!restartInFlight.current && generationRef.current === expectedGeneration) setControlError(error instanceof DemoError ? error.message : "Control outcome unknown. Refresh status; do not retry Step automatically.");
     } finally { controlInFlight.current = false; setControlling(false); }
   };
-  const restart = async (selected?: ScenarioID) => {
+  const restart = async (selected?: ScenarioID | typeof warehouseScenario) => {
     if (restartInFlight.current || controlInFlight.current || !generation || !token || !statusKnown) return;
     restartInFlight.current = true; setRestarting(true); setRestartError(null); setFeed(emptyFeed); setScenarioReady(false); setStatusKnown(false);
     setSimulationStatus(null); setControlError(null);
-    try { acceptStatus(await (selected ? selectScenario(selected, generation) : restartScenario(generation))); }
+    try {
+      if (selected === warehouseScenario) {
+        await openWarehouse(generation);
+        onWarehouse(scenarioRef.current);
+      } else {
+        acceptStatus(await (selected ? selectScenario(selected, generation) : restartScenario(generation)));
+      }
+    }
     catch (error) {
       if (error instanceof DemoError && error.authentication) onUnauthorized();
       setRestartError(error instanceof DemoError ? error.message : "Restart outcome unknown. Refresh session status before retrying. Historical outcomes may require reconciliation.");
@@ -124,6 +147,8 @@ export default function App(): JSX.Element {
       {demo && token && <RestartControl busy={restarting} disabled={!generation || !statusKnown || controlling} error={restartError || statusError} onRestart={() => { void restart(); }} />}
     </header>
     {demo && token && <ScenarioSelector selected={simulationStatus?.scenarioId} disabled={!generation || !statusKnown || controlling} busy={restarting} onSelect={id => { void restart(id); }} />}
+    {demo && token && <button type="button" className="secondary-button" disabled={!generation || !statusKnown || restarting || controlling}
+      onClick={() => { void restart(warehouseScenario); }}>Open Warehouse V2</button>}
     <main id="main-content" tabIndex={-1}>{demo && !token ? <div className="notice notice-error" role="alert">Visitor session ended. Clear this site's cookies to begin a new visit.</div> : !token ? <section className="login-panel"><p className="eyebrow">LIVE WAREHOUSE</p><h1>Your fleet, in view.</h1><p>Connect to the running simulator with your bearer token.</p>
       <form onSubmit={connect}><label htmlFor="viewer-token">Bearer token</label><input id="viewer-token" type="password" autoComplete="off" spellCheck={false} value={draft} onChange={event => setDraft(event.target.value)} placeholder="Paste a viewer or operator token" required /><button className="primary-button" type="submit">Connect to fleet <span aria-hidden="true">→</span></button></form>
       {authError && <p className="auth-error" role="alert">Authentication failed. Check your token and connect again.</p>}
