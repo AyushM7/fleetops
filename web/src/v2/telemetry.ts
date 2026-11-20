@@ -11,6 +11,11 @@ const jobStates = ["pending", "assigned", "in_progress", "done"] as const;
 const jobTypes = ["NORMAL", "PRIORITY"] as const;
 const outcomes = ["DELIVERED", "ON_TIME", "LATE"] as const;
 const modes = ["deterministic", "checking_assistance", "ai_assisted"] as const;
+export const operationsModeLabel = {
+  deterministic: "Deterministic dispatch",
+  checking_assistance: "Checking AI assistance",
+  ai_assisted: "AI-assisted dispatch",
+} as const;
 const runStates = ["paused", "running", "stopped"] as const;
 export const warehouseEvents = ["snapshot", "tick", "state", "operations"] as const;
 
@@ -42,7 +47,7 @@ type Decision =
   | { kind: "reassign"; reassignment: { JobID: string; FromRobotID: string; ToRobotID: string } }
   | { kind: "abstain"; reason: string };
 type Usage = { model: string; inputTokens: number; outputTokens: number };
-type OperationsActivity = {
+export type OperationsActivity = {
   observationId: string; observedAt: string; tick: number; stage: "observed" | "proposed" | "finished";
   status: string; recorded: boolean; proposedAt?: string; finishedAt?: string;
   modelStatus?: string; model?: string; requestId?: number; reservedMicroUsd?: number; accountedMicroUsd?: number;

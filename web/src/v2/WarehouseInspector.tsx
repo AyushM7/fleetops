@@ -3,11 +3,11 @@ import { BatteryCharge } from "./BatteryCharge";
 import { Icon } from "./WarehouseIcon";
 import {
   cellLabel, chargerStatus, isPriorityOverdue, jobLabels, jobOutcomeLabels, robotActivityLabel, robotRoleLabel, robotTone,
-  type Entity, type PickEntity, type RobotTone, type Selection,
+  type Entity, type RobotTone, type Selection,
 } from "./warehousePresentation";
 import type { Job, Robot, Station } from "./telemetry";
 
-export function useInspectorFocus(selectEntity: (selection: Selection | null) => void, fallback: string, visible: boolean) {
+export function useInspectorFocus<T>(selectEntity: (selection: T | null) => void, fallback: string, visible: boolean) {
   const surface = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement | SVGElement | null>(null);
   const close = useCallback(() => selectEntity(null), [selectEntity]);
@@ -16,7 +16,7 @@ export function useInspectorFocus(selectEntity: (selection: Selection | null) =>
     if (!visible) opener.current = null;
   }, [visible]);
 
-  const pick: PickEntity = (selection, source) => {
+  const pick = (selection: T, source: HTMLElement | SVGElement): void => {
     opener.current = source;
     selectEntity(selection);
   };
@@ -125,23 +125,10 @@ function StationDetails({ station, inspect }: { station: Station; inspect: (sele
   </>;
 }
 
-export function WarehouseInspector({
-  entity, job, inspect, close, restoreFocus, onWarehouse, lastConfirmedTick, canInspectAssigned = true,
-}: {
-  entity: Entity | null; job?: Job; inspect: (selection: Selection) => void; close: () => void; restoreFocus: () => void;
-  onWarehouse?: () => void; lastConfirmedTick?: number; canInspectAssigned?: boolean;
-}) {
-  const titleId = useId();
+export function useInspectorDialog(id: string | undefined, kind: string | undefined, close: () => void, restoreFocus: () => void) {
   const dialog = useRef<HTMLDialogElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const content = useRef<HTMLDivElement>(null);
-  const last = useRef<{ entity: Entity; job?: Job } | null>(null);
-  useLayoutEffect(() => {
-    if (entity) last.current = { entity, job };
-  }, [entity, job]);
-  const current = entity ? { entity, job } : last.current;
-  const id = entity?.kind === "robot" ? entity.robot.id : entity?.kind === "job" ? entity.job.id : entity?.station.id;
-  const kind = entity?.kind;
 
   useLayoutEffect(() => {
     const panel = dialog.current;
@@ -184,6 +171,26 @@ export function WarehouseInspector({
     document.addEventListener("keydown", dismiss);
     return () => document.removeEventListener("keydown", dismiss);
   }, [id, close]);
+
+  return { dialog, heading, content };
+}
+
+export function WarehouseInspector({
+  entity, job, inspect, close, restoreFocus, onWarehouse, lastConfirmedTick, canInspectAssigned = true,
+}: {
+  entity: Entity | null; job?: Job; inspect: (selection: Selection) => void; close: () => void; restoreFocus: () => void;
+  onWarehouse?: () => void; lastConfirmedTick?: number; canInspectAssigned?: boolean;
+}) {
+  const titleId = useId();
+  const last = useRef<{ entity: Entity; job?: Job } | null>(null);
+  useLayoutEffect(() => {
+    if (entity) last.current = { entity, job };
+  }, [entity, job]);
+  const current = entity ? { entity, job } : last.current;
+  const id = entity?.kind === "robot" ? entity.robot.id : entity?.kind === "job" ? entity.job.id : entity?.station.id;
+  const kind = entity?.kind;
+
+  const { dialog, heading, content } = useInspectorDialog(id, kind, close, restoreFocus);
 
   const detail = current?.entity;
   const title = detail && { robot: "Robot details", job: "Job details", station: "Charger details" }[detail.kind];

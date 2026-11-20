@@ -170,6 +170,37 @@ describe("Warehouse V2 stream lifecycle", () => {
     expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "live", frame: expect.objectContaining({ eventId: 6 }) }));
   });
 
+  it("retains the last confirmed Operations event until the reconnect snapshot replaces it", async () => {
+    const request = mockSession();
+    request.mockResolvedValueOnce(json(status())).mockResolvedValueOnce(json(status(generation, 1)));
+    const emit = vi.fn();
+    subscriptions.push(subscribeWarehouse(emit, vi.fn()).close);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const first = FakeSource.opened[0];
+    first.send("snapshot", wire());
+    const observed = { observationId: runtimeId, observedAt: "2026-11-19T00:00:00Z", tick: 0,
+      stage: "observed", status: "observed", recorded: false };
+    const operationsFrame = { ...wire(2), operationsActivity: [observed] };
+    first.send("operations", operationsFrame);
+    first.send("operations", wire(2));
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
+      phase: "live", frame: expect.objectContaining({ eventId: 2, operations: [observed] }),
+    }));
+    first.send("tick", wire(4, 1));
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
+      phase: "reconnecting", frame: expect.objectContaining({ operations: [observed] }),
+    }));
+    await vi.advanceTimersByTimeAsync(2000);
+
+    const finished = { ...observed, stage: "finished", status: "budget_denied", recorded: true };
+    const replacementFrame = { ...wire(4, 1), operationsActivity: [finished] };
+    FakeSource.opened[1].send("snapshot", replacementFrame);
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
+      phase: "live", frame: expect.objectContaining({ operations: [finished] }),
+    }));
+  });
+
   it("rechecks a silent running stream while allowing a paused stream to stay idle", async () => {
     const request = mockSession();
     request.mockResolvedValueOnce(json(status()));

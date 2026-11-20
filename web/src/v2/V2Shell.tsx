@@ -3,11 +3,14 @@ import { DemoError, selectScenario } from "../restart";
 import type { ScenarioID } from "../scenarios";
 import { allowsWarehouseAction, subscribeWarehouse, type WarehouseAction, type WarehouseFeed } from "./session";
 import { EntityDirectory } from "./EntityDirectory";
+import { OperationsAI } from "./OperationsAI";
+import { operationsModeLabel } from "./telemetry";
 import { Warehouse } from "./Warehouse";
 import { Icon } from "./WarehouseIcon";
 import { findEntity, type Selection } from "./warehousePresentation";
 import "./styles.css";
 import "./directory.css";
+import "./operations.css";
 
 const pages = ["Warehouse", "Fleet", "Jobs", "Operations AI"] as const;
 const pageIcons = { Warehouse: "building-warehouse", Fleet: "robot", Jobs: "clipboard-list", "Operations AI": "activity" } as const;
@@ -41,11 +44,6 @@ const connectionLabel = {
   unavailable: "Warehouse V2 is unavailable. Retrying session status…",
   expired: "Visitor session ended. Clear this site's cookies to begin a new visit.",
 };
-const modeLabel = {
-  deterministic: "Deterministic dispatch",
-  checking_assistance: "Checking AI assistance",
-  ai_assisted: "AI-assisted dispatch",
-} as const;
 
 const pendingLabel: Record<WarehouseAction, string> = {
   play: "Starting…", pause: "Pausing…", stop: "Stopping…", restart: "Restarting…",
@@ -76,7 +74,7 @@ function Toolbar({ page, feed, returning, onControl }: {
   return <header className="v2-toolbar">
     <div className="v2-page-title"><span>FleetOps</span><span aria-hidden="true">/</span><h1>{page}</h1></div>
     <div className="v2-toolbar-state">
-      {live && feed.frame && <span className="v2-mode" data-tone={feed.frame.mode === "ai_assisted" ? "assisted" : undefined}><Icon name="activity" size={16} />{modeLabel[feed.frame.mode]}</span>}
+      {page !== "Operations AI" && live && feed.frame && <span className="v2-mode" data-tone={feed.frame.mode === "ai_assisted" ? "assisted" : undefined}><Icon name="activity" size={16} />{operationsModeLabel[feed.frame.mode]}</span>}
       <p className={'v2-connection v2-connection-' + feed.phase + (live && running ? ' is-running' : '')} role="status">
         {live && state ? "Simulation " + state
           : feed.pending && feed.phase === "reconnecting" && !feed.controlWarning ? "Confirming with Go…" : connectionLabel[feed.phase]}
@@ -134,10 +132,7 @@ function SessionView({ returning, returnError, onReturn, onControl }: SessionAct
       <Warehouse frame={feed.frame} selection={selection} selectEntity={selectEntity} viewFleet={() => navigate("Fleet")} hidden={page !== "Warehouse"} />
       {(page === "Fleet" || page === "Jobs") && <EntityDirectory key={page} page={page} feed={feed}
         selection={selection} selectEntity={selectEntity} viewWarehouse={() => navigate("Warehouse")} inspectRelated={inspectRelated} />}
-      {page === "Operations AI" && <section className="v2-panel v2-empty" aria-label={page}>
-        <h2>{page}</h2><p>This view is planned for a later phase of the frontend rebuild.</p>
-        <button type="button" className="v2-inspector-link" onClick={() => navigate("Warehouse")}>Return to Warehouse</button>
-      </section>}
+      {page === "Operations AI" && <OperationsAI feed={feed} inspect={inspectRelated} />}
     </main>
   </div>;
 }
