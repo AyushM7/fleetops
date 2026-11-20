@@ -159,6 +159,14 @@ all passed. The known Phase 2 soak failure was not changed or rerun. Existing
 approved P3-07 working-tree changes are preserved. No new package dependencies
 or lockfile changes are needed.
 
+## Warehouse V2 appearance
+
+V2 surface, text, border, focus, selection, and status tokens live in
+[`src/v2/theme.css`](src/v2/theme.css). The rail and toolbar frame solid
+dashboard panels and a recessed map. The docked inspector is opaque. The
+floating inspector uses a near-opaque surface when contrast and transparency
+preferences allow it. Keep status colors paired with an activity label or glyph.
+
 ## Warehouse V2 map and inspector
 
 - **Find entity** opens details for any robot, charger, or job in the current

@@ -1,0 +1,104 @@
+.v2-shell {
+  color-scheme: dark;
+  --v2-bg: #101824;
+  --v2-rail: #152130;
+  --v2-toolbar: #192638;
+  --v2-panel: #1e2b3d;
+  --v2-raised: #27384e;
+  --v2-inspector: #26364b;
+  --v2-inspector-card: #2b3e56;
+  --v2-float-surface: var(--v2-inspector);
+  --v2-float-shadow: 0 12px 32px #080f1c99;
+  --v2-popup-shadow: 0 6px 20px #080f1c88;
+  --v2-scrim: #080f1bb3;
+
+  --v2-text: #eff5fd;
+  --v2-muted: #b9c8da;
+  --v2-border: #394c63;
+  --v2-control-border: #627991;
+  --v2-inspector-border: #4b627c;
+  --v2-focus: #dbe9ff;
+  --v2-selected: #294469;
+  --v2-selection-ink: #94bbff;
+  --v2-hover: #30445f;
+  --v2-pressed: #35527c;
+  --v2-disabled-ink: #93a4b9;
+  --v2-disabled-fill: #1a2636;
+
+  --v2-moving: #7cd7e4;
+  --v2-charging: #86d8ab;
+  --v2-waiting: #eac07d;
+  --v2-fault: #fa9d9d;
+  --v2-assisted: #c7aff1;
+  --v2-moving-wash: #213944;
+  --v2-charging-wash: #223931;
+  --v2-waiting-wash: #3a332b;
+  --v2-fault-wash: #402e36;
+  --v2-moving-fill: #2d4b55;
+  --v2-charging-fill: #2e4c3c;
+  --v2-waiting-fill: #4f3d29;
+  --v2-fault-fill: #55333a;
+
+  --v2-plot: #141e2a;
+  --v2-floor: #273038;
+  --v2-aisle: #2b363e;
+  --v2-wall: #36424c;
+  --v2-map-grid: #3a4753;
+  --v2-wall-line: #4d5c69;
+  --v2-floor-edge: #677c90;
+  --v2-fixture-fill: #2d3a46;
+  --v2-fixture-edge: #72869a;
+  --v2-marker-fill: #344453;
+  --v2-maintenance-fill: #3a4c5d;
+  --v2-marker-edge: #8297aa;
+  --v2-meter-track: #3a4b60;
+  --v2-meter-fill: #a0b8cf;
+}
+
+.v2-shell [data-tone="moving"] { --tone: var(--v2-moving); --tone-wash: var(--v2-moving-wash); --tone-fill: var(--v2-moving-fill); }
+.v2-shell [data-tone="charging"] { --tone: var(--v2-charging); --tone-wash: var(--v2-charging-wash); --tone-fill: var(--v2-charging-fill); }
+.v2-shell [data-tone="waiting"] { --tone: var(--v2-waiting); --tone-wash: var(--v2-waiting-wash); --tone-fill: var(--v2-waiting-fill); }
+.v2-shell [data-tone="fault"] { --tone: var(--v2-fault); --tone-wash: var(--v2-fault-wash); --tone-fill: var(--v2-fault-fill); }
+.v2-shell [data-tone="assisted"] { --tone: var(--v2-assisted); }
+
+@media (prefers-reduced-transparency: no-preference) and (prefers-contrast: no-preference) {
+  .v2-shell { --v2-float-surface: color-mix(in srgb, var(--v2-inspector) 95%, transparent); }
+}
+
+@media (prefers-contrast: more) {
+  .v2-shell {
+    --v2-text: #fff;
+    --v2-muted: #e1ecfa;
+    --v2-border: #859bb4;
+    --v2-control-border: #a5bed9;
+    --v2-inspector-border: var(--v2-control-border);
+    --v2-floor-edge: #9aafc3;
+    --v2-map-grid: #546773;
+    --v2-wall-line: #697d8f;
+    --v2-fixture-edge: #a6bad0;
+    --v2-marker-edge: var(--v2-fixture-edge);
+    --v2-focus: #fff;
+    --v2-selection-ink: #bad5ff;
+  }
+}
+
+@media (forced-colors: active) {
+  .v2-shell {
+    --v2-focus: Highlight;
+    --v2-selection-ink: Highlight;
+    --v2-text: CanvasText;
+    --v2-muted: CanvasText;
+    --v2-floor: Canvas;
+    --v2-aisle: Canvas;
+    --v2-wall: Canvas;
+    --v2-map-grid: GrayText;
+    --v2-wall-line: CanvasText;
+    --v2-floor-edge: CanvasText;
+    --v2-fixture-fill: Canvas;
+    --v2-fixture-edge: CanvasText;
+    --v2-marker-fill: Canvas;
+    --v2-maintenance-fill: Canvas;
+    --v2-marker-edge: CanvasText;
+  }
+  .v2-shell [data-tone] { --tone: CanvasText; --tone-fill: Canvas; }
+}

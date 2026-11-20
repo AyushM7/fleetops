@@ -108,18 +108,22 @@ export function WarehouseInspector({ entity, job, inspect, close }: {
       return;
     }
     const narrow = window.matchMedia("(max-width: 1179px)");
-    function sync() {
+    function sync(target: HTMLElement | null) {
       if (!panel) return;
       if (!panel.open || panel.matches(":modal") !== narrow.matches) {
         if (panel.open) panel.close();
         if (narrow.matches) panel.showModal();
         else panel.show();
       }
-      heading.current?.focus({ preventScroll: true });
+      target?.focus({ preventScroll: true });
     }
-    sync();
-    narrow.addEventListener("change", sync);
-    return () => narrow.removeEventListener("change", sync);
+    function changePresentation() {
+      const focused = document.activeElement;
+      sync(focused instanceof HTMLElement && panel?.contains(focused) ? focused : heading.current);
+    }
+    sync(heading.current);
+    narrow.addEventListener("change", changePresentation);
+    return () => narrow.removeEventListener("change", changePresentation);
   }, [id, kind]);
 
   const detail = current?.entity;

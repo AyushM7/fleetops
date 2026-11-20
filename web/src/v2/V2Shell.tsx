@@ -80,7 +80,8 @@ function Toolbar({ page, feed, returning, onControl }: {
           : feed.pending && feed.phase === "reconnecting" && !feed.controlWarning ? "Confirming with Go…" : connectionLabel[feed.phase]}
       </p>
       {!live && state && <span>Last confirmed: {state}</span>}
-      <span id="v2-control-note" className="v2-control-note" role="status">{feedback}</span>
+      <span id="v2-control-note" className="v2-control-note" role="status"
+        data-feedback={warning ? "unconfirmed" : feed.pending ? "pending" : undefined}>{feedback}</span>
     </div>
     <div className="v2-sim-controls" role="group" aria-label="Simulation controls" aria-describedby="v2-control-note">
       <button type="button" aria-disabled={blocked(primary)} onClick={() => trigger(primary)}>

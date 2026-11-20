@@ -70,6 +70,8 @@ describe("Warehouse V2", () => {
     expect(output.match(/aria-label="C\d charging station/g)).toHaveLength(4);
     expect(output.match(/aria-label="Inspect R\d/g)).toHaveLength(11);
     expect(output).toContain('aria-label="R11 maintenance robot, Parked, battery 89%"');
+    expect(output).toContain('data-status-glyph="moving" aria-hidden="true"');
+    expect(output).toContain('data-status-glyph="charging" aria-hidden="true"');
     expect(output).not.toContain("Pickup for");
   });
 

@@ -93,8 +93,12 @@ function RobotMarker({ robot, selection, pick, label, visible }: MarkerProps & {
     {label && (maintenance && centered
       ? <text className="v2-robot-id" style={{ fontSize: label.font }} textAnchor="middle" dominantBaseline="central">{robot.id}</text>
       : <Label id={robot.id} label={label} robot />)}
-    {tone === "waiting" && <circle className="v2-marker-wait" cx={0.36} cy={-0.31} r={0.085} />}
-    {tone === "fault" && <path className="v2-marker-fault" d="M .29 -.4 l .17 .17 m 0 -.17 l -.17 .17" />}
+    {tone && <g className="v2-status-glyph" data-status-glyph={tone} aria-hidden="true">
+      {tone === "waiting" && <circle cx={0.36} cy={-0.31} r={0.085} />}
+      {tone === "moving" && <path d="M .24 -.41 h .20 M .30 -.32 h .20" />}
+      {tone === "charging" && <path d="M .39 -.45 l -.10 .12 h .11 l -.05 .12" />}
+      {tone === "fault" && <path d="M .29 -.4 l .17 .17 m 0 -.17 l -.17 .17" />}
+    </g>}
   </MapTarget>;
 }
 
