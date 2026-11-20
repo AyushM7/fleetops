@@ -4,8 +4,7 @@ import type { MastraModelConfig } from "@mastra/core/llm";
 import { z } from "zod";
 import { resolveEvaluationModel } from "./evaluation-investigation-model.js";
 
-export const operationsModelId = "gpt-6-luna";
-export const operationsOutputLimit = 768;
+import { operationsModelId, operationsOutputLimit } from "./operations-fetch.js";
 
 const jobId = z.string().regex(/^J[1-9][0-9]{0,18}$/);
 const transportId = z.string().regex(/^R([1-9]|10)$/);
@@ -40,12 +39,12 @@ const instructions = [
 
 export type OperationsModelResult = {
   decision?: z.infer<typeof decisionSchema>["decision"];
-  failure?: "invalid_output" | "model_unavailable";
+  failure?: "invalid_output" | "model_unavailable" | "billing_anomaly";
   usage?: { model: string; inputTokens: number; outputTokens: number };
 };
 
 export async function makeOperationsDecision(observation: string, model: MastraModelConfig,
-  abortSignal: AbortSignal): Promise<OperationsModelResult> {
+  abortSignal: AbortSignal, expectedModel?: string): Promise<OperationsModelResult> {
   if (Buffer.byteLength(observation) > 48 * 1024 || abortSignal.aborted) return { failure: "model_unavailable" };
   const agent = new Agent({
     id: "fleetops-operations", name: "FleetOps Operations Manager", instructions,
@@ -54,19 +53,30 @@ export async function makeOperationsDecision(observation: string, model: MastraM
   agent.__setLogger(noopLogger);
   try {
     let reportedModel: string | undefined;
+    let knownUnexpectedBilling = false;
     const response = await agent.generate(observation, {
       maxSteps: 1, activeTools: [], toolChoice: "none", abortSignal,
       modelSettings: { maxOutputTokens: operationsOutputLimit, maxRetries: 0 },
-      providerOptions: { openai: { store: false, serviceTier: "default", reasoningEffort: "none" } },
+      providerOptions: { openai: { store: false, serviceTier: "default", reasoningEffort: "none", strictJsonSchema: true } },
       structuredOutput: { schema: decisionSchema, errorStrategy: "warn" },
-      onStepFinish: step => { reportedModel = step.response.modelId; },
+      onStepFinish: step => {
+        reportedModel = step.response.modelId;
+        const metadata = step.providerMetadata?.openai;
+        const tier = metadata?.serviceTier;
+        const details = metadata?.usage;
+        knownUnexpectedBilling = (reportedModel !== undefined && reportedModel !== expectedModel) ||
+          (typeof tier === "string" && tier !== "default" && tier !== "standard") ||
+          (typeof details === "object" && details !== null &&
+            Object.entries(details).some(([key, value]) => key.startsWith("orchestration") && value !== 0));
+      },
     });
+    if (expectedModel && knownUnexpectedBilling) return { failure: "billing_anomaly" };
     const { inputTokens, outputTokens, totalTokens } = response.totalUsage;
     const usage = reportedModel === operationsModelId && inputTokens !== undefined && outputTokens !== undefined &&
       Number.isSafeInteger(inputTokens) && inputTokens > 0 && Number.isSafeInteger(outputTokens) &&
       outputTokens >= 0 && inputTokens + outputTokens === totalTokens ? { model: reportedModel, inputTokens, outputTokens } : undefined;
     const parsed = decisionSchema.safeParse(response.object);
-    return parsed.success ? { decision: parsed.data.decision, usage } : { failure: "invalid_output", usage };
+    return parsed.success && response.finishReason === "stop" ? { decision: parsed.data.decision, usage } : { failure: "invalid_output", usage };
   } catch {
     // SDK errors and raw model output can contain secrets and private reasoning.
     return { failure: "model_unavailable" };
@@ -78,7 +88,7 @@ export async function makeOpenAIOperationsDecision(observation: string, permit: 
   signal: AbortSignal): Promise<OperationsModelResult> {
   try {
     const model = await resolveEvaluationModel(operationsModelId, operationsOutputLimit, permit);
-    return await makeOperationsDecision(observation, model, signal);
+    return await makeOperationsDecision(observation, model, signal, operationsModelId);
   } catch {
     return { failure: "model_unavailable" };
   }
