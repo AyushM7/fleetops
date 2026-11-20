@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { Icon } from "./WarehouseIcon";
-import { activityLabels, chargerStatus, jobLabels, type Entity, type Selection } from "./warehousePresentation";
+import { chargerStatus, jobLabels, robotActivityLabel, robotTone, type Entity, type RobotTone, type Selection } from "./warehousePresentation";
 import type { Job, Point, Robot, Station } from "./telemetry";
 
 const cell = (point: Point) => "Cell " + point.x + ", " + point.y;
@@ -23,13 +23,20 @@ function JobEndpoints({ job }: { job: Job }) {
   </dl>;
 }
 
+function ActivityChip({ tone, children }: { tone?: RobotTone; children: ReactNode }) {
+  const icons = { moving: "activity", charging: "bolt", waiting: "clock", fault: "x" } as const;
+  return <span className="v2-status-chip" data-tone={tone}>
+    {tone && <Icon name={icons[tone]} size={13} />}{children}
+  </span>;
+}
+
 function RobotDetails({ robot, job, inspect }: { robot: Robot; job?: Job; inspect: (selection: Selection) => void }) {
   const status = robot.status.charAt(0).toUpperCase() + robot.status.slice(1);
   return <>
     <Identity title={robot.id} subtitle={robot.role === "maintenance" ? "Maintenance robot" : "Transport robot"} icon="robot" />
     <dl className="v2-inspector-group">
       <Detail label="Status">{status}</Detail>
-      <Detail label="Activity">{activityLabels[robot.activity]}</Detail>
+      <Detail label="Activity"><ActivityChip tone={robotTone(robot)}>{robotActivityLabel(robot)}</ActivityChip></Detail>
       <Detail label="Battery"><strong>{robot.battery}%</strong></Detail>
     </dl>
     <meter className="v2-battery" min={0} max={100} value={robot.battery} aria-label={robot.id + " battery"} />
@@ -55,7 +62,7 @@ function JobDetails({ job, inspect }: { job: Job; inspect: (selection: Selection
       <Detail label="Status">{jobLabels[job.status]}</Detail>
       <Detail label="Assigned robot">{job.assignedRobot || "Unassigned"}</Detail>
       {job.deadlineTick !== undefined && <Detail label="Deadline">
-        <span className={overdue ? "v2-amber" : undefined}>Tick {job.deadlineTick}{overdue ? " · Overdue" : ""}</span>
+        <span className={overdue ? "v2-overdue" : undefined}>Tick {job.deadlineTick}{overdue ? " · Overdue" : ""}</span>
       </Detail>}
     </dl>
     <div className="v2-inspector-group"><JobEndpoints job={job} /></div>
@@ -69,7 +76,7 @@ function StationDetails({ station, inspect }: { station: Station; inspect: (sele
   return <>
     <Identity title={station.id} subtitle="Charging station" icon="bolt" />
     <dl className="v2-inspector-group">
-      <Detail label="Status">{chargerStatus(station)}</Detail>
+      <Detail label="Status"><ActivityChip tone={station.occupiedBy ? "charging" : undefined}>{chargerStatus(station)}</ActivityChip></Detail>
       <Detail label="Location">{cell(station)}</Detail>
       <Detail label="Occupied by">{station.occupiedBy || "—"}</Detail>
       <Detail label="Reserved for">{station.reservedBy || "—"}</Detail>
@@ -81,24 +88,56 @@ function StationDetails({ station, inspect }: { station: Station; inspect: (sele
 }
 
 export function WarehouseInspector({ entity, job, inspect, close }: {
-  entity: Entity; job?: Job; inspect: (selection: Selection) => void; close: () => void;
+  entity: Entity | null; job?: Job; inspect: (selection: Selection) => void; close: () => void;
 }) {
+  const dialog = useRef<HTMLDialogElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
-  const id = entity.kind === "robot" ? entity.robot.id : entity.kind === "job" ? entity.job.id : entity.station.id;
-  useLayoutEffect(() => { heading.current?.focus({ preventScroll: true }); }, [entity.kind, id]);
+  const last = useRef<{ entity: Entity; job?: Job } | null>(null);
+  useLayoutEffect(() => {
+    if (entity) last.current = { entity, job };
+  }, [entity, job]);
+  const current = entity ? { entity, job } : last.current;
+  const id = entity?.kind === "robot" ? entity.robot.id : entity?.kind === "job" ? entity.job.id : entity?.station.id;
+  const kind = entity?.kind;
 
-  const title = { robot: "Robot details", job: "Job details", station: "Charger details" }[entity.kind];
-  return <aside className="v2-panel v2-inspector" aria-labelledby="v2-inspector-title">
-    <header className="v2-panel-title">
-      <h2 id="v2-inspector-title" ref={heading} tabIndex={-1}>{title}</h2>
-      <button type="button" className="v2-map-control v2-inspector-close" aria-label="Close inspector" title="Close inspector" onClick={close}>
-        <Icon name="x" size={17} />
-      </button>
-    </header>
-    <div className="v2-inspector-content">
-      {entity.kind === "robot" && <RobotDetails robot={entity.robot} job={job} inspect={inspect} />}
-      {entity.kind === "job" && <JobDetails job={entity.job} inspect={inspect} />}
-      {entity.kind === "station" && <StationDetails station={entity.station} inspect={inspect} />}
-    </div>
-  </aside>;
+  useLayoutEffect(() => {
+    const panel = dialog.current;
+    if (!panel) return;
+    if (!id) {
+      if (panel.open) panel.close();
+      return;
+    }
+    const narrow = window.matchMedia("(max-width: 1179px)");
+    function sync() {
+      if (!panel) return;
+      if (!panel.open || panel.matches(":modal") !== narrow.matches) {
+        if (panel.open) panel.close();
+        if (narrow.matches) panel.showModal();
+        else panel.show();
+      }
+      heading.current?.focus({ preventScroll: true });
+    }
+    sync();
+    narrow.addEventListener("change", sync);
+    return () => narrow.removeEventListener("change", sync);
+  }, [id, kind]);
+
+  const detail = current?.entity;
+  const title = detail && { robot: "Robot details", job: "Job details", station: "Charger details" }[detail.kind];
+  return <dialog ref={dialog} className="v2-panel v2-inspector" inert={!entity} aria-labelledby={detail ? "v2-inspector-title" : undefined}
+    onCancel={event => { event.preventDefault(); close(); }}>
+    {detail && <>
+      <header className="v2-panel-title">
+        <h2 id="v2-inspector-title" ref={heading} tabIndex={-1}>{title}</h2>
+        <button type="button" className="v2-map-control v2-inspector-close" aria-label="Close inspector" title="Close inspector" onClick={close}>
+          <Icon name="x" size={17} />
+        </button>
+      </header>
+      <div className="v2-inspector-content">
+        {detail.kind === "robot" && <RobotDetails robot={detail.robot} job={current.job} inspect={inspect} />}
+        {detail.kind === "job" && <JobDetails job={detail.job} inspect={inspect} />}
+        {detail.kind === "station" && <StationDetails station={detail.station} inspect={inspect} />}
+      </div>
+    </>}
+  </dialog>;
 }

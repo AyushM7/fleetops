@@ -159,9 +159,18 @@ all passed. The known Phase 2 soak failure was not changed or rerun. Existing
 approved P3-07 working-tree changes are preserved. No new package dependencies
 or lockfile changes are needed.
 
-## Warehouse V2 polish follow-ups
+## Warehouse V2 map and inspector
 
-- At a 390 px viewport, robot IDs on the fitted map measure about 6.33 px.
-  Zoom increases map label size, and fleet-strip IDs remain 14 px.
-- A robot in the cell directly below a charger can partially cover the charger
-  caption. Chrome reproduced this with R10 directly below C4.
+- **Find entity** opens details for any robot, charger, or job in the current
+  snapshot, including those offscreen. It leaves the camera in place.
+- Robot and charger labels have an 11 px screen-space minimum. When no readable
+  placement is available, the marker stays at its actual cell and the entity
+  remains available in **Find entity**. Reservation details appear in the
+  charger inspector.
+- Selection preserves manual pan and zoom. The desktop inspector can clip the
+  right edge of a manually framed view. **Fit warehouse map** reframes the room
+  explicitly. Below 1180 px the inspector uses a modal overlay, with Escape and
+  Close returning focus to the opener.
+- After a missing command acknowledgment, the toolbar reports Go's confirmed
+  state and retains the acknowledgment message until the next user command.
+  The client sends no automatic command retry.

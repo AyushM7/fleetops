@@ -14,6 +14,24 @@ export const activityLabels: Record<Robot["activity"], string> = {
   PARKED: "Parked", FAULTED: "Faulted", OUT_OF_SERVICE: "Out of service",
 };
 
+export type RobotTone = "moving" | "charging" | "waiting" | "fault";
+
+export function robotTone(robot: Robot): RobotTone | undefined {
+  if (robot.status === "faulted" || robot.status === "offline" ||
+      robot.activity === "FAULTED" || robot.activity === "OUT_OF_SERVICE") return "fault";
+  if (robot.blocked || robot.activity === "WAITING_FOR_TRAFFIC") return "waiting";
+  if (robot.activity === "CHARGING") return "charging";
+  if (robot.status === "moving") return "moving";
+}
+
+export function robotActivityLabel(robot: Robot): string {
+  if (robot.status === "offline") return "Offline";
+  if (robot.status === "faulted") return "Faulted";
+  if (robot.activity === "FAULTED" || robot.activity === "OUT_OF_SERVICE") return activityLabels[robot.activity];
+  if (robot.blocked) return "Traffic wait";
+  return activityLabels[robot.activity];
+}
+
 export const jobLabels: Record<Job["status"], string> = {
   pending: "Pending", assigned: "Assigned", in_progress: "In progress", done: "Completed",
 };

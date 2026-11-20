@@ -338,7 +338,7 @@ describe("Warehouse V2 simulation controls", () => {
     await session.control("play", generation);
     expect(paths(request)).toEqual(["/demo/status", "/demo/restart", "/demo/status"]);
     expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
-      phase: "live", pending: null, controlWarning: "Result unconfirmed", frame: expect.objectContaining({ state: "stopped", generation }),
+      phase: "live", pending: null, controlWarning: "restart", frame: expect.objectContaining({ state: "stopped", generation }),
     }));
   });
 
@@ -349,7 +349,7 @@ describe("Warehouse V2 simulation controls", () => {
     await session.control("play", generation);
     await vi.advanceTimersByTimeAsync(0);
     expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
-      phase: "reconnecting", frame: null, controlWarning: "Result unconfirmed",
+      phase: "reconnecting", frame: null, controlWarning: "play",
     }));
     FakeSource.opened[0].send("tick", sample("running", 2, 1));
     FakeSource.opened[1].send("snapshot", sample("paused", 1, 0, replacement));
@@ -375,14 +375,14 @@ describe("Warehouse V2 simulation controls", () => {
     await vi.advanceTimersByTimeAsync(1);
     await play;
     expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
-      phase: "unavailable", frame: expect.objectContaining({ state: "paused" }), controlWarning: "Result unconfirmed",
+      phase: "unavailable", frame: expect.objectContaining({ state: "paused" }), controlWarning: "play",
     }));
     await session.control("restart", generation);
     await vi.advanceTimersByTimeAsync(2000);
     expect(session.canControl(generation)).toBe(false);
     FakeSource.opened[1].send("snapshot", sample("running", 4, 2));
     expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
-      phase: "live", pending: null, controlWarning: "Result unconfirmed", frame: expect.objectContaining({ state: "running" }),
+      phase: "live", pending: null, controlWarning: "play", frame: expect.objectContaining({ state: "running" }),
     }));
     expect(paths(request)).toEqual(["/demo/status", "/demo/play", "/demo/status", "/demo/status"]);
     expect(session.canControl(generation)).toBe(true);
@@ -399,8 +399,15 @@ describe("Warehouse V2 simulation controls", () => {
     FakeSource.opened[1].send("snapshot", sample("paused", 2));
     expect(paths(request)).toEqual(["/demo/status", "/demo/pause", "/demo/status"]);
     expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({
-      phase: "live", pending: null, controlWarning: "Result unconfirmed", frame: expect.objectContaining({ state: "paused" }),
+      phase: "live", pending: null, controlWarning: "pause", frame: expect.objectContaining({ state: "paused" }),
     }));
+
+    request.mockResolvedValueOnce(json(runStatus("paused")));
+    FakeSource.opened[1].onerror?.();
+    await vi.advanceTimersByTimeAsync(2000);
+    FakeSource.opened[2].send("snapshot", sample("paused", 2));
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "live", controlWarning: "pause" }));
+    expect(paths(request)).toEqual(["/demo/status", "/demo/pause", "/demo/status", "/demo/status"]);
   });
 
   it.each(["paused", "running"] as const)("keeps %s separate from connection loss and locks controls during reconnect", async state => {

@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import V2Shell from "./V2Shell";
 import { Warehouse } from "./Warehouse";
 import { fitWarehouseCamera } from "./WarehouseMap";
-import { warehouseCounts, type Selection } from "./warehousePresentation";
+import { mapTargetVisible, placeMapLabels } from "./warehouseLabels";
+import { robotActivityLabel, robotTone, warehouseCounts, type Selection } from "./warehousePresentation";
 import type { Job, Layout, Robot, Station, WarehouseFrame } from "./telemetry";
 
 const stations: Station[] = [1, 6, 12, 18].map((x, index) => ({
@@ -52,7 +53,8 @@ describe("Warehouse V2", () => {
     const output = render();
     for (const label of ["Completed deliveries", "Priority overdue", "Charging robots", "Warehouse map"]) expect(output).toContain(label);
     expect(output).toContain("<dd>18</dd>");
-    expect(output).toContain('<dd class="v2-amber">1</dd>');
+    expect(output).toMatch(/v2-metric" data-tone="fault".*?Priority overdue<\/dt><dd>1<\/dd>/);
+    expect(output).toMatch(/v2-metric" data-tone="charging".*?Charging robots<\/dt><dd>1<\/dd>/);
     expect(output).not.toContain("Robot details");
   });
 
@@ -78,10 +80,12 @@ describe("Warehouse V2", () => {
       .toBe(overview.match(/data-testid="warehouse-floor" transform="[^"]+"/)?.[0]);
     expect(selected).toContain("Robot details");
     expect(selected).toMatch(/aria-label="R8, Delivering, battery 21%" aria-pressed="true"/);
-    expect(selected).toMatch(/aria-pressed="true" aria-label="Inspect R8"/);
+    expect(selected).toMatch(/aria-pressed="true" data-tone="moving" aria-label="Inspect R8"/);
     expect(selected).toContain('aria-label="Pickup for J18"');
     expect(selected).toContain('aria-label="Drop-off for J18"');
     expect(selected).toContain("View job");
+    expect(selected).toContain('class="v2-status-chip" data-tone="moving"');
+    expect(selected).toContain('<dialog class="v2-panel v2-inspector" aria-labelledby="v2-inspector-title">');
   });
 
   it("keeps a job marker visible within its real cell when a robot occupies the center", () => {
@@ -100,6 +104,8 @@ describe("Warehouse V2", () => {
     const charger = render({ kind: "station", id: "C2" });
     expect(charger).toContain("Charger details");
     expect(charger).toContain("Reserved for");
+    expect(charger).not.toContain("C2 · Reserved");
+    expect(charger).toContain("C2 charging station, Reserved");
     expect(charger).toContain("Inspect R2");
     expect(render({ kind: "job", id: "missing" })).not.toContain("Job details");
   });
@@ -113,6 +119,41 @@ describe("Warehouse V2", () => {
     const mobile = fitWarehouseCamera(layout, 366, 260);
     expect(mobile.x).toBe(12);
     expect(mobile.x + mobile.scale * layout.width).toBe(354);
+  });
+
+  it("maps confirmed activity with fault and traffic taking precedence over moving", () => {
+    expect(robotTone(robots[0])).toBe("charging");
+    expect(robotTone(robots[7])).toBe("moving");
+    expect(robotTone(robots[2])).toBeUndefined();
+    const waiting = { ...robots[7], blocked: true };
+    const fault = { ...waiting, status: "offline" } as const;
+    expect(robotTone(waiting)).toBe("waiting");
+    expect(robotActivityLabel(waiting)).toBe("Traffic wait");
+    expect(robotTone(fault)).toBe("fault");
+    expect(robotActivityLabel(fault)).toBe("Offline");
+  });
+
+  it("keeps phone-fit labels readable without overlapping a charger caption", () => {
+    const bounds = { width: 365, height: 230 };
+    const camera = fitWarehouseCamera(layout, bounds.width, bounds.height);
+    const crowded = [ { ...robots[7], x: 1, y: 1 }, { ...robots[10], x: 2, y: 1 } ];
+    const labels = placeMapLabels(crowded, [stations[0]], camera, bounds);
+    const charger = labels.get("C1");
+    const robot = labels.get("R8");
+    expect(labels.size).toBe(3);
+    expect(robot!.font * camera.scale).toBe(11);
+    expect(charger!.font * camera.scale).toBe(11);
+    expect(charger!.y + charger!.height / 2).toBeLessThan(1 + robot!.y - robot!.height / 2);
+    expect(mapTargetVisible(crowded[0], { ...camera, x: -100 }, bounds)).toBe(false);
+  });
+
+  it("provides a map-independent finder for every kind of entity", () => {
+    const output = render();
+    expect(output).toContain("<summary>Find entity</summary>");
+    expect(output).toContain('aria-label="Robots"');
+    expect(output).toContain('aria-label="Chargers"');
+    expect(output).toContain('aria-label="Jobs"');
+    expect(output).toContain("<strong>J18</strong><span>In progress</span>");
   });
 
   it("keeps zoom and Fit named while waiting states show no fabricated totals or active simulation buttons", () => {

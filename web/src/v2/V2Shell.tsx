@@ -58,8 +58,14 @@ function Toolbar({ page, feed, returning, onControl }: {
   const primary = running ? "pause" : "play";
   const blocked = (action: WarehouseAction) =>
     !live || returning || !!feed.pending || state === undefined || !allowsWarehouseAction(state, action);
-  const feedback = feed.controlWarning ?? (feed.pending ? pendingLabel[feed.pending]
-    : state === "stopped" && live ? "Restart to play" : !live ? "Waiting for Go" : "");
+  const warning = feed.controlWarning;
+  const acknowledgment = warning && warning !== "run_changed"
+    ? warning[0].toUpperCase() + warning.slice(1) + " acknowledgment was not received."
+    : null;
+  const feedback = acknowledgment ? (live && state ? "Go reports " + state + ". " : "") + acknowledgment
+    : warning === "run_changed" ? "Run changed during confirmation."
+    : feed.pending ? pendingLabel[feed.pending]
+    : state === "stopped" && live ? "Restart to play" : !live ? "Waiting for Go" : "";
 
   function trigger(action: WarehouseAction): void {
     if (!blocked(action)) onControl(action);
@@ -68,7 +74,7 @@ function Toolbar({ page, feed, returning, onControl }: {
   return <header className="v2-toolbar">
     <div className="v2-page-title"><span>FleetOps</span><span aria-hidden="true">/</span><h1>{page}</h1></div>
     <div className="v2-toolbar-state">
-      {live && feed.frame && <span className="v2-mode"><Icon name="activity" size={16} />{modeLabel[feed.frame.mode]}</span>}
+      {live && feed.frame && <span className="v2-mode" data-tone={feed.frame.mode === "ai_assisted" ? "assisted" : undefined}><Icon name="activity" size={16} />{modeLabel[feed.frame.mode]}</span>}
       <p className={'v2-connection v2-connection-' + feed.phase + (live && running ? ' is-running' : '')} role="status">
         {live && state ? "Simulation " + state
           : feed.pending && feed.phase === "reconnecting" && !feed.controlWarning ? "Confirming with Go…" : connectionLabel[feed.phase]}

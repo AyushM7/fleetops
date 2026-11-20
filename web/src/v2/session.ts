@@ -19,7 +19,7 @@ export type WarehouseFeed = {
   status: Extract<WarehouseStatus, { ready: true }> | null;
   frame: WarehouseFrame | null;
   pending: WarehouseAction | null;
-  controlWarning: string | null;
+  controlWarning: WarehouseAction | "run_changed" | null;
 };
 
 const retryDelay = 2000;
@@ -52,7 +52,7 @@ export function subscribeWarehouse(emit: (feed: WarehouseFeed) => void, onLegacy
   let frame: WarehouseFrame | null = null;
   let phase: WarehouseFeed["phase"] = "connecting";
   let pending: PendingControl | null = null;
-  let controlWarning: string | null = null;
+  let controlWarning: WarehouseFeed["controlWarning"] = null;
 
   function publish(nextPhase: WarehouseFeed["phase"]): void {
     phase = nextPhase;
@@ -88,7 +88,7 @@ export function subscribeWarehouse(emit: (feed: WarehouseFeed) => void, onLegacy
         attempt.expectedGeneration = generation;
       }
     } catch {
-      controlWarning = "Result unconfirmed";
+      controlWarning = action;
       if (!lifetime.signal.aborted) publish("reconnecting");
     }
     // Read the current status and full snapshot even if the mutation response was lost.
@@ -130,7 +130,7 @@ export function subscribeWarehouse(emit: (feed: WarehouseFeed) => void, onLegacy
           reconciled = true;
           if (pending?.expectedGeneration &&
               (pending.expectedGeneration !== next.generation || expectedState[pending.action] !== next.state)) {
-            controlWarning = "Run changed during confirmation";
+            controlWarning = "run_changed";
           }
           pending = null;
         } else if (frame) {
