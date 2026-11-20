@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import V2Shell from "./V2Shell";
 import { Warehouse } from "./Warehouse";
-import { fitWarehouseCamera } from "./WarehouseMap";
+import { fitWarehouseCamera, mapDragIntent, reframeWarehouseCamera } from "./WarehouseMap";
 import { mapTargetVisible, placeMapLabels } from "./warehouseLabels";
 import { robotActivityLabel, robotTone, warehouseCounts, type Selection } from "./warehousePresentation";
 import type { Job, Layout, Robot, Station, WarehouseFrame } from "./telemetry";
@@ -113,6 +113,20 @@ describe("Warehouse V2", () => {
     expect(charger).toContain("C2 charging station, Reserved");
     expect(charger).toContain("Inspect R2");
     expect(render({ kind: "job", id: "missing" })).not.toContain("Job details");
+  });
+
+  it("preserves taps, gives vertical touch intent to native scroll, and starts map pans after movement", () => {
+    expect(mapDragIntent(2, 2, false)).toBe("pending");
+    expect(mapDragIntent(0, -3, false)).toBe("pan");
+    expect(mapDragIntent(7, 2, true)).toBe("pending");
+    expect(mapDragIntent(4, -9, true)).toBe("scroll");
+    expect(mapDragIntent(-8, 4, true)).toBe("pan");
+    expect(mapDragIntent(9, 9, true)).toBe("scroll");
+  });
+
+  it("keeps the pan offset and zoom relative to Fit after resizing", () => {
+    expect(reframeWarehouseCamera({ x: 30, y: 10, scale: 8 }, { x: 20, y: 16, scale: 4 }, { x: 8, y: 7, scale: 2 }))
+      .toEqual({ x: 13, y: 4, scale: 4 });
   });
 
   it("fits the real aspect ratio inside the inspector-safe viewport and explicitly centers Fit", () => {

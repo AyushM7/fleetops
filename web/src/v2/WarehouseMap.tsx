@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { Icon } from "./WarehouseIcon";
 import { chargerStatus, jobLabels, robotActivityLabel, robotTone, type PickEntity, type RobotTone, type Selection } from "./warehousePresentation";
 import type { Job, Layout, Point, Robot, Snapshot, Station, WarehouseFrame } from "./telemetry";
@@ -11,6 +11,22 @@ export function fitWarehouseCamera(layout: Layout, width: number, height: number
   const clearWidth = 2 * Math.min(center, width - inspectorSpace - center);
   const scale = Math.max(1, Math.min((clearWidth - 24) / layout.width, (height - 16) / layout.height));
   return { x: center - layout.width * scale / 2, y: (height - layout.height * scale) / 2, scale };
+}
+
+export function mapDragIntent(dx: number, dy: number, touch: boolean): "pending" | "pan" | "scroll" {
+  const x = Math.abs(dx);
+  const y = Math.abs(dy);
+  if (Math.max(x, y) < (touch ? 8 : 3)) return "pending";
+  return touch && y >= x ? "scroll" : "pan";
+}
+
+export function reframeWarehouseCamera(camera: Camera, previousFit: Camera, nextFit: Camera): Camera {
+  const ratio = nextFit.scale / previousFit.scale;
+  return {
+    x: nextFit.x + (camera.x - previousFit.x) * ratio,
+    y: nextFit.y + (camera.y - previousFit.y) * ratio,
+    scale: camera.scale * ratio,
+  };
 }
 
 function wallBlocks(layout: Layout) {
@@ -160,7 +176,8 @@ export function WarehouseMap({ frame, selection, job, pick }: { frame: Warehouse
   const occupied = (point: Point) => [...snapshot.robots, ...snapshot.stations].some(entity => entity.x === point.x && entity.y === point.y);
   const svg = useRef<SVGSVGElement>(null);
   const stage = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ id: number; pointer: Point; start: Camera } | null>(null);
+  const drag = useRef<{ id: number; pointer: Point; start: Camera; panning: boolean } | null>(null);
+  const suppressDragClick = useRef(false);
   const [viewport, setViewport] = useState({ width: 1250, height: 394, inspectorSpace: 332 });
   const [stageWidth, setStageWidth] = useState(1250);
   const [manualCamera, setCamera] = useState<Camera | null>(null);
@@ -201,7 +218,11 @@ export function WarehouseMap({ frame, selection, job, pick }: { frame: Warehouse
       const inspectorSpace = Number.parseFloat(getComputedStyle(canvas).getPropertyValue("--v2-inspector-space")) || 0;
       const measured = { width: canvas.clientWidth, height: canvas.clientHeight, inspectorSpace };
       if (previous?.width === measured.width && previous.height === measured.height && previous.inspectorSpace === inspectorSpace) return;
-      if (previous) setCamera(null);
+      if (previous) {
+        const previousFit = fitWarehouseCamera(layout, previous.width, previous.height, previous.inspectorSpace);
+        const nextFit = fitWarehouseCamera(layout, measured.width, measured.height, measured.inspectorSpace);
+        setCamera(current => current && reframeWarehouseCamera(current, previousFit, nextFit));
+      }
       previous = measured;
       setViewport(measured);
     }
@@ -209,14 +230,17 @@ export function WarehouseMap({ frame, selection, job, pick }: { frame: Warehouse
     const observer = new ResizeObserver(measure);
     observer.observe(canvas);
     return () => observer.disconnect();
-  }, []);
+  }, [layout]);
 
   function zoom(factor: number): void {
-    const scale = Math.min(maxScale, Math.max(minScale, camera.scale * factor));
-    const ratio = scale / camera.scale;
     const cx = (stage.current?.clientWidth ?? viewport.width) / 2;
     const cy = viewport.height / 2;
-    setCamera({ x: cx - (cx - camera.x) * ratio, y: cy - (cy - camera.y) * ratio, scale });
+    setCamera(current => {
+      const from = current ?? fit;
+      const scale = Math.min(maxScale, Math.max(minScale, from.scale * factor));
+      const ratio = scale / from.scale;
+      return { x: cx - (cx - from.x) * ratio, y: cy - (cy - from.y) * ratio, scale };
+    });
   }
 
   function pan(event: KeyboardEvent<HTMLDivElement>): void {
@@ -226,23 +250,57 @@ export function WarehouseMap({ frame, selection, job, pick }: { frame: Warehouse
     const offset = offsets[event.key];
     if (!offset) return;
     event.preventDefault();
-    setCamera({ ...camera, x: camera.x + offset.x, y: camera.y + offset.y });
+    setCamera(current => {
+      const from = current ?? fit;
+      return { ...from, x: from.x + offset.x, y: from.y + offset.y };
+    });
   }
 
   function beginDrag(event: PointerEvent<HTMLDivElement>): void {
-    if (event.button !== 0 || !(event.target instanceof Element) || event.target.closest("[role=button]")) return;
-    drag.current = { id: event.pointerId, pointer: { x: event.clientX, y: event.clientY }, start: camera };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (!event.isPrimary) {
+      // A second touch belongs to the browser's pinch gesture.
+      if (event.pointerType === "touch" && drag.current) finishDrag(event.currentTarget, drag.current.id);
+      return;
+    }
+    if (event.button !== 0) return;
+    suppressDragClick.current = false;
+    drag.current = { id: event.pointerId, pointer: { x: event.clientX, y: event.clientY }, start: camera, panning: false };
   }
 
   function moveDrag(event: PointerEvent<HTMLDivElement>): void {
     const active = drag.current;
     if (!active || active.id !== event.pointerId) return;
-    setCamera({ ...active.start, x: active.start.x + event.clientX - active.pointer.x, y: active.start.y + event.clientY - active.pointer.y });
+    if (!event.buttons) {
+      finishDrag(event.currentTarget, event.pointerId);
+      return;
+    }
+    const dx = event.clientX - active.pointer.x;
+    const dy = event.clientY - active.pointer.y;
+    if (!active.panning) {
+      const intent = mapDragIntent(dx, dy, event.pointerType === "touch");
+      if (intent === "pending") return;
+      if (intent === "scroll") {
+        drag.current = null;
+        return;
+      }
+      active.panning = true;
+      suppressDragClick.current = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      event.currentTarget.dataset.dragging = "";
+    }
+    setCamera({ ...active.start, x: active.start.x + dx, y: active.start.y + dy });
   }
 
-  function cancelDrag(event: PointerEvent<HTMLDivElement>): void {
-    if (drag.current?.id === event.pointerId) drag.current = null;
+  function finishDrag(element: HTMLDivElement, id: number): void {
+    if (drag.current?.id !== id) return;
+    drag.current = null;
+    delete element.dataset.dragging;
+  }
+
+  function preventDragClick(event: MouseEvent<HTMLDivElement>): void {
+    if (!suppressDragClick.current || event.detail === 0) return;
+    suppressDragClick.current = false;
+    event.stopPropagation();
   }
 
   return <section className="v2-panel v2-map-panel" aria-labelledby="v2-map-title">
@@ -261,8 +319,12 @@ export function WarehouseMap({ frame, selection, job, pick }: { frame: Warehouse
       </div>
     </header>
     <div className="v2-map-stage" ref={stage} tabIndex={0} role="group" aria-label="Warehouse map. Use arrow keys to pan or Find entity for any robot, charger or job."
-      onKeyDown={pan} onPointerDown={beginDrag} onPointerMove={moveDrag} onPointerUp={cancelDrag}
-      onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}>
+      onKeyDown={pan} onClickCapture={preventDragClick} onPointerDown={beginDrag} onPointerMove={moveDrag}
+      onPointerUp={event => finishDrag(event.currentTarget, event.pointerId)} onPointerCancel={event => finishDrag(event.currentTarget, event.pointerId)}
+      onLostPointerCapture={event => {
+        // A marker can lose implicit touch capture when the stage claims the drag.
+        if (event.target === event.currentTarget) finishDrag(event.currentTarget, event.pointerId);
+      }}>
       <svg ref={svg} className="v2-map-svg" role="group" aria-label="Live warehouse floor plan"
         viewBox={'0 0 ' + viewport.width + ' ' + viewport.height}>
         <defs><pattern id="v2-wall-grid" width={1} height={1} patternUnits="userSpaceOnUse">

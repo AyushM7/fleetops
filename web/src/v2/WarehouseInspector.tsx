@@ -25,11 +25,10 @@ export function useInspectorFocus(selectEntity: (selection: Selection | null) =>
     const source = opener.current;
     opener.current = null;
     if (!visible) return;
-    if (source?.isConnected && source.getAttribute("tabindex") !== "-1" && source.getClientRects().length) {
-      source.focus({ preventScroll: true });
-    } else {
-      surface.current?.querySelector<HTMLElement>(fallback)?.focus({ preventScroll: true });
-    }
+    const target = source?.isConnected && source.getAttribute("tabindex") !== "-1" && source.getClientRects().length
+      ? source : surface.current?.querySelector<HTMLElement>(fallback);
+    target?.focus({ preventScroll: true });
+    if (target instanceof HTMLElement) target.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
   }, [fallback, visible]);
 
   return { surface, pick, close, restoreFocus };
@@ -135,6 +134,7 @@ export function WarehouseInspector({
   const titleId = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   const last = useRef<{ entity: Entity; job?: Job } | null>(null);
   useLayoutEffect(() => {
     if (entity) last.current = { entity, job };
@@ -168,6 +168,7 @@ export function WarehouseInspector({
       const focused = document.activeElement;
       sync(focused instanceof HTMLElement && panel?.contains(focused) ? focused : heading.current);
     }
+    if (content.current) content.current.scrollTop = 0;
     sync(heading.current);
     narrow.addEventListener("change", changePresentation);
     return () => narrow.removeEventListener("change", changePresentation);
@@ -195,7 +196,7 @@ export function WarehouseInspector({
           <Icon name="x" size={17} />
         </button>
       </header>
-      <div className="v2-inspector-content">
+      <div className="v2-inspector-content" ref={content}>
         {lastConfirmedTick !== undefined && <p className="v2-directory-notice">Last confirmed at tick {lastConfirmedTick}.</p>}
         {detail.kind === "robot" && <RobotDetails robot={detail.robot} job={current.job} inspect={inspect} expanded={!!onWarehouse} />}
         {detail.kind === "job" && <JobDetails job={detail.job} inspect={canInspectAssigned ? inspect : undefined} expanded={!!onWarehouse} />}

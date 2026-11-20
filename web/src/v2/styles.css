@@ -14,6 +14,7 @@
   color: inherit;
   border: 1px solid transparent;
   background: transparent;
+  touch-action: manipulation;
 }
 
 .v2-shell :is(button, a, [tabindex]):focus-visible {
@@ -78,7 +79,6 @@
   background: var(--v2-selection-ink);
   content: "";
 }
-.v2-rail nav button:not([aria-current]):hover:where(:not(:active)) { color: var(--v2-text); background: var(--v2-hover); }
 .v2-rail .v2-legacy-link {
   display: grid;
   justify-items: center;
@@ -139,7 +139,6 @@
   white-space: nowrap;
 }
 .v2-sim-controls button:first-of-type { background: var(--v2-selected); border-color: var(--v2-control-border); color: var(--v2-selection-ink); }
-.v2-sim-controls button:hover:where(:not(:active, [aria-disabled=true])) { background: var(--v2-hover); }
 .v2-sim-controls button[aria-disabled=true] {
   color: var(--v2-disabled-ink);
   background: var(--v2-disabled-fill);
@@ -204,7 +203,6 @@
   border: 1px solid var(--v2-border);
   background: var(--v2-raised);
 }
-.v2-map-control:hover:not(:disabled)::before { background: var(--v2-hover); border-color: var(--v2-control-border); }
 .v2-map-control:active:not(:disabled)::before { background: var(--v2-pressed); border-color: var(--v2-selection-ink); }
 .v2-shell .v2-map-control:focus-visible { outline-offset: -3px; color: var(--v2-text); }
 .v2-shell .v2-map-control:disabled { color: var(--v2-disabled-ink); }
@@ -215,9 +213,9 @@
   min-block-size: 0;
   border-block: 1px solid var(--v2-border);
   background: var(--v2-plot);
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
-.v2-map-stage:active { cursor: grabbing; }
+.v2-map-stage[data-dragging] { cursor: grabbing; }
 .v2-shell .v2-map-stage:focus-visible { outline-offset: -3px; z-index: 1; }
 .v2-map-svg {
   position: absolute;
@@ -247,7 +245,6 @@
 .v2-map-target { cursor: pointer; }
 .v2-shell .v2-map-target:focus-visible { outline: none; }
 .v2-target-ring { fill: transparent; stroke: transparent; stroke-width: .055; pointer-events: none; }
-.v2-map-target:hover .v2-target-ring { stroke: var(--v2-fixture-edge); }
 .v2-map-target:active .v2-target-ring,
 .v2-map-target[aria-pressed=true] .v2-target-ring { stroke: var(--v2-selection-ink); stroke-width: 2px; vector-effect: non-scaling-stroke; }
 .v2-map-target:focus-visible .v2-target-ring { stroke: var(--v2-focus); stroke-width: 2px; vector-effect: non-scaling-stroke; stroke-dasharray: 3 2; }
@@ -311,7 +308,6 @@
   font-size: .8125rem;
   text-align: left;
 }
-.v2-find-list button:hover:where(:not(:active)) { background: var(--v2-hover); }
 .v2-find-list button span { white-space: normal; }
 .v2-map-footer ul, .v2-fleet ul { list-style: none; margin: 0; padding: 0; }
 .v2-map-footer ul { display: flex; flex-wrap: wrap; gap: 4px 15px; }
@@ -334,6 +330,7 @@
   grid-template-columns: repeat(11, minmax(6rem, 1fr));
   gap: 7px;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--v2-control-border) var(--v2-panel);
   scroll-snap-type: x proximity;
@@ -410,7 +407,7 @@
 }
 .v2-inspector .v2-panel-title { border-block-end: 1px solid var(--v2-border); justify-content: space-between; flex: none; }
 .v2-panel-title h2[tabindex="-1"]:focus:not(:focus-visible) { outline: none; }
-.v2-inspector-content { padding: 16px 15px; overflow: auto; }
+.v2-inspector-content { padding: 16px 15px; overflow: auto; overscroll-behavior-y: contain; }
 .v2-identity { display: flex; align-items: center; gap: 12px; margin-block-end: 15px; }
 .v2-identity-icon {
   display: grid;
@@ -450,7 +447,15 @@ section.v2-inspector-group { padding-block-start: 10px; }
   border-block-start: 1px solid var(--v2-border);
   border-radius: 0;
 }
-.v2-shell :is(.v2-fleet-link, .v2-inspector-link):hover { color: var(--v2-focus); text-decoration: underline; border-color: transparent; }
+@media (hover: hover) {
+  .v2-rail nav button:not([aria-current]):hover:where(:not(:active)),
+  .v2-rail .v2-legacy-link:hover:where(:not(:active, :disabled)) { color: var(--v2-text); background: var(--v2-hover); }
+  .v2-sim-controls button:hover:where(:not(:active, [aria-disabled=true])) { background: var(--v2-hover); }
+  .v2-map-control:hover:not(:active, :disabled)::before { background: var(--v2-hover); border-color: var(--v2-control-border); }
+  .v2-map-target:hover:where(:not(:active, :focus-visible, [aria-pressed=true])) .v2-target-ring { stroke: var(--v2-fixture-edge); }
+  .v2-find-list button:hover:where(:not(:active)) { background: var(--v2-hover); }
+  .v2-shell :is(.v2-fleet-link, .v2-inspector-link):hover:where(:not(:active)) { color: var(--v2-focus); text-decoration: underline; }
+}
 
 @media (max-width: 1179px) {
   .v2-workspace { --v2-inspector-space: 0px; }
@@ -499,7 +504,7 @@ section.v2-inspector-group { padding-block-start: 10px; }
   .v2-map-panel > .v2-panel-title { flex-wrap: wrap; row-gap: 0; }
   .v2-map-footer { flex-wrap: wrap; gap: 4px; padding: 5px 8px 0; }
   .v2-map-meta { inline-size: 100%; justify-content: space-between; }
-  .v2-find summary, .v2-shell .v2-find-list button { min-block-size: 44px; }
+  .v2-find summary, .v2-shell .v2-find-list button, .v2-shell .v2-fleet-link { min-block-size: 44px; }
 }
 
 @media (max-width: 430px) {

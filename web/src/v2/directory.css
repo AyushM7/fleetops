@@ -102,8 +102,10 @@
 .v2-job-row .v2-status-chip { margin: 0; background: var(--tone-fill, var(--v2-panel)); }
 .v2-shell .v2-job-row[aria-pressed=true] { border-color: var(--v2-selection-ink); background: var(--v2-selected); }
 .v2-shell .v2-job-row[aria-pressed=true] .v2-job-row-id strong { color: var(--v2-selection-ink); }
-.v2-shell :is(.v2-fleet-tile, .v2-job-row):hover:not(:active, [aria-pressed=true]) {
-  border-color: var(--tone, var(--v2-control-border));
+@media (hover: hover) {
+  .v2-shell :is(.v2-fleet-tile, .v2-job-row):hover:not(:active, [aria-pressed=true]) {
+    border-color: var(--tone, var(--v2-control-border));
+  }
 }
 .v2-shell :is(.v2-fleet-tile, .v2-job-row):active { border-color: var(--v2-selection-ink); }
 .v2-shell .v2-job-row:focus-visible { outline-offset: -3px; }
