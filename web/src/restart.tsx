@@ -2,6 +2,7 @@ import type { JSX } from "react";
 import { parseSnapshot, type FleetSnapshot } from "./fleet";
 import { isScenarioID, type ScenarioID } from "./scenarios";
 import { parseEvidence, type ExplanationEvidence } from "./Evidence";
+import { postVisitor } from "./demo";
 
 export type SimulationState = "awaiting_decision" | "paused" | "running" | "unavailable";
 export type SimulationSpeed = "0.5" | "1" | "2";
@@ -11,17 +12,19 @@ export class DemoError extends Error {
   constructor(public readonly authentication: boolean, message: string) { super(message); }
 }
 
-async function demoRequest(path: "status" | "restart" | `scenario/${ScenarioID}` | TimeOperation, generation: string, signal: AbortSignal, tick?: number): Promise<DemoStatus> {
-  const response = await fetch(`/demo/${path}`, {
-    method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal,
-    headers: { "Content-Type": "application/json", "X-FleetOps-Demo": "1", "X-FleetOps-Generation": generation, ...(tick === undefined ? {} : { "X-FleetOps-Tick": String(tick) }) }, body: "{}",
-  });
+type DemoOperation = "status" | "restart" | `scenario/${ScenarioID}` | TimeOperation;
+
+async function readDemoResponse(path: DemoOperation, generation: string, signal: AbortSignal, tick?: number): Promise<unknown> {
+  const response = await postVisitor(`/demo/${path}`, generation, signal, tick);
   if (response.status === 401 || response.status === 403) throw new DemoError(true, "Visitor session ended. Clear this site's cookies to begin a new visit.");
   if (!response.ok) throw new DemoError(false, path === "restart" || path.startsWith("scenario/")
     ? "Restart was not confirmed. The previous run may have stopped. Refresh session status before retrying; historical outcomes may require reconciliation."
     : path === "status" ? "Demo session status unavailable. Decisions are disabled until status is refreshed."
     : "Simulation control was not confirmed. Refresh status before another action; do not retry an unknown Step outcome.");
-  const body: unknown = await response.json();
+  return response.json();
+}
+
+function parseDemoStatus(body: unknown): DemoStatus {
   if (typeof body !== "object" || body === null || !("generation" in body) || typeof body.generation !== "string" || !/^[a-f0-9]{64}$/.test(body.generation) || !("ready" in body) || typeof body.ready !== "boolean") {
     throw new DemoError(false, "Invalid demo status. Restart success cannot be confirmed.");
   }
@@ -39,6 +42,10 @@ async function demoRequest(path: "status" | "restart" | `scenario/${ScenarioID}`
   }
   if ("evidence" in body) status.evidence = parseEvidence(body.evidence, status.generation, status.scenarioId);
   return status;
+}
+
+async function demoRequest(path: DemoOperation, generation: string, signal: AbortSignal, tick?: number): Promise<DemoStatus> {
+  return parseDemoStatus(await readDemoResponse(path, generation, signal, tick));
 }
 
 export async function controlSimulation(operation: TimeOperation, generation: string, tick: number): Promise<DemoStatus> {
@@ -73,7 +80,7 @@ export async function selectScenario(id: ScenarioID, generation: string): Promis
   } finally { clearTimeout(timeout); }
 }
 
-export function pollDemoStatus(emit: (status: DemoStatus | null, error: string | null) => void, unauthorized: () => void, interval = 1000): () => void {
+export function pollDemoStatus(emit: (status: DemoStatus | null, error: string | null) => void, unauthorized: () => void, interval = 1000, routeStatus?: (body: unknown) => boolean): () => void {
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let active: AbortController | undefined;
@@ -81,8 +88,10 @@ export function pollDemoStatus(emit: (status: DemoStatus | null, error: string |
     active = new AbortController();
     const timeout = setTimeout(() => active?.abort(), 8000);
     try {
-      const status = await demoRequest("status", "", active.signal);
-      if (!stopped) emit(status, status.ready ? null : "Scenario stopped. Restart or reconcile the historical outcome; decisions are disabled.");
+      const body = await readDemoResponse("status", "", active.signal);
+      if (stopped || routeStatus?.(body)) return;
+      const status = parseDemoStatus(body);
+      emit(status, status.ready ? null : "Scenario stopped. Restart or reconcile the historical outcome; decisions are disabled.");
     } catch (error) {
       if (stopped) return;
       if (error instanceof DemoError && error.authentication) { unauthorized(); return; }

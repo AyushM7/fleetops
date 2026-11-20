@@ -167,3 +167,39 @@ func TestManagerRefusesModelWithoutCommittedReservationIntegration(t *testing.T)
 		t.Fatalf("ledger failure did not stop calls: %+v", denied)
 	}
 }
+
+func TestManagerRetainsUnverifiedReservationsAndReportsWorkerFailuresIntegration(t *testing.T) {
+	ctx := context.Background()
+	pool := testDatabase(t)
+	ledger, err := openLedger(ctx, pool, pricing{minInputRate, minOutputRate})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		status string
+		result modelResult
+	}{
+		{"model_unavailable", modelResult{Failure: "model_unavailable"}},
+		{"invalid_output", modelResult{Failure: "invalid_output"}},
+		{"usage_unconfirmed", modelResult{Decision: &fleet.OperationsDecision{Kind: "abstain", Reason: "no_safe_option"}}},
+	} {
+		t.Run(test.status, func(t *testing.T) {
+			calls := 0
+			m := Manager{ledger: ledger, slots: make(chan struct{}, 2), generate: func(context.Context, []byte, int64) (modelResult, error) {
+				calls++
+				return test.result, nil
+			}}
+			out := m.Decide(ctx, runtimeFixture(t), fleet.OperationsObservation{})
+			if calls != 1 || out.Status != test.status || out.RequestID == 0 || out.Decision != nil ||
+				out.AccountedMicroUSD != nil || out.Usage != nil {
+				t.Fatalf("unverified worker result: calls=%d outcome=%+v", calls, out)
+			}
+			var reserved int64
+			var settled bool
+			if err := pool.QueryRow(ctx, "SELECT reserved_micro_usd, settled_at IS NOT NULL FROM fleetops_operations.requests WHERE id=$1",
+				out.RequestID).Scan(&reserved, &settled); err != nil || settled || reserved != out.ReservedMicroUSD || reserved <= 0 {
+				t.Fatalf("unverified request did not retain its reservation: reserved=%d settled=%t error=%v", reserved, settled, err)
+			}
+		})
+	}
+}

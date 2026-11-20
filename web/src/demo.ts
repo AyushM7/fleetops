@@ -8,3 +8,11 @@ export function authentication(token: string): Pick<RequestInit, "credentials" |
     ? { credentials: "same-origin", headers: { "Content-Type": "application/json", "X-FleetOps-Demo": "1", ...(token && token !== "local-demo-session" ? { "X-FleetOps-Generation": token } : {}) } }
     : { credentials: "omit", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } };
 }
+
+export function postVisitor(path: `/demo/${string}`, generation: string, signal: AbortSignal, tick?: number): Promise<Response> {
+  return fetch(path, {
+    method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal,
+    headers: { "Content-Type": "application/json", "X-FleetOps-Demo": "1", "X-FleetOps-Generation": generation, ...(tick === undefined ? {} : { "X-FleetOps-Tick": String(tick) }) },
+    body: "{}",
+  });
+}

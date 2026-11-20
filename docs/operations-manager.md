@@ -14,7 +14,10 @@ reservation in place. Known pricing or usage anomalies freeze the admission day.
 
 The only reviewed model is GPT-6 Luna via OpenAI Responses, using Standard
 text pricing with zero tools, zero retries, and at most 768 output tokens
-(including reasoning). The worker allows a single HTTPS request to OpenAI.
+(including reasoning). The worker attaches its private key only after validating a single HTTPS
+request to OpenAI Responses. The price review covers the default 30-minute
+cache policy. The request guard excludes extended cache settings and explicit
+cache breakpoints.
 The Go host bounds worker execution to eight seconds. The estimate uses all
 1,050,000 documented context tokens at the configured maximum input rate.
 It prices every input token at a conservative upper bound that includes
@@ -66,3 +69,11 @@ warehouse ticks, and reconnect snapshots include the recent history.
 Telemetry carries typed decisions, IDs and usage only. It contains no
 prompts, private reasoning or credentials. V1 routes keep their current
 approval workflow.
+
+The production scratch image currently ships the Go server and web assets.
+Public enablement requires a deployment that also supplies Node and the built
+Operations worker, a dedicated provider credential, and the shared PostgreSQL
+ledger. Keep deterministic mode as the default. Removing the opt-in from the
+server environment and restarting disables automatic AI dispatch. Visitor
+limits can slow abuse, while public traffic can still exhaust the shared
+daily allowance.

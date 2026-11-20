@@ -1,10 +1,11 @@
 import { singleOperationsFetch } from "./operations-fetch.js";
 
 async function run() {
-  if (!process.env.OPENAI_API_KEY?.trim() || !/^[1-9][0-9]{0,18}$/.test(process.env.FLEETOPS_OPERATIONS_RESERVATION ?? "")) {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey || !/^[1-9][0-9]{0,18}$/.test(process.env.FLEETOPS_OPERATIONS_RESERVATION ?? "")) {
     throw new Error("Operations reservation required.");
   }
-  globalThis.fetch = singleOperationsFetch(globalThis.fetch);
+  globalThis.fetch = singleOperationsFetch(globalThis.fetch, apiKey);
   const { makeOpenAIOperationsDecision } = await import("./operations-manager.js");
   let observation = "";
   process.stdin.setEncoding("utf8");

@@ -11,6 +11,6 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    css: { include: [/styles\.css/] },
+    css: { include: [/styles\.css/, /theme\.css/] },
   },
 });

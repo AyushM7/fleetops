@@ -158,3 +158,32 @@ real PostgreSQL integration tests, Go race tests, non-soak regressions, and vet
 all passed. The known Phase 2 soak failure was not changed or rerun. Existing
 approved P3-07 working-tree changes are preserved. No new package dependencies
 or lockfile changes are needed.
+
+## Warehouse V2 appearance
+
+V2 surface, text, border, focus, selection, and status tokens live in
+[`src/v2/theme.css`](src/v2/theme.css). The rail and toolbar frame solid
+dashboard panels and a recessed map. The docked inspector is opaque. The
+floating inspector uses a near-opaque surface when contrast and transparency
+preferences allow it. Keep status colors paired with an activity label or glyph.
+
+## Warehouse V2 map and inspector
+
+- **Find entity** opens details for any robot, charger, or job in the current
+  snapshot, including those offscreen. It leaves the camera in place.
+- Robot and charger labels have an 11 px screen-space minimum. Robot IDs stay
+  on their markers when space allows, and displaced labels clear status glyphs
+  and job pins. When no readable
+  placement is available, the marker stays at its actual cell and the entity
+  remains available in **Find entity**. Reservation details appear in the
+  charger inspector.
+- The fleet strip uses native horizontal scrolling, a thin scrollbar, and
+  proximity snapping. When the strip overflows, Tab can focus it before its
+  robot cards so arrow keys can scroll the strip.
+- Selection preserves manual pan and zoom. The desktop inspector can clip the
+  right edge of a manually framed view. **Fit warehouse map** reframes the room
+  explicitly. Below 1180 px the inspector uses a modal overlay, with Escape and
+  Close returning focus to the opener.
+- After a missing command acknowledgment, the toolbar reports Go's confirmed
+  state and retains the acknowledgment message until the next user command.
+  The client sends no automatic command retry.

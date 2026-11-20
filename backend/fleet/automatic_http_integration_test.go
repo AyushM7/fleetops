@@ -201,21 +201,18 @@ func TestAutomaticReassignmentTransfersUnstartedV2JobIntegration(t *testing.T) {
 		}
 	}
 	ctx := automaticContext(t, s.RuntimeID())
-	view, err := s.ReadAutomaticState(ctx)
+	observed, err := s.ObserveOperations(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	const job, source, recipient = "J10", "R7", "R2"
-	key, err := newID()
+	command, err := observed.Prepare(OperationsDecision{
+		Kind: "reassign", Reassignment: &safety.ReassignUnstartedJobRequest{JobID: job, FromRobotID: source, ToRobotID: recipient},
+	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("eligible reassignment was not offered: %v", err)
 	}
-	command := AutomaticCommand{
-		RuntimeID: view.RuntimeID, ObservationID: view.ObservationID, ExpiresAt: view.ExpiresAt,
-		IdempotencyKey: key, Preconditions: map[string]uint64{job: view.Versions[job], source: view.Versions[source], recipient: view.Versions[recipient]},
-		ReassignUnstartedJob: &safety.ReassignUnstartedJobRequest{JobID: job, FromRobotID: source, ToRobotID: recipient},
-	}
-	result, err := s.ExecuteAutomatic(ctx, command)
+	result, err := s.ExecuteAutomatic(ctx, *command)
 	state := s.Snapshot()
 	reassigned := state.Jobs[9]
 	if err != nil || result.Execution != Succeeded || !result.AuditCommitted || reassigned.ID != job ||

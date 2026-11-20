@@ -21,6 +21,7 @@ it("sends one real Mastra Responses request through the guard with a mocked Open
   const transport = vi.fn(async (request: Request) => {
     const body = await request.json();
     expect(request.url).toBe(endpoint);
+    expect(request.headers.get("authorization")).toBe("Bearer fixture-transport");
     expect(body).toMatchObject({ model: operationsModelId, store: false, service_tier: "default",
       max_output_tokens: operationsOutputLimit });
     expect(body.tools ?? []).toEqual([]);
@@ -36,7 +37,7 @@ it("sends one real Mastra Responses request through the guard with a mocked Open
     return new Response(chunks.map(chunk => "data: " + JSON.stringify(chunk) + "\n\n").join(""),
       { headers: { "Content-Type": "text/event-stream" } });
   });
-  vi.stubGlobal("fetch", singleOperationsFetch(transport as typeof fetch));
+  vi.stubGlobal("fetch", singleOperationsFetch(transport as typeof fetch, "fixture-transport"));
   const permit = vi.fn();
   const result = await makeOpenAIOperationsDecision('{"tick":1}', permit, AbortSignal.timeout(2_000));
   expect(result).toEqual({ decision, usage: { model: operationsModelId, inputTokens: 41, outputTokens: 20 } });
@@ -46,7 +47,7 @@ it("sends one real Mastra Responses request through the guard with a mocked Open
 
 it("denies retries, paid tools and a different host without forwarding them", async () => {
   const transport = vi.fn(async () => new Response("{}"));
-  const guarded = singleOperationsFetch(transport);
+  const guarded = singleOperationsFetch(transport, "fixture-transport");
   const request = { method: "POST", body: JSON.stringify({ model: operationsModelId, store: false,
     service_tier: "default", max_output_tokens: operationsOutputLimit,
     input: [{ role: "user", content: [{ type: "input_text", text: "fixture" }] }],
@@ -54,8 +55,13 @@ it("denies retries, paid tools and a different host without forwarding them", as
   await expect(guarded("https://example.invalid/v1/responses", request)).rejects.toThrow();
   await expect(guarded(endpoint, request)).resolves.toBeDefined();
   await expect(guarded(endpoint, request)).rejects.toThrow();
-  await expect(singleOperationsFetch(transport)(endpoint, { ...request, body: JSON.stringify({
+  await expect(singleOperationsFetch(transport, "fixture-transport")(endpoint, { ...request, body: JSON.stringify({
     ...JSON.parse(request.body), tools: [{ type: "web_search" }],
+  }) })).rejects.toThrow();
+  await expect(singleOperationsFetch(transport, "fixture-transport")(endpoint, { ...request, body: JSON.stringify({
+    ...JSON.parse(request.body),
+    input: [{ role: "user", content: [{ type: "input_text", text: "fixture",
+      prompt_cache_breakpoint: { mode: "explicit", ttl: "12h" } }] }],
   }) })).rejects.toThrow();
   expect(transport).toHaveBeenCalledTimes(1);
 });
