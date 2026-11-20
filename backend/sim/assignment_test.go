@@ -111,3 +111,28 @@ func TestAssignJobBatchUsesNormalMovementAndCustodyIntegration(t *testing.T) {
 		t.Fatalf("assignments did not produce verified deliveries: %+v", state.Jobs)
 	}
 }
+
+func TestOperationsDispatchHoldExpiresWithoutStoppingTicks(t *testing.T) {
+	s := newTestSim(t, WarehouseV2Config(), 42)
+	options := s.OperationsAssignments(s.Snapshot().Jobs)
+	if len(options) == 0 {
+		t.Fatal("fixture has no dispatch options")
+	}
+	s.SetOperationsDispatchHold(options)
+	jobID := options[0].JobID
+	for range operationsDispatchTicks {
+		s.Tick()
+		for _, job := range s.Snapshot().Jobs {
+			if job.ID == jobID && job.AssignedRobot != "" {
+				t.Fatal("deterministic dispatch claimed an offered job during the window")
+			}
+		}
+	}
+	s.Tick()
+	for _, job := range s.Snapshot().Jobs {
+		if job.ID == jobID && job.AssignedRobot != "" {
+			return
+		}
+	}
+	t.Fatal("offered job was still held after the final dispatch tick")
+}

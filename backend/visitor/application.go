@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/AyushM7/fleetops/backend/db"
+	"github.com/AyushM7/fleetops/backend/operations"
 )
 
 type Application struct {
@@ -58,6 +59,13 @@ func New(ctx context.Context, config Config) (*Application, error) {
 		return nil, errors.New("visitor database reconciliation required")
 	}
 	factory := visitorFactory{admin: admin, config: cfg, evidenceDir: config.EvidenceDir}
+	if os.Getenv("FLEETOPS_OPERATIONS_ENABLED") == "1" {
+		if manager, err := operations.Open(ctx, admin); err == nil {
+			factory.operations, factory.recordOperations = manager.Decide, manager.RecordActivity
+		} else {
+			slog.Warn("operations_manager_unavailable", "warehouse_mode", "deterministic")
+		}
+	}
 	manager := newVisitorManager(factory.create)
 	manager.admit = func(ctx context.Context) error {
 		if err := storageReady(config.EvidenceDir); err != nil {

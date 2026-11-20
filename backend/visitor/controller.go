@@ -13,23 +13,27 @@ import (
 	"time"
 
 	"github.com/AyushM7/fleetops/backend/graphql/model"
+	"github.com/AyushM7/fleetops/backend/operations"
 	"github.com/AyushM7/fleetops/backend/sim"
 )
 
 const warehouseScenario = "warehouse-v2"
 
 type demoRun struct {
-	scenarioID string
-	generation string
-	runtimeID  string
-	handler    http.Handler
-	capture    func(context.Context) error
-	advance    func(context.Context) error
-	inspect    func(context.Context) (*model.FleetState, bool, error)
-	step       func(context.Context) error
-	warehouse  func() sim.State
-	events     warehouseEvents
-	evidence   *demoExplanation
+	scenarioID         string
+	generation         string
+	runtimeID          string
+	handler            http.Handler
+	capture            func(context.Context) error
+	advance            func(context.Context) error
+	inspect            func(context.Context) (*model.FleetState, bool, error)
+	step               func(context.Context) error
+	warehouse          func() sim.State
+	events             warehouseEvents
+	evidence           *demoExplanation
+	operations         *runtimeOperations
+	operationsMode     string
+	operationsActivity []operations.Activity
 }
 
 // Read-only local-demo provenance. This never authorizes a command.
@@ -54,35 +58,39 @@ const (
 )
 
 type demoStatus struct {
-	ScenarioID string            `json:"scenarioId,omitempty"`
-	Generation string            `json:"generation"`
-	Ready      bool              `json:"ready"`
-	State      string            `json:"state,omitempty"`
-	Speed      string            `json:"speed,omitempty"`
-	Snapshot   *model.FleetState `json:"snapshot,omitempty"`
-	Evidence   *demoExplanation  `json:"evidence,omitempty"`
-	Warehouse  *sim.State        `json:"warehouse,omitempty"`
+	ScenarioID         string                `json:"scenarioId,omitempty"`
+	Generation         string                `json:"generation"`
+	Ready              bool                  `json:"ready"`
+	State              string                `json:"state,omitempty"`
+	Speed              string                `json:"speed,omitempty"`
+	Snapshot           *model.FleetState     `json:"snapshot,omitempty"`
+	Evidence           *demoExplanation      `json:"evidence,omitempty"`
+	OperationsActivity []operations.Activity `json:"operationsActivity,omitempty"`
+	OperationsMode     string                `json:"operationsMode,omitempty"`
+	Warehouse          *sim.State            `json:"warehouse,omitempty"`
 }
 
 // All browser forwarding, progress ticks, capture and replacement share this
 // gate. No caller retains a handler/service reference outside the gate.
 type demoController struct {
-	mu            sync.Mutex
-	busy          atomic.Bool
-	stepping      atomic.Bool
-	run           *demoRun
-	ready         bool
-	closed        bool
-	factory       func(context.Context) (*demoRun, error)
-	selectFactory func(context.Context, string) (*demoRun, error)
-	record        func(string, string) error
-	interactive   bool
-	running       bool
-	stopped       bool
-	speed         string
-	nextTick      time.Time
-	lastStep      time.Time
-	ticks         int
+	mu             sync.Mutex
+	busy           atomic.Bool
+	stepping       atomic.Bool
+	run            *demoRun
+	ready          bool
+	closed         bool
+	factory        func(context.Context) (*demoRun, error)
+	selectFactory  func(context.Context, string) (*demoRun, error)
+	record         func(string, string) error
+	interactive    bool
+	running        bool
+	stopped        bool
+	speed          string
+	nextTick       time.Time
+	lastStep       time.Time
+	ticks          int
+	operations     *operationsCycle
+	nextOperations time.Time
 }
 
 func (c *demoController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -145,6 +153,7 @@ func (c *demoController) restart(w http.ResponseWriter, r *http.Request) {
 	}
 	// HTTP disconnects cannot cancel capture after ownership has been revoked.
 	// A failed replacement leaves the old runtime inaccessible, including poison.
+	c.cancelOperations()
 	c.ready = false
 	c.running = false
 	c.run.events.signal()
@@ -226,11 +235,21 @@ func (c *demoController) advance(ctx context.Context) error {
 
 func (c *demoController) close() error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	cycle := c.operations
+	c.cancelOperations()
 	c.closed, c.ready, c.running = true, false, false
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return c.run.capture(ctx)
+	err := c.run.capture(ctx)
+	c.mu.Unlock()
+	if cycle != nil {
+		select {
+		case <-cycle.done:
+		case <-ctx.Done():
+			err = errors.Join(err, errors.New("operations cancellation did not finish before cleanup"))
+		}
+	}
+	return err
 }
 
 // Exclusive files plus Sync prevent replacing earlier evidence or acknowledging

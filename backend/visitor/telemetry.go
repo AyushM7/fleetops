@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AyushM7/fleetops/backend/operations"
 	"github.com/AyushM7/fleetops/backend/sim"
 )
 
@@ -23,12 +24,14 @@ const (
 )
 
 type warehouseFrame struct {
-	RuntimeID  string    `json:"runtimeId"`
-	Generation string    `json:"generation"`
-	EventID    uint64    `json:"eventId"`
-	Tick       int       `json:"tick"`
-	State      string    `json:"state"`
-	Snapshot   sim.State `json:"snapshot"`
+	RuntimeID          string                `json:"runtimeId"`
+	Generation         string                `json:"generation"`
+	EventID            uint64                `json:"eventId"`
+	Tick               int                   `json:"tick"`
+	State              string                `json:"state"`
+	OperationsMode     string                `json:"operationsMode"`
+	OperationsActivity []operations.Activity `json:"operationsActivity,omitempty"`
+	Snapshot           sim.State             `json:"snapshot"`
 }
 
 type warehouseEvent struct {
@@ -68,7 +71,11 @@ func (c *demoController) publishWarehouse(kind string) {
 		id = events.frames[n-1].id + 1
 	}
 	snapshot := run.warehouse()
-	data, err := json.Marshal(warehouseFrame{run.runtimeID, run.generation, id, snapshot.Tick, c.warehouseState(), snapshot})
+	data, err := json.Marshal(warehouseFrame{
+		RuntimeID: run.runtimeID, Generation: run.generation, EventID: id, Tick: snapshot.Tick,
+		State: c.warehouseState(), Snapshot: snapshot, OperationsMode: run.warehouseOperationsMode(),
+		OperationsActivity: run.operationsActivity,
+	})
 	if err != nil {
 		c.ready, c.running = false, false
 		events.signal()

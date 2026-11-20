@@ -19,6 +19,7 @@ type Sim struct {
 	recovery          map[string]robotRecovery
 	protected         map[Point]bool
 	traffic           *trafficReservations
+	operationsHold    dispatchHold
 }
 
 // New constructs an isolated deterministic simulator from a configuration and seed.

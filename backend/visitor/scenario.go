@@ -25,6 +25,8 @@ type demoFactory struct {
 	auth                         *auth.Authenticator
 	tokens                       map[string]string
 	evidenceDir, proposerSubject string
+	operations                   operationsDecider
+	recordOperations             operationsRecorder
 }
 
 type demoScenario struct {
@@ -100,6 +102,12 @@ func (f demoFactory) createScenario(ctx context.Context, id string) (*demoRun, e
 			ProposalID: s.proposalID, ProposalSource: source, Observation: observation}}
 	if id == warehouseScenario {
 		run.warehouse = service.Snapshot
+		if f.operations != nil {
+			run.operations, _ = newRuntimeOperations(service, f.operations)
+			if run.operations != nil {
+				run.operations.record = f.recordOperations
+			}
+		}
 	}
 	return run, nil
 }
