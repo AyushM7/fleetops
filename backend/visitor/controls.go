@@ -82,10 +82,8 @@ func (c *demoController) status(ctx context.Context) (demoStatus, error) {
 	if c.run.warehouse != nil {
 		state := c.run.warehouse()
 		status.Warehouse, status.State, status.Evidence = &state, c.warehouseState(), c.run.evidence
-		status.OperationsMode = c.run.operationsMode
-		if status.OperationsMode == "" {
-			status.OperationsMode = "deterministic"
-		}
+		status.OperationsMode = c.run.warehouseOperationsMode()
+		status.OperationsActivity = c.run.operationsActivity
 		return status, nil
 	}
 	snapshot, decided, err := c.run.inspect(ctx)

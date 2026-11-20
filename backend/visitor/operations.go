@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/AyushM7/fleetops/backend/auth"
@@ -14,10 +15,13 @@ import (
 
 type operationsDecider func(context.Context, string, fleet.OperationsObservation) operations.Outcome
 
+type operationsRecorder func(context.Context, string, operations.Activity) error
+
 type runtimeOperations struct {
 	service   *fleet.Service
 	authorize func(context.Context) (context.Context, error)
 	decide    operationsDecider
+	record    operationsRecorder
 }
 
 func newRuntimeOperations(service *fleet.Service, decide operationsDecider) (*runtimeOperations, error) {
@@ -85,14 +89,15 @@ func (c *demoController) startOperations(ctx context.Context, now time.Time) {
 	cycle := &operationsCycle{run: run, ctx: scoped, cancel: cancel, done: make(chan struct{})}
 	c.operations, c.nextOperations = cycle, now.Add(operationsCooldown)
 	run.operationsMode = "checking_assistance"
+	activity := operations.Activity{ObservationID: observation.ID(), Tick: observation.Tick,
+		ObservedAt: time.Now().UTC(), Stage: "observed", Status: "observed"}
+	c.publishOperations(run, activity)
 	go func() {
 		defer close(cycle.done)
 		defer cancel()
-		outcome := manager.decide(private, run.runtimeID, observation)
-		c.finishOperations(cycle, observation, outcome)
+		c.runOperations(cycle, observation, activity)
 	}()
 }
-
 func (c *demoController) cancelOperations() {
 	if cycle := c.operations; cycle != nil {
 		cycle.cancel()
@@ -104,29 +109,108 @@ func (c *demoController) cancelOperations() {
 	}
 }
 
-func (c *demoController) finishOperations(cycle *operationsCycle, observed fleet.OperationsObservation, outcome operations.Outcome) {
+func (c *demoController) runOperations(cycle *operationsCycle, observed fleet.OperationsObservation, activity operations.Activity) {
+	run := cycle.run
+	manager := run.operations
+	persist := func() bool {
+		activity.Recorded = manager.record != nil
+		if manager.record != nil && manager.record(context.WithoutCancel(cycle.ctx), run.runtimeID, activity) != nil {
+			activity.Recorded = false
+			return false
+		}
+		return true
+	}
+	var command *fleet.AutomaticCommand
+	if persist() {
+		result := manager.decide(cycle.ctx, run.runtimeID, observed)
+		activity.SetModel(result)
+		activity.Status = result.Status
+		if result.Status == "decided" && result.Decision != nil {
+			var err error
+			command, err = observed.Prepare(*result.Decision)
+			switch {
+			case err != nil:
+				activity.Status = "invalid_output"
+			case command == nil:
+				activity.Status, activity.Decision = "abstained", result.Decision
+			default:
+				at := time.Now().UTC()
+				activity.Stage, activity.Status, activity.ProposedAt, activity.Decision = "proposed", "proposed", &at, result.Decision
+				if !persist() {
+					command, activity.Status = nil, "audit_unavailable"
+				}
+			}
+		}
+	} else {
+		activity.Status = "audit_unavailable"
+	}
+	c.applyOperations(cycle, &activity, command)
+	at := time.Now().UTC()
+	activity.Stage, activity.FinishedAt = "finished", &at
+	persist()
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.operations != cycle {
-		return
+	if c.operations == cycle {
+		c.operations = nil
+		if c.run == run && c.ready && !c.closed {
+			c.publishOperations(run, activity)
+		}
 	}
-	c.operations = nil
+}
+
+func (c *demoController) applyOperations(cycle *operationsCycle, activity *operations.Activity, command *fleet.AutomaticCommand) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	run := cycle.run
 	manager := run.operations
 	_ = manager.service.SetOperationsWindow(cycle.ctx, nil)
 	if c.run != run {
+		activity.Status = "cancelled"
 		return
 	}
 	run.operationsMode = "deterministic"
-	if !c.ready || !c.running || c.closed || cycle.ctx.Err() != nil || outcome.Status != "decided" || outcome.Decision == nil {
+	if !c.ready || !c.running || c.closed || cycle.ctx.Err() != nil {
+		activity.Status = "cancelled"
 		return
 	}
-	command, err := observed.Prepare(*outcome.Decision)
-	if err != nil || command == nil {
+	if command == nil {
 		return
 	}
+	c.publishOperations(run, *activity)
 	receipt, err := manager.service.ExecuteAutomatic(cycle.ctx, *command)
-	if err == nil && receipt.Execution == fleet.Succeeded && receipt.AuditCommitted {
-		run.operationsMode = "ai_assisted"
+	activity.Go = &receipt
+	switch {
+	case err == nil && receipt.Execution == fleet.Succeeded && receipt.AuditCommitted:
+		activity.Status, run.operationsMode = "applied", "ai_assisted"
+	case receipt.Execution == fleet.Unknown || !receipt.AuditCommitted:
+		activity.Status = "execution_unconfirmed"
+	case receipt.Execution == fleet.Failed:
+		activity.Status = "execution_failed"
+	default:
+		activity.Status, activity.GoReason = "go_rejected", "admission_rejected"
+		if errors.Is(err, fleet.ErrObservation) || errors.Is(err, fleet.ErrAutomaticExpired) {
+			activity.GoReason = "stale_observation"
+		}
 	}
+}
+
+func (c *demoController) publishOperations(run *demoRun, activity operations.Activity) {
+	const history = 12
+	if n := len(run.operationsActivity); n > 0 && run.operationsActivity[n-1].ObservationID == activity.ObservationID {
+		run.operationsActivity[n-1] = activity
+	} else {
+		if len(run.operationsActivity) == history {
+			copy(run.operationsActivity, run.operationsActivity[1:])
+			run.operationsActivity = run.operationsActivity[:history-1]
+		}
+		run.operationsActivity = append(run.operationsActivity, activity)
+	}
+	c.publishWarehouse("operations")
+}
+
+func (r *demoRun) warehouseOperationsMode() string {
+	if r.operationsMode == "" {
+		return "deterministic"
+	}
+	return r.operationsMode
 }

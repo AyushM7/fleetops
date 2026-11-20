@@ -2,6 +2,8 @@ package visitor
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"sync/atomic"
@@ -78,6 +80,7 @@ func TestOperationsCycleKeepsTicksMovingAndAppliesOnlyToItsRuntimeIntegration(t 
 	pool := operationsTestPool(t)
 	offered := make(chan sim.JobAssignment, 1)
 	proceed := make(chan struct{})
+	var journal []operations.Activity
 	c := operationsTestController(t, pool, func(ctx context.Context, runtime string, observed fleet.OperationsObservation) operations.Outcome {
 		pair := observed.Assignments[0].JobAssignment
 		offered <- pair
@@ -88,6 +91,13 @@ func TestOperationsCycleKeepsTicksMovingAndAppliesOnlyToItsRuntimeIntegration(t 
 			return operations.Outcome{Status: "decided", Decision: &fleet.OperationsDecision{Kind: "assign", Assignments: []sim.JobAssignment{pair}}}
 		}
 	})
+	c.run.operations.record = func(_ context.Context, runtime string, activity operations.Activity) error {
+		if runtime != c.run.runtimeID {
+			t.Errorf("audit used the wrong runtime")
+		}
+		journal = append(journal, activity)
+		return nil
+	}
 	t.Cleanup(func() { _ = c.close() })
 	other, err := fleet.NewVisitorWarehouse(42, pool)
 	if err != nil {
@@ -125,6 +135,19 @@ func TestOperationsCycleKeepsTicksMovingAndAppliesOnlyToItsRuntimeIntegration(t 
 	}
 	if owner != pair.RobotID || c.run.operationsMode != "ai_assisted" {
 		t.Fatalf("Go did not apply the observed assignment: %s, %s", owner, c.run.operationsMode)
+	}
+	if len(journal) != 3 || journal[0].Stage != "observed" || journal[1].Stage != "proposed" ||
+		journal[2].Status != "applied" || journal[2].Go == nil || !journal[2].Go.AuditCommitted {
+		t.Fatalf("actual workflow was not audited: %+v", journal)
+	}
+	batch, _ := c.warehouseEventBatch(c.run, 0)
+	var replay warehouseFrame
+	if len(batch) != 1 || batch[0].kind != "snapshot" || json.Unmarshal(batch[0].data, &replay) != nil ||
+		replay.RuntimeID != c.run.runtimeID || replay.OperationsMode != "ai_assisted" ||
+		len(replay.OperationsActivity) != 1 || replay.OperationsActivity[0].Status != "applied" ||
+		replay.OperationsActivity[0].ObservationID != journal[0].ObservationID ||
+		replay.OperationsActivity[0].Go.AuditID != journal[2].Go.AuditID || !replay.OperationsActivity[0].Recorded {
+		t.Fatalf("SSE reconnect did not preserve a confirmed scoped decision: %+v", replay.OperationsActivity)
 	}
 	for _, job := range other.Snapshot().Jobs {
 		if job.AssignedRobot != "" {
@@ -203,5 +226,31 @@ func TestExpiredVisitorCancelsOperationsAndDrainsWorkerIntegration(t *testing.T)
 	var attempts int
 	if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM fleet_automatic_audit").Scan(&attempts); err != nil || attempts != 0 {
 		t.Fatalf("expired decision reached automatic execution: %d %v", attempts, err)
+	}
+}
+
+func TestUnavailableAuditPreventsOperationsCallIntegration(t *testing.T) {
+	pool := operationsTestPool(t)
+	var calls atomic.Int32
+	c := operationsTestController(t, pool, func(context.Context, string, fleet.OperationsObservation) operations.Outcome {
+		calls.Add(1)
+		return operations.Outcome{}
+	})
+	c.run.operations.record = func(context.Context, string, operations.Activity) error {
+		return errors.New("offline audit fixture")
+	}
+	t.Cleanup(func() { _ = c.close() })
+	c.mu.Lock()
+	err := c.advanceInteractive(context.Background(), time.Now())
+	cycle := c.operations
+	c.mu.Unlock()
+	if err != nil || cycle == nil {
+		t.Fatalf("expected a cycle to fail closed: %v", err)
+	}
+	waitOperations(t, cycle.done)
+	history := c.run.operationsActivity
+	if calls.Load() != 0 || len(history) != 1 || history[0].Status != "audit_unavailable" ||
+		history[0].Recorded || c.run.warehouseOperationsMode() != "deterministic" {
+		t.Fatalf("audit failure was not reported safely: calls=%d events=%+v", calls.Load(), history)
 	}
 }

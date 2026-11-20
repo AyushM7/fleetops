@@ -61,7 +61,7 @@ func New(ctx context.Context, config Config) (*Application, error) {
 	factory := visitorFactory{admin: admin, config: cfg, evidenceDir: config.EvidenceDir}
 	if os.Getenv("FLEETOPS_OPERATIONS_ENABLED") == "1" {
 		if manager, err := operations.Open(ctx, admin); err == nil {
-			factory.operations = manager.Decide
+			factory.operations, factory.recordOperations = manager.Decide, manager.RecordActivity
 		} else {
 			slog.Warn("operations_manager_unavailable", "warehouse_mode", "deterministic")
 		}

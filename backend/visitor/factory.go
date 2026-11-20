@@ -19,11 +19,12 @@ import (
 )
 
 type visitorFactory struct {
-	admin         *db.Pool
-	config        db.Config
-	evidenceDir   string
-	archiveCommit func(string, []byte) error
-	operations    operationsDecider
+	admin            *db.Pool
+	config           db.Config
+	evidenceDir      string
+	archiveCommit    func(string, []byte) error
+	operations       operationsDecider
+	recordOperations operationsRecorder
 }
 
 func visitorCredentials() (*auth.Authenticator, map[string]string, string, error) {
@@ -94,7 +95,7 @@ func (f visitorFactory) create(ctx context.Context) (session *visitorSession, er
 	}
 	release := func() error { return f.release(pool, schema, dir) }
 	factory := demoFactory{pool: pool, auth: a, tokens: tokens, evidenceDir: dir,
-		proposerSubject: identity + ":proposer", operations: f.operations}
+		proposerSubject: identity + ":proposer", operations: f.operations, recordOperations: f.recordOperations}
 	run, err := factory.create(ctx)
 	if err != nil {
 		return nil, errors.Join(err, release())

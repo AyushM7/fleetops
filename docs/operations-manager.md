@@ -51,3 +51,18 @@ Only the offered jobs and robots get a dispatch window, which ends on the
 worker result, pause, stop or expiry and lasts no more than 20 simulator
 ticks. Movement, charging and collision avoidance keep running throughout.
 Go may reject an otherwise valid proposal when these live conditions change.
+
+Each observation is recorded against its runtime in
+`fleetops_operations.activity`. The host records a grounded proposal before
+it enters the Go command boundary, which supplies its own durable receipt.
+The activity reports terminal results, including abstention, denied budget,
+stale proposals and uncertain execution. `recorded: false` means that the
+activity projection could not be confirmed in the shared audit store.
+A confirmed Go receipt remains authoritative about command execution.
+
+V2 status and SSE frames expose up to 12 recent activities per runtime.
+An `operations` SSE event advances the same generation-scoped sequence as
+warehouse ticks, and reconnect snapshots include the recent history.
+Telemetry carries typed decisions, IDs and usage only. It contains no
+prompts, private reasoning or credentials. V1 routes keep their current
+approval workflow.

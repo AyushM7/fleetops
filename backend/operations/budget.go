@@ -60,6 +60,7 @@ func openLedger(ctx context.Context, pool *db.Pool, price pricing) (*ledger, err
 		}
 		for _, query := range []string{
 			"CREATE SCHEMA IF NOT EXISTS fleetops_operations",
+			activityTable,
 			`CREATE TABLE IF NOT EXISTS fleetops_operations.days (
 				utc_day date PRIMARY KEY,
 				micro_usd bigint NOT NULL CHECK (micro_usd BETWEEN 0 AND 5000000),

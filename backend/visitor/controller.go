@@ -13,25 +13,27 @@ import (
 	"time"
 
 	"github.com/AyushM7/fleetops/backend/graphql/model"
+	"github.com/AyushM7/fleetops/backend/operations"
 	"github.com/AyushM7/fleetops/backend/sim"
 )
 
 const warehouseScenario = "warehouse-v2"
 
 type demoRun struct {
-	scenarioID     string
-	generation     string
-	runtimeID      string
-	handler        http.Handler
-	capture        func(context.Context) error
-	advance        func(context.Context) error
-	inspect        func(context.Context) (*model.FleetState, bool, error)
-	step           func(context.Context) error
-	warehouse      func() sim.State
-	events         warehouseEvents
-	evidence       *demoExplanation
-	operations     *runtimeOperations
-	operationsMode string
+	scenarioID         string
+	generation         string
+	runtimeID          string
+	handler            http.Handler
+	capture            func(context.Context) error
+	advance            func(context.Context) error
+	inspect            func(context.Context) (*model.FleetState, bool, error)
+	step               func(context.Context) error
+	warehouse          func() sim.State
+	events             warehouseEvents
+	evidence           *demoExplanation
+	operations         *runtimeOperations
+	operationsMode     string
+	operationsActivity []operations.Activity
 }
 
 // Read-only local-demo provenance. This never authorizes a command.
@@ -56,15 +58,16 @@ const (
 )
 
 type demoStatus struct {
-	ScenarioID     string            `json:"scenarioId,omitempty"`
-	Generation     string            `json:"generation"`
-	Ready          bool              `json:"ready"`
-	State          string            `json:"state,omitempty"`
-	Speed          string            `json:"speed,omitempty"`
-	Snapshot       *model.FleetState `json:"snapshot,omitempty"`
-	Evidence       *demoExplanation  `json:"evidence,omitempty"`
-	OperationsMode string            `json:"operationsMode,omitempty"`
-	Warehouse      *sim.State        `json:"warehouse,omitempty"`
+	ScenarioID         string                `json:"scenarioId,omitempty"`
+	Generation         string                `json:"generation"`
+	Ready              bool                  `json:"ready"`
+	State              string                `json:"state,omitempty"`
+	Speed              string                `json:"speed,omitempty"`
+	Snapshot           *model.FleetState     `json:"snapshot,omitempty"`
+	Evidence           *demoExplanation      `json:"evidence,omitempty"`
+	OperationsActivity []operations.Activity `json:"operationsActivity,omitempty"`
+	OperationsMode     string                `json:"operationsMode,omitempty"`
+	Warehouse          *sim.State            `json:"warehouse,omitempty"`
 }
 
 // All browser forwarding, progress ticks, capture and replacement share this
