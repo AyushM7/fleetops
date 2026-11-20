@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/AyushM7/fleetops/backend/db"
 	"github.com/AyushM7/fleetops/backend/fleet"
@@ -22,7 +23,10 @@ func testDatabase(t *testing.T) *db.Pool {
 		t.Skip("FLEETOPS_TEST_DATABASE_URL not configured")
 	}
 	ctx := context.Background()
-	admin, err := db.Open(ctx, db.DefaultConfig(connection))
+	adminConfig := db.DefaultConfig(connection)
+	// Dropping a database can wait for a checkpoint after other integration tests write WAL.
+	adminConfig.QueryTimeout = 30 * time.Second
+	admin, err := db.Open(ctx, adminConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
