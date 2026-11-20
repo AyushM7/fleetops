@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ReactNode } from "react";
+import { BatteryCharge } from "./BatteryCharge";
 import { Icon } from "./WarehouseIcon";
 import {
   cellLabel, chargerStatus, isPriorityOverdue, jobLabels, jobOutcomeLabels, robotActivityLabel, robotRoleLabel, robotTone,
@@ -68,7 +69,7 @@ function RobotDetails({ robot, job, inspect, expanded }: {
     <dl className="v2-inspector-group">
       <Detail label="Status">{status}</Detail>
       <Detail label="Activity"><ActivityChip tone={robotTone(robot)}>{robotActivityLabel(robot)}</ActivityChip></Detail>
-      <Detail label="Battery"><strong>{robot.battery}%</strong></Detail>
+      <Detail label="Battery"><BatteryCharge percent={robot.battery} /></Detail>
       {expanded && <Detail label="Position">{cellLabel(robot)}</Detail>}
       {expanded && robot.waitTicks > 0 && <Detail label="Traffic wait">{robot.waitTicks} {robot.waitTicks === 1 ? "tick" : "ticks"}</Detail>}
     </dl>

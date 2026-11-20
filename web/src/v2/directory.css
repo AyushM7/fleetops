@@ -38,7 +38,7 @@
   block-size: 100%;
   padding: .7rem .8rem;
 }
-.v2-fleet-tile-title, .v2-fleet-tile-battery { display: inline-flex; align-items: center; gap: .35rem; }
+.v2-fleet-tile-title { display: inline-flex; align-items: center; gap: .35rem; }
 .v2-fleet-tile-title .v2-icon { color: var(--tone, var(--v2-muted)); }
 .v2-fleet-tile-title strong { font-size: 1.125rem; }
 .v2-fleet-tile .v2-card-activity { font-size: .875rem; font-weight: 650; }

@@ -1,3 +1,4 @@
+import { BatteryCharge } from "./BatteryCharge";
 import { Icon } from "./WarehouseIcon";
 import { cellLabel, robotActivityLabel, robotRoleLabel, robotTone, type PickEntity, type Selection } from "./warehousePresentation";
 import type { Robot } from "./telemetry";
@@ -16,7 +17,7 @@ export function Fleet({ robots, selection, pick }: {
           aria-pressed={selection?.kind === "robot" && selection.id === robot.id}
           data-tone={robotTone(robot)} onClick={event => pick({ kind: "robot", id: robot.id }, event.currentTarget)}>
           <span className="v2-fleet-tile-title"><Icon name="robot" size={19} /><strong>{robot.id}</strong></span>
-          <span className="v2-fleet-tile-battery"><Icon name="battery" size={17} />{robot.battery}%</span>
+          <BatteryCharge percent={robot.battery} />
           <span className="v2-card-activity">{robotActivityLabel(robot)}</span>
           <span className="v2-directory-muted">{robotRoleLabel(robot)}</span>
           <span className="v2-directory-muted v2-fleet-tile-location">

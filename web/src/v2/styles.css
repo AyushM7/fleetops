@@ -331,7 +331,7 @@
 .v2-shell .v2-fleet-link { margin-inline-start: auto; padding: 5px 0; font-size: .75rem; }
 .v2-fleet-scroll {
   display: grid;
-  grid-template-columns: repeat(11, minmax(88px, 1fr));
+  grid-template-columns: repeat(11, minmax(6rem, 1fr));
   gap: 7px;
   overflow-x: auto;
   scrollbar-width: thin;
@@ -354,7 +354,22 @@
   text-align: start;
 }
 .v2-robot-card strong { display: inline-flex; align-items: center; gap: 3px; font-size: .875rem; }
-.v2-card-charge { text-align: end; font-size: .8125rem; font-weight: 550; }
+.v2-card-charge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .2rem;
+  color: var(--v2-text);
+  white-space: nowrap;
+}
+.v2-card-charge .v2-icon { stroke-width: 2; }
+.v2-card-charge[data-charge="healthy"] .v2-icon { color: var(--v2-charging); }
+.v2-card-charge[data-charge="low"] .v2-icon { color: var(--v2-waiting); }
+.v2-card-charge[data-charge="critical"] .v2-icon { color: var(--v2-fault); }
+.v2-fleet-scroll .v2-robot-card { column-gap: 4px; padding-inline: 6px; }
+.v2-fleet-scroll .v2-card-charge { font-size: .8125rem; font-weight: 550; }
+.v2-fleet-scroll .v2-card-charge .v2-icon { inline-size: 1rem; block-size: 1rem; }
+.v2-fleet-scroll .v2-card-activity { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
 .v2-card-activity { grid-column: span 2; color: var(--tone, var(--v2-muted)); font-size: .72rem; line-height: 1.15; }
 .v2-shell .v2-robot-card[data-tone] {
   background: var(--tone-wash);

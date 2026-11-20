@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { BatteryCharge } from "./BatteryCharge";
 import { Icon } from "./WarehouseIcon";
 import { WarehouseInspector, useInspectorFocus } from "./WarehouseInspector";
 import { WarehouseMap } from "./WarehouseMap";
@@ -48,9 +49,11 @@ function FleetStrip({ robots, selection, pick, viewFleet }: {
         data-tone={robotTone(robot)} aria-label={'Inspect ' + robot.id + (robot.role === "maintenance" ? " maintenance robot" : "")}
         aria-describedby={"v2-fleet-activity-" + robot.id + " v2-fleet-battery-" + robot.id}
         onClick={event => pick({ kind: "robot", id: robot.id }, event.currentTarget)}>
-        <strong>{robot.id}{robot.role === "maintenance" && <Icon name="diamond" size={13} />}</strong>
-        <span className="v2-card-charge" id={"v2-fleet-battery-" + robot.id}>{robot.battery}%</span>
-        <span className="v2-card-activity" id={"v2-fleet-activity-" + robot.id}>{robotActivityLabel(robot)}</span>
+        <strong>{robot.id}</strong>
+        <BatteryCharge id={"v2-fleet-battery-" + robot.id} percent={robot.battery} />
+        <span className="v2-card-activity" id={"v2-fleet-activity-" + robot.id}>
+          {robotActivityLabel(robot)}{robot.role === "maintenance" && <Icon name="diamond" size={13} />}
+        </span>
       </button>
     </li>)}</ul>
   </section>;

@@ -41,6 +41,8 @@ describe("Fleet", () => {
   it("shows every robot with its actual role and activity, with operational tints", () => {
     const html = render("Fleet");
     expect(html.match(/class="v2-robot-card v2-fleet-tile"/g)).toHaveLength(11);
+    expect(html.match(/class="v2-card-charge"[^>]*><svg aria-hidden="true"[^>]*>.*?<\/svg>\d+%<\/span>/g)).toHaveLength(11);
+    expect(html).toContain('aria-label="Battery charge 54%, healthy"');
     for (const text of ["R11", "Maintenance robot", "Parked", "Available", "Charging", "Traffic wait", "Delivering", "Faulted",
       "Job J3", "Cell 3, 4", "54%"]) expect(html).toContain(text);
     for (const tone of ["moving", "charging", "waiting", "fault"]) expect(html).toContain('data-tone="' + tone + '"');
@@ -50,6 +52,7 @@ describe("Fleet", () => {
     const html = render("Fleet", { kind: "robot", id: "R4" });
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
     expect(html).toContain("Robot details");
+    expect(html).toMatch(/<dt>Battery<\/dt><dd><span[^>]+aria-label="Battery charge 90%, healthy"/);
     expect(html).toContain("<dt>Position</dt><dd>Cell 3, 4</dd>");
     expect(html).toContain("<dt>Traffic wait</dt><dd>2 ticks</dd>");
     expect(html).toContain("View on Warehouse map");

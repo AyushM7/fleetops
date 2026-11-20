@@ -21,7 +21,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
 
 const paths = {
   "activity": <>
@@ -33,7 +33,8 @@ const paths = {
     <path d="M13 6l6 6" />
   </>,
   "battery": <>
-    <path d="M6 7h11a2 2 0 0 1 2 2v.5a.5 .5 0 0 0 .5 .5a.5 .5 0 0 1 .5 .5v3a.5 .5 0 0 1 -.5 .5a.5 .5 0 0 0 -.5 .5v.5a2 2 0 0 1 -2 2h-11a2 2 0 0 1 -2 -2v-6a2 2 0 0 1 2 -2" />
+    <rect x="2.5" y="6.5" width="17" height="11" rx="2" />
+    <path d="M22 10v4" />
   </>,
   "bolt": <>
     <path d="M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11" />
@@ -138,7 +139,9 @@ const paths = {
   </>,
 };
 
-export function Icon({ name, size = 18, x, y }: { name: keyof typeof paths; size?: number; x?: number; y?: number }): JSX.Element {
+export function Icon({ name, size = 18, x, y, children }: {
+  name: keyof typeof paths; size?: number; x?: number; y?: number; children?: ReactNode;
+}): JSX.Element {
   return <svg aria-hidden="true" className="v2-icon" width={size} height={size} x={x} y={y} viewBox="0 0 24 24"
-    fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
+    fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">{paths[name]}{children}</svg>;
 }
