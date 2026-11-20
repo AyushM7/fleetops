@@ -41,3 +41,13 @@ of the key.
 
 - [GPT-6 Luna context and pricing](https://developers.openai.com/api/docs/models/gpt-6-luna)
 - [OpenAI Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create)
+
+Set `FLEETOPS_OPERATIONS_ENABLED=1` in the Go visitor server environment to
+opt in. The default is deterministic dispatch. Missing credentials, pricing,
+worker or ledger configuration leave that mode in place. Only a playing
+warehouse-v2 scenario schedules model cycles. Each visitor can start at
+most one cycle every 30 seconds, with two workers per server process.
+Only the offered jobs and robots get a dispatch window, which ends on the
+worker result, pause, stop or expiry and lasts no more than 20 simulator
+ticks. Movement, charging and collision avoidance keep running throughout.
+Go may reject an otherwise valid proposal when these live conditions change.

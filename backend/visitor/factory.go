@@ -23,6 +23,7 @@ type visitorFactory struct {
 	config        db.Config
 	evidenceDir   string
 	archiveCommit func(string, []byte) error
+	operations    operationsDecider
 }
 
 func visitorCredentials() (*auth.Authenticator, map[string]string, string, error) {
@@ -93,7 +94,7 @@ func (f visitorFactory) create(ctx context.Context) (session *visitorSession, er
 	}
 	release := func() error { return f.release(pool, schema, dir) }
 	factory := demoFactory{pool: pool, auth: a, tokens: tokens, evidenceDir: dir,
-		proposerSubject: identity + ":proposer"}
+		proposerSubject: identity + ":proposer", operations: f.operations}
 	run, err := factory.create(ctx)
 	if err != nil {
 		return nil, errors.Join(err, release())

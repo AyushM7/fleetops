@@ -11,10 +11,14 @@ func (s *Sim) assignPending(skip []bool) {
 	if !s.cfg.AutoDispatch {
 		return
 	}
+	hold := s.operationsHold
+	if s.state.Tick > hold.until {
+		s.operationsHold, hold = dispatchHold{}, dispatchHold{}
+	}
 	var idle []scheduler.RobotInfo
 	robots := make(map[int]int)
 	for i, robot := range s.state.Robots {
-		if skip[i] || !s.canAcceptJob(robot) {
+		if skip[i] || hold.robots[robot.ID] || !s.canAcceptJob(robot) {
 			continue
 		}
 		number := idNumber(robot.ID)
@@ -28,7 +32,7 @@ func (s *Sim) assignPending(skip []bool) {
 	distance := s.travelDistance(s.cfg.MaintenanceBay != nil)
 	jobs := make(map[int]int)
 	for i, job := range s.state.Jobs {
-		if job.Status != JobPending {
+		if job.Status != JobPending || hold.jobs[job.ID] {
 			continue
 		}
 		number := idNumber(job.ID)
@@ -110,4 +114,25 @@ func (s *Sim) travelDistance(liveOccupancy bool) scheduler.Distance {
 		cache[key] = found
 		return found.distance, found.reachable
 	}
+}
+
+const operationsDispatchTicks = 20
+
+type dispatchHold struct {
+	until        int
+	robots, jobs map[string]bool
+}
+
+// SetOperationsDispatchHold only delays the deterministic dispatcher for
+// offered pairs. It never blocks movement, charging, safety or direct validation.
+func (s *Sim) SetOperationsDispatchHold(options []AssignmentOption) {
+	s.operationsHold = dispatchHold{}
+	if len(options) == 0 || s.cfg.MaintenanceBay == nil {
+		return
+	}
+	hold := dispatchHold{until: s.state.Tick + operationsDispatchTicks, robots: map[string]bool{}, jobs: map[string]bool{}}
+	for _, option := range options {
+		hold.robots[option.RobotID], hold.jobs[option.JobID] = true, true
+	}
+	s.operationsHold = hold
 }

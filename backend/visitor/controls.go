@@ -39,7 +39,9 @@ func (c *demoController) advanceInteractive(ctx context.Context, now time.Time) 
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		c.startOperations(ctx, now)
 		if err := c.run.step(ctx); err != nil {
+			c.cancelOperations()
 			c.ready, c.running = false, false
 			c.run.events.signal()
 			return err
@@ -80,6 +82,10 @@ func (c *demoController) status(ctx context.Context) (demoStatus, error) {
 	if c.run.warehouse != nil {
 		state := c.run.warehouse()
 		status.Warehouse, status.State, status.Evidence = &state, c.warehouseState(), c.run.evidence
+		status.OperationsMode = c.run.operationsMode
+		if status.OperationsMode == "" {
+			status.OperationsMode = "deterministic"
+		}
 		return status, nil
 	}
 	snapshot, decided, err := c.run.inspect(ctx)
@@ -178,8 +184,10 @@ func (c *demoController) applyWarehouseControl(w http.ResponseWriter, path strin
 			c.running, c.nextTick = true, time.Now().Add(warehouseTickInterval)
 		}
 	case "/demo/pause":
+		c.cancelOperations()
 		c.running = false
 	case "/demo/stop":
+		c.cancelOperations()
 		c.running, c.stopped = false, true
 	default:
 		http.Error(w, "warehouse ticks are controlled by the server", http.StatusConflict)

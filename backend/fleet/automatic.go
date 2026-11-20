@@ -49,6 +49,7 @@ func (s *Service) SetAutomaticCommandsEnabled(enabled bool) error {
 	}
 	s.automaticEnabled = enabled
 	if !enabled {
+		s.commander.SetOperationsDispatchHold(nil)
 		s.automaticReads, s.automaticVersions = nil, nil
 	}
 	return nil

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 
+	"github.com/AyushM7/fleetops/backend/auth"
 	"github.com/AyushM7/fleetops/backend/safety"
 	"github.com/AyushM7/fleetops/backend/sim"
 )
@@ -140,4 +141,40 @@ func (o OperationsObservation) Prepare(decision OperationsDecision) (*AutomaticC
 		return nil, ErrOperationsDecision
 	}
 	return command, nil
+}
+
+// SetOperationsWindow coordinates an authenticated decision window with Go
+// auto-dispatch. Passing nil releases the window even after cancellation.
+func (s *Service) SetOperationsWindow(ctx context.Context, observation *OperationsObservation) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	principal, _ := auth.FromContext(ctx)
+	if err := s.automaticAccess(principal, s.runtimeID); err != nil {
+		return err
+	}
+	if observation == nil {
+		s.commander.SetOperationsDispatchHold(nil)
+		return nil
+	}
+	if s.poisoned {
+		return ErrPoisoned
+	}
+	private := observation.private
+	if private.RuntimeID != s.runtimeID {
+		return ErrObservation
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	ref := AutomaticCommand{ObservationID: private.ObservationID, ExpiresAt: private.ExpiresAt, Preconditions: private.Versions}
+	if err := s.checkAutomaticObservation(ref, principal.Subject, s.clock().UTC()); err != nil {
+		return err
+	}
+	options := slices.Clone(observation.Assignments)
+	for _, candidate := range observation.Reassignments {
+		options = append(options, sim.AssignmentOption{JobAssignment: sim.JobAssignment{RobotID: candidate.ToRobotID}})
+	}
+	s.commander.SetOperationsDispatchHold(options)
+	return nil
 }

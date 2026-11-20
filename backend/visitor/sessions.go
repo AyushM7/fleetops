@@ -293,6 +293,7 @@ func (s *visitorSession) advance(ctx context.Context) {
 func (s *visitorSession) stopRuntime() {
 	s.controller.mu.Lock()
 	defer s.controller.mu.Unlock()
+	s.controller.cancelOperations()
 	s.controller.ready, s.controller.running = false, false
 	s.controller.run.events.signal()
 }

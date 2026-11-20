@@ -17,6 +17,7 @@ type Commander interface {
 	SetCharging(robotID, stationID string) error
 	ReassignUnstartedJob(jobID, fromRobotID, toRobotID string) error
 	AssignJobBatch(request AssignJobBatchRequest) error
+	SetOperationsDispatchHold([]AssignmentOption)
 }
 
 // Driver exposes trusted scenario injections, never agent tools.
