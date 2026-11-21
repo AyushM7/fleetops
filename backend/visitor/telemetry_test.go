@@ -11,7 +11,42 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/AyushM7/fleetops/backend/sim"
 )
+
+func TestWarehouseBreakdownTelemetry(t *testing.T) {
+	cfg := sim.WarehouseV2Config()
+	cfg.ScheduledBreakdowns = []sim.ScheduledBreakdown{{Tick: 1, RobotID: "R1", Type: sim.FaultMotorFailure}}
+	world, err := sim.New(cfg, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := &demoRun{scenarioID: warehouseScenario, warehouse: world.Snapshot}
+	c := &demoController{run: run, ready: true}
+	c.ensureWarehouseSnapshot()
+	for range 2 {
+		world.Tick()
+		c.publishWarehouse("tick")
+	}
+	for i, event := range run.events.frames {
+		var frame warehouseFrame
+		if err := json.Unmarshal(event.data, &frame); err != nil {
+			t.Fatal(err)
+		}
+		r := frame.Snapshot.Robots[0]
+		if i == 0 {
+			if r.ActiveFault != "" || len(frame.Snapshot.Faults) != 0 {
+				t.Fatal("pre-fault frame reported a breakdown")
+			}
+			continue
+		}
+		if r.ID != "R1" || r.Status != sim.RobotFaulted || r.ActiveFault != sim.FaultMotorFailure ||
+			len(frame.Snapshot.Faults) != 1 || frame.Snapshot.Faults[0].Tick != 1 {
+			t.Fatalf("frame %d dropped or rewrote fault telemetry: robot=%+v history=%+v", i, r, frame.Snapshot.Faults)
+		}
+	}
+}
 
 type blockedWarehouseWriter struct {
 	*httptest.ResponseRecorder

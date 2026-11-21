@@ -18,6 +18,18 @@ The V2 simulator creates ten transport robots (`R1` through `R10`) and one maint
 
 A fresh V2 runtime issues `M1` for live references, including charging reservations, occupancy, and fault reports. The runtime keeps physical state in memory and starts a fresh simulator after restart. Stored evidence, audit payloads, and historical fixtures retain the IDs recorded by their original runtime. In historical V2 evidence, `R11` identifies the maintenance robot from that runtime. Live V2 requests have no `R11` alias. V1 keeps its existing IDs and human approval workflow.
 
+### V2 breakdowns
+
+Motor and sensor failures stop a robot immediately with status `faulted`. Communication loss also stops it on detection and changes its status to `offline` after `UnresponsiveDelay` subsequent ticks. The active cause remains `robot_unresponsive` across that transition. Critical battery uses the existing depletion stop at zero. A healthy charging trip can still dock at zero if it reaches the station on that step. V1 keeps its existing delayed unresponsive behavior and fault records.
+
+A stopped robot retains its cell, job assignment, and cargo custody. Its cell and occupied aisle remain obstacles. Go invalidates the executable route and releases unused charger reservations because the trip has stopped. A physically occupied dock stays occupied, and charging pauses. No tick clears an active breakdown or transfers a failed robot's job. M1 follows the same breakdown and battery rules.
+
+The robot's optional `activeFault` gives the current cause. The `faults` list records immutable occurrences with their tick and robot ID. Incident reconciliation opens a high-severity episode from the current cause, and callers that carry the reconciliation history retain the same episode across repeated observations and offline confirmation. Fleet state reads project current incidents. The V2 event stream carries the live robot cause and occurrence history. Episode history is runtime-scoped, with no persistent incident store or repair outcomes in this session.
+
+Trusted Go scenarios can schedule one breakdown per robot in nondecreasing tick order. Tick zero applies at construction. Later entries apply after that tick's physical movement, in the order supplied for a shared tick. If a robot is already disabled, it keeps its first cause and occurrence. The seed controls ordinary simulation randomness. The schedule takes no random draws. The default warehouse starts with an empty schedule, and only existing physical depletion can produce a breakdown there.
+
+Run a reproducible local scenario from the Go module with `go run ./cmd/simrun -layout=warehouse-v2 -seed=42 -ticks=7 -breakdown=1:R1:motor_failure -breakdown=4:R2:robot_unresponsive`. The other supported causes are `sensor_failure` and `critical_battery`. Advancement to tick 7 confirms R2 is offline. The scenario driver is outside the visitor and model command surfaces.
+
 ## Phase 2 closeout evidence
 
 The following closeout records historical Phase 2 acceptance, not a fresh whole-repository test result. DEMO-02's later native Windows run reported golden-file CRLF mismatches and no soak failure; see its [verification record](demo-inventory.md#10-tests-ci-and-inspection-verification). Neither observation silently resolves the historical limitation below.

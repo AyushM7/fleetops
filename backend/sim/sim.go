@@ -13,6 +13,7 @@ type Sim struct {
 	rng               *rand.Rand
 	jobCells          []Point
 	jobSequence       int
+	nextBreakdown     int
 	idleTicks         map[string]int
 	unresponsiveTicks map[string]int
 	navigation        map[string]robotNavigation
@@ -69,6 +70,7 @@ func New(cfg Config, seed int64) (*Sim, error) {
 	for i := 0; i < cfg.InitialJobs; i++ {
 		s.addJob()
 	}
+	s.applyScheduledBreakdowns()
 	s.state.Aisles = s.snapshotAisles()
 	return s, nil
 }
@@ -80,6 +82,7 @@ func (s *Sim) Tick() {
 		s.addJob()
 	}
 	s.stepRobots()
+	s.applyScheduledBreakdowns()
 	if s.cfg.MaintenanceBay != nil {
 		for i := range s.state.Jobs {
 			if job := &s.state.Jobs[i]; job.Status != JobDone {

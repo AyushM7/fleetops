@@ -116,6 +116,8 @@ func TestRunInvalidArguments(t *testing.T) {
 		{[]string{"-seed=-9223372036854775809"}, "invalid value"},
 		{[]string{"-ticks=-1"}, "ticks must be between"},
 		{[]string{"-ticks=100001"}, "ticks must be between"},
+		{[]string{"-breakdown=1:R1"}, "breakdown must be TICK:ROBOT:TYPE"},
+		{[]string{"-breakdown=x:R1:motor_failure"}, "breakdown tick must be an integer"},
 		{[]string{"extra"}, "unexpected positional"},
 		{[]string{"--", "extra"}, "unexpected positional"},
 	} {
@@ -125,6 +127,23 @@ func TestRunInvalidArguments(t *testing.T) {
 				t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout.String(), stderr.String())
 			}
 		})
+	}
+}
+
+func TestRunScheduledBreakdownsReplay(t *testing.T) {
+	args := []string{"-layout=warehouse-v2", "-seed=42", "-ticks=7", "-breakdown=1:R1:motor_failure", "-breakdown=4:R2:robot_unresponsive"}
+	var first, replay, stderr bytes.Buffer
+	if run(args, &first, &stderr) != 0 || run(args, &replay, &stderr) != 0 || !bytes.Equal(first.Bytes(), replay.Bytes()) {
+		t.Fatalf("breakdown replay differed: %s", stderr.String())
+	}
+	var state sim.State
+	if err := json.Unmarshal(first.Bytes(), &state); err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Faults) != 2 || state.Faults[0].Tick != 1 || state.Faults[1].Tick != 4 ||
+		state.Robots[0].ActiveFault != sim.FaultMotorFailure || state.Robots[0].Status != sim.RobotFaulted ||
+		state.Robots[1].ActiveFault != sim.FaultRobotUnresponsive || state.Robots[1].Status != sim.RobotOffline {
+		t.Fatalf("unexpected scheduled breakdowns: robots=%+v faults=%+v", state.Robots[:2], state.Faults)
 	}
 }
 

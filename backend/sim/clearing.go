@@ -265,7 +265,7 @@ func (s *Sim) stepRelocation(robot *RobotState) {
 		robot.Battery = max(0, robot.Battery-s.cfg.MovingDrain)
 	}
 	if robot.Battery == 0 {
-		robot.Status = RobotFaulted
+		s.depleteBattery(robot)
 	} else if (Point{X: robot.X, Y: robot.Y}) == target {
 		robot.Status = RobotIdle
 	}

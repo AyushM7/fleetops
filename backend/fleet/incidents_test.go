@@ -4,10 +4,41 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 
+	"github.com/AyushM7/fleetops/backend/db"
 	"github.com/AyushM7/fleetops/backend/incident"
 	"github.com/AyushM7/fleetops/backend/sim"
 )
+
+func TestWarehouseV2BreakdownReadState(t *testing.T) {
+	ctx := context.Background()
+	cfg := sim.WarehouseV2Config()
+	cfg.InitialJobs = 0
+	cfg.ScheduledBreakdowns = []sim.ScheduledBreakdown{{Tick: 1, RobotID: "R2", Type: sim.FaultSensorFailure}}
+	service, err := New(cfg, 42, &db.Pool{}, time.Now, visitorOperator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := service.ReadState(ctx)
+	if err != nil || len(before.ActiveIncidents) != 0 || before.Robots[1].Status != string(sim.RobotIdle) {
+		t.Fatalf("pre-fault read: %+v, %v", before.ActiveIncidents, err)
+	}
+	for range 2 {
+		if err := service.Tick(); err != nil {
+			t.Fatal(err)
+		}
+		after, err := service.ReadState(ctx)
+		if err != nil || len(after.ActiveIncidents) != 1 {
+			t.Fatalf("post-fault read: %+v, %v", after.ActiveIncidents, err)
+		}
+		robot := after.Robots[1]
+		if got := after.ActiveIncidents[0]; got != (IncidentView{RobotID: "R2", Type: string(incident.SensorFailure), Severity: string(incident.High), Telemetry: robot}) ||
+			robot.Status != string(sim.RobotFaulted) || robot.X != before.Robots[1].X || robot.Y != before.Robots[1].Y {
+			t.Fatalf("unexpected active incident: %+v", got)
+		}
+	}
+}
 
 // Only trusted tests supply synthetic snapshots; no runtime injection endpoint exists.
 type incidentCommander struct {

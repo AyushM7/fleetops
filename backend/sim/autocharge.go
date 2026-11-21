@@ -189,7 +189,7 @@ func (s *Sim) stepChargeTrip(robot *RobotState) {
 		return
 	}
 	if robot.Battery == 0 {
-		robot.Status = RobotFaulted
+		s.depleteBattery(robot)
 		return
 	}
 	if !s.advanceNavigation(robot, target) {
@@ -200,7 +200,7 @@ func (s *Sim) stepChargeTrip(robot *RobotState) {
 		// Successful arrival permits charging at zero; gain starts next tick.
 		s.beginCharging(robot, station)
 	} else if robot.Battery == 0 {
-		robot.Status = RobotFaulted
+		s.depleteBattery(robot)
 	}
 }
 

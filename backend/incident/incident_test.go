@@ -174,6 +174,49 @@ func TestMaintenanceIncidentHistoryKeepsRecordedRobotIDs(t *testing.T) {
 	}
 }
 
+func TestReconcileWarehouseV2BreakdownsAcrossOfflineTransition(t *testing.T) {
+	cfg := sim.WarehouseV2Config()
+	cfg.InitialJobs = 0
+	cfg.ScheduledBreakdowns = []sim.ScheduledBreakdown{
+		{RobotID: "R3", Type: sim.FaultRobotUnresponsive},
+		{RobotID: "R2", Type: sim.FaultSensorFailure},
+		{RobotID: "R1", Type: sim.FaultMotorFailure},
+		{RobotID: "M1", Type: sim.FaultCriticalBattery},
+	}
+	world, err := sim.New(cfg, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := world.Snapshot()
+	want := []incident.Incident{
+		{ID: "I1", RobotID: "R1", Type: incident.MotorFailure, Status: incident.Open, Severity: incident.High},
+		{ID: "I2", RobotID: "R2", Type: incident.SensorFailure, Status: incident.Open, Severity: incident.High},
+		{ID: "I3", RobotID: "R3", Type: incident.RobotUnresponsive, Status: incident.Open, Severity: incident.High},
+		{ID: "I4", RobotID: "M1", Type: incident.CriticalBattery, Status: incident.Open, Severity: incident.High},
+	}
+	got, counter := reconcile(t, nil, snapshot, 0)
+	if !reflect.DeepEqual(got, want) || counter != 4 || snapshot.Robots[2].Status != sim.RobotFaulted {
+		t.Fatalf("initial episodes = %+v, counter=%d, R3=%+v", got, counter, snapshot.Robots[2])
+	}
+	for i := 0; i < cfg.UnresponsiveDelay+2; i++ {
+		world.Tick()
+		state := world.Snapshot()
+		got, counter = reconcile(t, got, state, counter)
+		if !reflect.DeepEqual(got, want) || counter != 4 || !reflect.DeepEqual(state.Faults, snapshot.Faults) {
+			t.Fatalf("tick=%d episodes=%+v faults=%+v counter=%d", state.Tick, got, state.Faults, counter)
+		}
+	}
+	if state := world.Snapshot(); state.Robots[2].Status != sim.RobotOffline {
+		t.Fatal(state.Robots[2])
+	}
+
+	historyOnly := snapshot
+	historyOnly.Robots = nil
+	if got, next := reconcile(t, nil, historyOnly, 0); len(got) != 0 || next != 0 {
+		t.Fatalf("immutable occurrence history generated an active incident: %+v", got)
+	}
+}
+
 func TestFaultHistoryDoesNotInventActiveConditions(t *testing.T) {
 	aisle := 0
 	state := sim.State{Robots: []sim.RobotState{{ID: "R1", Battery: 100, Status: sim.RobotMoving}}, Faults: []sim.FaultState{

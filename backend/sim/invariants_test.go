@@ -112,6 +112,10 @@ func checkRobotInvariants(robot RobotState, cfg Config, jobs map[string]JobState
 	if !slices.Contains([]RobotStatus{RobotIdle, RobotMoving, RobotCharging, RobotFaulted, RobotOffline}, robot.Status) {
 		return fmt.Errorf("I3: %s invalid robot status %q", robot.ID, robot.Status)
 	}
+	if robot.ActiveFault != "" && (cfg.MaintenanceBay == nil || !robot.ActiveFault.isBreakdown() ||
+		robot.Status != RobotFaulted && (robot.Status != RobotOffline || robot.ActiveFault != FaultRobotUnresponsive)) {
+		return fmt.Errorf("I6: %s has inconsistent active fault %q", robot.ID, robot.ActiveFault)
+	}
 	if robot.JobID != "" {
 		job, exists := jobs[robot.JobID]
 		if !exists || job.AssignedRobot != robot.ID || (job.Status != JobAssigned && job.Status != JobInProgress) {
@@ -128,7 +132,7 @@ func checkRobotInvariants(robot RobotState, cfg Config, jobs map[string]JobState
 			return fmt.Errorf("I6: %s moving without a job", robot.ID)
 		}
 	case RobotFaulted:
-		if robot.Battery != 0 {
+		if (robot.ActiveFault == "" || robot.ActiveFault == FaultCriticalBattery) && robot.Battery != 0 {
 			return fmt.Errorf("I6: %s faulted with battery %d", robot.ID, robot.Battery)
 		}
 	}
@@ -245,7 +249,7 @@ func checkStationInvariants(stations []StationState, robots map[string]RobotStat
 			continue
 		}
 		robot, exists := robots[station.OccupiedBy]
-		if !exists || robot.X != station.X || robot.Y != station.Y || (robot.Status != RobotCharging && robot.Status != RobotOffline && robot.Activity != ActivityUndocking) {
+		if !exists || robot.X != station.X || robot.Y != station.Y || (robot.Status != RobotCharging && robot.Status != RobotOffline && robot.ActiveFault == "" && robot.Activity != ActivityUndocking) {
 			return fmt.Errorf("I7: station %s has invalid occupant %s", station.ID, station.OccupiedBy)
 		}
 		occupancy[robot.ID]++
@@ -264,7 +268,7 @@ func checkStationInvariants(stations []StationState, robots map[string]RobotStat
 func checkFaultInvariants(faults []FaultState, tick int, robots map[string]RobotState) error {
 	seen := make(map[string]bool)
 	for _, fault := range faults {
-		if !slices.Contains([]FaultType{FaultLowBattery, FaultRobotUnresponsive, FaultAisleConflict}, fault.Type) {
+		if fault.Type != FaultLowBattery && fault.Type != FaultAisleConflict && !fault.Type.isBreakdown() {
 			return fmt.Errorf("I3: %s invalid fault type %q", fault.ID, fault.Type)
 		}
 		if seen[fault.ID] || fault.Tick > tick {

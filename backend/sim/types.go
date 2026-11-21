@@ -82,6 +82,9 @@ const (
 	FaultLowBattery        FaultType = "low_battery"
 	FaultRobotUnresponsive FaultType = "robot_unresponsive"
 	FaultAisleConflict     FaultType = "aisle_conflict"
+	FaultMotorFailure      FaultType = "motor_failure"
+	FaultSensorFailure     FaultType = "sensor_failure"
+	FaultCriticalBattery   FaultType = "critical_battery"
 )
 
 type RobotState struct {
@@ -96,6 +99,7 @@ type RobotState struct {
 	Maintenance bool          `json:"maintenance,omitempty"`
 	Role        RobotRole     `json:"role,omitempty"`
 	Activity    RobotActivity `json:"activity,omitempty"`
+	ActiveFault FaultType     `json:"activeFault,omitempty"`
 }
 
 type JobState struct {

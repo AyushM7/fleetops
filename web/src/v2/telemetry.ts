@@ -2,6 +2,7 @@ export const warehouseScenario = "warehouse-v2";
 
 const cellKinds = ["free", "wall", "aisle", "station", "parking", "maintenance_bay"] as const;
 const robotStates = ["idle", "moving", "charging", "faulted", "offline"] as const;
+const breakdowns = ["motor_failure", "sensor_failure", "robot_unresponsive", "critical_battery"] as const;
 const activities = [
   "AVAILABLE", "GOING_TO_PICKUP", "PICKING_UP", "DELIVERING", "WAITING_FOR_TRAFFIC",
   "GOING_TO_CHARGE", "CHARGING", "UNDOCKING", "GOING_TO_PARK", "RELOCATING",
@@ -25,6 +26,7 @@ export type Layout = { width: number; height: number; cells: Cell[] };
 export type Robot = Point & {
   id: string; status: typeof robotStates[number]; activity: typeof activities[number];
   role: "transport" | "maintenance"; battery: number; jobId: string; blocked: boolean; waitTicks: number;
+  activeFault?: typeof breakdowns[number];
 };
 export type Job = {
   id: string; status: typeof jobStates[number]; type: typeof jobTypes[number]; assignedRobot: string;
@@ -98,6 +100,9 @@ function isRobot(v: unknown): v is Robot {
   return record(v) && point(v) && text(v.id) && member(v.status, robotStates) && member(v.activity, activities) &&
     (v.role === "maintenance" && v.id === "M1" || v.role === "transport" && /^R([1-9]|10)$/.test(v.id)) &&
     count(v.battery) && v.battery <= 100 &&
+    (v.activeFault === undefined || member(v.activeFault, breakdowns) &&
+      (v.status === "faulted" || v.status === "offline" && v.activeFault === "robot_unresponsive") &&
+      (v.activeFault !== "critical_battery" || v.battery === 0)) &&
     text(v.jobId) && typeof v.blocked === "boolean" && count(v.waitTicks);
 }
 

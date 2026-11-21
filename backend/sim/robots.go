@@ -77,6 +77,9 @@ func (s *Sim) prepareRobot(robot *RobotState) bool {
 			return true
 		}
 	}
+	if robot.ActiveFault != "" {
+		return true
+	}
 	if robot.Status != RobotMoving {
 		s.finishNavigation(robot)
 	}
@@ -122,7 +125,7 @@ func (s *Sim) stepIdle(robot *RobotState) {
 		robot.Battery = max(0, robot.Battery-1)
 	}
 	if robot.Battery == 0 {
-		robot.Status = RobotFaulted
+		s.depleteBattery(robot)
 		return
 	}
 }
@@ -185,7 +188,7 @@ func (s *Sim) stepMoving(robot *RobotState) {
 			s.prepareNavigation(robot, job.To)
 		}
 		if robot.Battery == 0 {
-			robot.Status = RobotFaulted
+			s.depleteBattery(robot)
 		}
 		return
 	}

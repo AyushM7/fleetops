@@ -17,6 +17,7 @@ type Config struct {
 	Stations              []Point
 	RobotStarts           []Point // V2 reserves these starts for transport robots.
 	MaintenanceBay        *Point  // Enables V2 and is the sole maintenance start.
+	ScheduledBreakdowns   []ScheduledBreakdown
 	InitialJobs           int
 	NewJobEvery           int
 	MaxJobs               int // Caps active jobs in V2 and total retained jobs in legacy scenarios.
@@ -118,6 +119,7 @@ func (c Config) Clone() Config {
 	c.Walls = slices.Clone(c.Walls)
 	c.Stations = slices.Clone(c.Stations)
 	c.RobotStarts = slices.Clone(c.RobotStarts)
+	c.ScheduledBreakdowns = slices.Clone(c.ScheduledBreakdowns)
 	if c.MaintenanceBay != nil {
 		bay := *c.MaintenanceBay
 		c.MaintenanceBay = &bay
@@ -133,6 +135,9 @@ func (c Config) robotStarts() []Point {
 }
 
 func (c Config) Validate() error {
+	if err := c.validateBreakdowns(); err != nil {
+		return err
+	}
 	if c.Width < 4 || c.Width > 50 || c.Height < 4 || c.Height > 50 {
 		return fmt.Errorf("%w: width and height must each be in [4,50]", ErrInvalidConfig)
 	}
