@@ -89,6 +89,12 @@ func checkTripInvariants(state State, cfg Config, navigation ...map[string]robot
 				}
 			}
 		}
+		if maintenanceTrip(state, robot.ID) {
+			if !recorded || reservations != 0 || nav.relocation || nav.target != state.Maintenance.Active.ServiceCell {
+				return fmt.Errorf("I19: %s lost its assigned service destination", robot.ID)
+			}
+			continue
+		}
 		if !recorded || nav.relocation && reservations != 0 || !nav.relocation && reservations != 1 {
 			return fmt.Errorf("I19: %s missing or ambiguous trip", robot.ID)
 		}
@@ -109,7 +115,7 @@ func checkRobotInvariants(robot RobotState, cfg Config, jobs map[string]JobState
 	if !cfg.InBounds(Point{robot.X, robot.Y}) || cfg.CellTypeAt(Point{robot.X, robot.Y}) == CellWall {
 		return fmt.Errorf("I2: %s outside %dx%d grid", robot.ID, cfg.Width, cfg.Height)
 	}
-	if !slices.Contains([]RobotStatus{RobotIdle, RobotMoving, RobotCharging, RobotFaulted, RobotOffline}, robot.Status) {
+	if !slices.Contains([]RobotStatus{RobotIdle, RobotMoving, RobotCharging, RobotFaulted, RobotOffline, RobotServicing}, robot.Status) {
 		return fmt.Errorf("I3: %s invalid robot status %q", robot.ID, robot.Status)
 	}
 	if robot.ActiveFault != "" && (cfg.MaintenanceBay == nil || !robot.ActiveFault.isBreakdown() ||
@@ -126,6 +132,10 @@ func checkRobotInvariants(robot RobotState, cfg Config, jobs map[string]JobState
 	case RobotIdle, RobotCharging:
 		if robot.JobID != "" {
 			return fmt.Errorf("I6: %s is %s with a job", robot.ID, robot.Status)
+		}
+	case RobotServicing:
+		if robot.Role != RoleMaintenance || robot.JobID != "" {
+			return fmt.Errorf("I6: %s servicing without a maintenance capability", robot.ID)
 		}
 	case RobotMoving:
 		if robot.JobID == "" && !cfg.AutoCharge && cfg.MaintenanceBay == nil {
@@ -179,11 +189,16 @@ func checkReservationInvariants(s State, cfg Config, robots map[string]RobotStat
 		reserved[robot.ID] = true
 	}
 	for _, robot := range s.Robots {
-		if robot.Status == RobotMoving && robot.JobID == "" && !reserved[robot.ID] && !relocating[robot.ID] {
-			return fmt.Errorf("I6: %s moving without a job or valid charging/relocation trip", robot.ID)
+		if robot.Status == RobotMoving && robot.JobID == "" && !reserved[robot.ID] && !relocating[robot.ID] && !maintenanceTrip(s, robot.ID) {
+			return fmt.Errorf("I6: %s moving without a job or valid charging, relocation or maintenance trip", robot.ID)
 		}
 	}
 	return nil
+}
+
+func maintenanceTrip(state State, robotID string) bool {
+	return robotID == MaintenanceRobotID && state.Maintenance != nil && state.Maintenance.Active != nil &&
+		(state.Maintenance.Phase == MaintenanceAssigned || state.Maintenance.Phase == MaintenanceTraveling)
 }
 
 func checkTrafficInvariants(robots []RobotState, cfg Config) error {

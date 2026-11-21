@@ -1,12 +1,20 @@
 export const warehouseScenario = "warehouse-v2";
 
 const cellKinds = ["free", "wall", "aisle", "station", "parking", "maintenance_bay"] as const;
-const robotStates = ["idle", "moving", "charging", "faulted", "offline"] as const;
+const robotStates = ["idle", "moving", "charging", "faulted", "offline", "servicing"] as const;
 const breakdowns = ["motor_failure", "sensor_failure", "robot_unresponsive", "critical_battery"] as const;
 const activities = [
   "AVAILABLE", "GOING_TO_PICKUP", "PICKING_UP", "DELIVERING", "WAITING_FOR_TRAFFIC",
   "GOING_TO_CHARGE", "CHARGING", "UNDOCKING", "GOING_TO_PARK", "RELOCATING",
   "PARKED", "FAULTED", "OUT_OF_SERVICE",
+  "GOING_TO_REPAIR", "AT_REPAIR_SITE", "REPAIRING",
+] as const;
+const maintenancePhases = ["available", "assigned", "traveling", "at_target", "repairing", "verifying", "returning", "unavailable"] as const;
+const maintenanceOutcomes = ["completed", "failed", "unresolved", "cancelled"] as const;
+const maintenanceReasons = [
+  "maintenance_unavailable", "external_power_required", "awaiting_offline", "service_cell_unreachable",
+  "insufficient_maintenance_energy", "target_changed", "service_position_lost", "travel_blocked",
+  "target_recovery_blocked", "self_repair_unsupported",
 ] as const;
 const jobStates = ["pending", "assigned", "in_progress", "done"] as const;
 const jobTypes = ["NORMAL", "PRIORITY"] as const;
@@ -38,10 +46,22 @@ export type Station = Point & { id: string; occupiedBy: string; reservedBy: stri
 type Fault = { id: string; type: string; robots: string[]; tick: number; aisle?: number };
 type Aisle = { id: number; occupiedBy: string };
 type Deadlock = { robots: string[]; yieldingRobot?: string };
+type MaintenanceTarget = { robotId: string; faultId: string };
+type MaintenanceAttempt = MaintenanceTarget & {
+  id: string; fault: typeof breakdowns[number]; targetCell: Point; serviceCell: Point;
+  startedTick: number; finishedTick?: number; repairTicks: number; requiredRepairTicks: number;
+  outcome?: typeof maintenanceOutcomes[number]; reason?: typeof maintenanceReasons[number];
+};
+type MaintenanceIssue = MaintenanceTarget & { reason: typeof maintenanceReasons[number] };
+export type MaintenanceState = {
+  phase: typeof maintenancePhases[number]; active?: MaintenanceAttempt;
+  history?: MaintenanceAttempt[]; issues?: MaintenanceIssue[];
+};
 export type Snapshot = {
   tick: number; seed: number; completedJobs?: number; priorityDeadlinesMet?: number;
   priorityDeadlinesMissed?: number; robots: Robot[]; jobs: Job[]; stations: Station[];
   faults: Fault[]; aisles: Aisle[]; trafficDeadlocks?: Deadlock[];
+  maintenance?: MaintenanceState;
 };
 type Assignment = { jobId: string; robotId: string };
 type Decision =
@@ -99,6 +119,8 @@ function parseLayout(value: unknown): Layout {
 function isRobot(v: unknown): v is Robot {
   return record(v) && point(v) && text(v.id) && member(v.status, robotStates) && member(v.activity, activities) &&
     (v.role === "maintenance" && v.id === "M1" || v.role === "transport" && /^R([1-9]|10)$/.test(v.id)) &&
+    (v.status !== "servicing" || v.role === "maintenance" && v.jobId === "" &&
+      (v.activity === "AT_REPAIR_SITE" || v.activity === "REPAIRING")) &&
     count(v.battery) && v.battery <= 100 &&
     (v.activeFault === undefined || member(v.activeFault, breakdowns) &&
       (v.status === "faulted" || v.status === "offline" && v.activeFault === "robot_unresponsive") &&
@@ -135,6 +157,28 @@ function uniqueIds(values: { id: string }[]): boolean {
   return new Set(values.map(value => value.id)).size === values.length;
 }
 
+function isMaintenanceAttempt(v: unknown): v is MaintenanceAttempt {
+  return record(v) && id(v.id) && id(v.robotId) && id(v.faultId) && member(v.fault, breakdowns) &&
+    point(v.targetCell) && point(v.serviceCell) && Math.abs(v.targetCell.x - v.serviceCell.x) + Math.abs(v.targetCell.y - v.serviceCell.y) === 1 &&
+    count(v.startedTick) && count(v.repairTicks) && count(v.requiredRepairTicks) &&
+    v.requiredRepairTicks > 0 && v.repairTicks <= v.requiredRepairTicks &&
+    (v.outcome === undefined && v.finishedTick === undefined && v.reason === undefined ||
+      member(v.outcome, maintenanceOutcomes) && count(v.finishedTick) && v.finishedTick >= v.startedTick &&
+      (v.outcome === "completed" ? v.reason === undefined && v.repairTicks === v.requiredRepairTicks : member(v.reason, maintenanceReasons)));
+}
+
+function isMaintenanceIssue(v: unknown): v is MaintenanceIssue {
+  return record(v) && id(v.robotId) && id(v.faultId) && member(v.reason, maintenanceReasons);
+}
+
+function isMaintenance(v: unknown): v is MaintenanceState {
+  if (!record(v) || !member(v.phase, maintenancePhases)) return false;
+  const idle = v.phase === "available" || v.phase === "returning" || v.phase === "unavailable";
+  return (idle ? v.active === undefined : isMaintenanceAttempt(v.active) && v.active.outcome === undefined) &&
+    (v.history === undefined || Array.isArray(v.history) && v.history.every(item => isMaintenanceAttempt(item) && item.outcome !== undefined)) &&
+    (v.issues === undefined || Array.isArray(v.issues) && v.issues.every(isMaintenanceIssue));
+}
+
 function parseSnapshot(v: unknown, layout: Layout): Snapshot {
   if (!record(v) || !count(v.tick) || !count(v.seed) ||
       ![v.completedJobs, v.priorityDeadlinesMet, v.priorityDeadlinesMissed].every(optionalCount) ||
@@ -142,6 +186,7 @@ function parseSnapshot(v: unknown, layout: Layout): Snapshot {
       !Array.isArray(v.stations) || v.stations.length !== 4 || !v.stations.every(isStation) || !uniqueIds(v.stations) ||
       !Array.isArray(v.jobs) || !v.jobs.every(isJob) || !uniqueIds(v.jobs) ||
       !Array.isArray(v.faults) || !v.faults.every(isFault) || !Array.isArray(v.aisles) || !v.aisles.every(isAisle) ||
+      (v.maintenance !== undefined && !isMaintenance(v.maintenance)) ||
       (v.trafficDeadlocks !== undefined && (!Array.isArray(v.trafficDeadlocks) || !v.trafficDeadlocks.every(isDeadlock)))) return invalid();
   const cells = new Map(layout.cells.map(value => [cellKey(value), value.kind]));
   if (new Set(v.robots.map(cellKey)).size !== v.robots.length ||
@@ -152,6 +197,7 @@ function parseSnapshot(v: unknown, layout: Layout): Snapshot {
     tick: v.tick, seed: v.seed, robots: v.robots, stations: v.stations, jobs: v.jobs, faults: v.faults, aisles: v.aisles,
     completedJobs: v.completedJobs as number | undefined, priorityDeadlinesMet: v.priorityDeadlinesMet as number | undefined,
     priorityDeadlinesMissed: v.priorityDeadlinesMissed as number | undefined, trafficDeadlocks: v.trafficDeadlocks,
+    maintenance: v.maintenance,
   };
 }
 

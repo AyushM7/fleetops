@@ -12,6 +12,7 @@ export const activityLabels: Record<Robot["activity"], string> = {
   WAITING_FOR_TRAFFIC: "Traffic wait", GOING_TO_CHARGE: "To charge", CHARGING: "Charging",
   UNDOCKING: "Undocking", GOING_TO_PARK: "To parking", RELOCATING: "Relocating",
   PARKED: "Parked", FAULTED: "Faulted", OUT_OF_SERVICE: "Out of service",
+  GOING_TO_REPAIR: "To repair", AT_REPAIR_SITE: "At repair site", REPAIRING: "Repairing",
 };
 
 export const cellLabel = (point: Point): string => "Cell " + point.x + ", " + point.y;

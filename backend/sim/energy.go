@@ -19,6 +19,9 @@ func (s *Sim) chargingExitDistance(from Point, robotID string, distance schedule
 }
 
 func (s *Sim) routeAffordable(robot RobotState, target Point, steps int) bool {
+	if s.maintenanceTravel(robot) {
+		return s.maintenanceAffordable(robot, target, steps, s.cfg.MaintenanceRepairTicks)
+	}
 	if !s.cfg.AutoCharge {
 		return true
 	}

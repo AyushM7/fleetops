@@ -217,6 +217,48 @@ func TestReconcileWarehouseV2BreakdownsAcrossOfflineTransition(t *testing.T) {
 	}
 }
 
+func TestWarehouseMaintenanceResolvesTheOriginalEpisodeAfterVerification(t *testing.T) {
+	cfg := sim.WarehouseV2Config()
+	cfg.ScheduledBreakdowns = []sim.ScheduledBreakdown{{Tick: 48, RobotID: "R4", Type: sim.FaultSensorFailure}}
+	world, err := sim.New(cfg, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var episodes []incident.Incident
+	var counter uint64
+	var episodeID string
+	for range 200 {
+		world.Tick()
+		state := world.Snapshot()
+		episodes, counter = reconcile(t, episodes, state, counter)
+		if state.Tick < 48 {
+			continue
+		}
+		index := slices.IndexFunc(episodes, func(i incident.Incident) bool {
+			return i.RobotID == "R4" && i.Type == incident.SensorFailure
+		})
+		if index < 0 {
+			t.Fatal("lost the R4 episode")
+		}
+		current := episodes[index]
+		if episodeID == "" {
+			episodeID = current.ID
+		}
+		if current.ID != episodeID || len(state.Faults) != 1 || state.Faults[0].Tick != 48 {
+			t.Fatalf("episode or source occurrence changed: %+v, %+v", current, state.Faults)
+		}
+		if current.Status == incident.Resolved {
+			if state.Maintenance == nil || len(state.Maintenance.History) != 1 ||
+				state.Maintenance.History[0].Outcome != sim.MaintenanceCompleted ||
+				state.Maintenance.History[0].FinishedTick != state.Tick || state.Robots[3].ActiveFault != "" {
+				t.Fatalf("episode resolved without verified recovery: %+v", state.Maintenance)
+			}
+			return
+		}
+	}
+	t.Fatal("verified repair did not resolve the active incident")
+}
+
 func TestFaultHistoryDoesNotInventActiveConditions(t *testing.T) {
 	aisle := 0
 	state := sim.State{Robots: []sim.RobotState{{ID: "R1", Battery: 100, Status: sim.RobotMoving}}, Faults: []sim.FaultState{

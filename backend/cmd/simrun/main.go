@@ -22,6 +22,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	seed := flags.Int64("seed", 42, "random seed")
 	ticks := flags.Int("ticks", 200, "number of ticks (0–100000)")
 	layout := flags.String("layout", "default", "layout (default|warehouse|warehouse-v2)")
+	repairTicks := flags.Int("repair-ticks", 0, "repair duration in ticks (0 disables V2 maintenance, omit for layout default)")
 	var breakdowns []sim.ScheduledBreakdown
 	flags.Func("breakdown", "schedule a V2 breakdown as TICK:ROBOT:TYPE (repeat in tick order)", func(value string) error {
 		fields := strings.Split(value, ":")
@@ -58,6 +59,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	cfg.ScheduledBreakdowns = breakdowns
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == "repair-ticks" {
+			cfg.MaintenanceRepairTicks = *repairTicks
+		}
+	})
 	s, err := sim.New(cfg, *seed)
 	if err != nil {
 		fmt.Fprintf(stderr, "simrun: create simulator: %v\n", err)

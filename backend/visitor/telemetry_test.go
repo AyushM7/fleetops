@@ -48,6 +48,46 @@ func TestWarehouseBreakdownTelemetry(t *testing.T) {
 	}
 }
 
+func TestWarehouseMaintenanceTelemetryUsesObservedSimulatorProgress(t *testing.T) {
+	cfg := sim.WarehouseV2Config()
+	cfg.ScheduledBreakdowns = []sim.ScheduledBreakdown{{Tick: 48, RobotID: "R4", Type: sim.FaultSensorFailure}}
+	world, err := sim.New(cfg, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := &demoRun{scenarioID: warehouseScenario, warehouse: world.Snapshot}
+	c := &demoController{run: run, ready: true}
+	observed := make(map[sim.MaintenancePhase]bool)
+	for range 150 {
+		world.Tick()
+		state := world.Snapshot()
+		if state.Maintenance == nil || observed[state.Maintenance.Phase] {
+			continue
+		}
+		c.publishWarehouse("tick")
+		var frame warehouseFrame
+		if err := json.Unmarshal(run.events.frames[len(run.events.frames)-1].data, &frame); err != nil {
+			t.Fatal(err)
+		}
+		maintenance := frame.Snapshot.Maintenance
+		if maintenance == nil || maintenance.Phase != state.Maintenance.Phase || frame.Tick != state.Tick {
+			t.Fatalf("telemetry lost observed maintenance: %+v", frame)
+		}
+		observed[maintenance.Phase] = true
+		if maintenance.Phase == sim.MaintenanceRepairing && (maintenance.Active == nil ||
+			frame.Snapshot.Robots[10].Status != sim.RobotServicing || frame.Snapshot.Robots[3].ActiveFault == "") {
+			t.Fatalf("repair frame reported recovery prematurely: %+v", maintenance)
+		}
+		if maintenance.Phase == sim.MaintenanceReturning && (len(maintenance.History) != 1 ||
+			maintenance.History[0].Outcome != sim.MaintenanceCompleted || frame.Snapshot.Robots[3].ActiveFault != "") {
+			t.Fatalf("returning frame lost actual repair outcome: %+v", maintenance)
+		}
+	}
+	if !observed[sim.MaintenanceRepairing] || !observed[sim.MaintenanceReturning] {
+		t.Fatalf("missing maintenance phases in telemetry: %+v", observed)
+	}
+}
+
 type blockedWarehouseWriter struct {
 	*httptest.ResponseRecorder
 	deadline time.Time

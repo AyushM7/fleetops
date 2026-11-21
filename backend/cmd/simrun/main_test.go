@@ -131,7 +131,7 @@ func TestRunInvalidArguments(t *testing.T) {
 }
 
 func TestRunScheduledBreakdownsReplay(t *testing.T) {
-	args := []string{"-layout=warehouse-v2", "-seed=42", "-ticks=7", "-breakdown=1:R1:motor_failure", "-breakdown=4:R2:robot_unresponsive"}
+	args := []string{"-layout=warehouse-v2", "-seed=42", "-ticks=7", "-repair-ticks=0", "-breakdown=1:R1:motor_failure", "-breakdown=4:R2:robot_unresponsive"}
 	var first, replay, stderr bytes.Buffer
 	if run(args, &first, &stderr) != 0 || run(args, &replay, &stderr) != 0 || !bytes.Equal(first.Bytes(), replay.Bytes()) {
 		t.Fatalf("breakdown replay differed: %s", stderr.String())
@@ -140,7 +140,7 @@ func TestRunScheduledBreakdownsReplay(t *testing.T) {
 	if err := json.Unmarshal(first.Bytes(), &state); err != nil {
 		t.Fatal(err)
 	}
-	if len(state.Faults) != 2 || state.Faults[0].Tick != 1 || state.Faults[1].Tick != 4 ||
+	if state.Maintenance != nil || len(state.Faults) != 2 || state.Faults[0].Tick != 1 || state.Faults[1].Tick != 4 ||
 		state.Robots[0].ActiveFault != sim.FaultMotorFailure || state.Robots[0].Status != sim.RobotFaulted ||
 		state.Robots[1].ActiveFault != sim.FaultRobotUnresponsive || state.Robots[1].Status != sim.RobotOffline {
 		t.Fatalf("unexpected scheduled breakdowns: robots=%+v faults=%+v", state.Robots[:2], state.Faults)

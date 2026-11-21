@@ -85,7 +85,7 @@ func (s *Sim) dispatchDistance() scheduler.Distance {
 func (s *Sim) travelDistance(liveOccupancy bool) scheduler.Distance {
 	blocked := make(map[Point]bool)
 	for _, robot := range s.state.Robots {
-		if !liveOccupancy && robot.Status != RobotOffline && robot.Status != RobotFaulted && robot.Status != RobotCharging {
+		if !liveOccupancy && robot.Status != RobotOffline && robot.Status != RobotFaulted && robot.Status != RobotCharging && robot.Status != RobotServicing {
 			continue
 		}
 		position := Point{X: robot.X, Y: robot.Y}

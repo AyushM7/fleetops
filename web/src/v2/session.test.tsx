@@ -121,6 +121,31 @@ describe("Warehouse V2 wire contracts", () => {
     expect(() => parseWarehouseStatus({ ...status(), warehouse: undefined, snapshot: snapshot(0) })).toThrow();
   });
 
+  it("reads physical maintenance progress and rejects an incomplete success or unsafe service cell", () => {
+    const parsed = parseWarehouseStatus(status());
+    if (!parsed.ready) throw new Error("Fixture should be ready");
+    const frame = wire(5, 12);
+    const m1 = { ...robots[10], x: 0, y: 11, status: "servicing", activity: "REPAIRING" };
+    const attempt = {
+      id: "MA1", robotId: "R1", faultId: "F1", fault: "sensor_failure",
+      targetCell: { x: 0, y: 12 }, serviceCell: { x: 0, y: 11 },
+      startedTick: 5, repairTicks: 1, requiredRepairTicks: 3,
+    };
+    const physical = { ...frame.snapshot, robots: [...robots.slice(0, 10), m1] };
+    const active = { ...frame, snapshot: { ...physical, maintenance: { phase: "repairing", active: attempt } } };
+    expect(parseWarehouseFrame(message("tick", active), parsed).snapshot.maintenance?.active).toEqual(attempt);
+    const returnedRobots = [...robots.slice(0, 10), { ...m1, status: "idle", activity: "AVAILABLE" }];
+    const returning = (repairTicks: number) => ({ ...frame, snapshot: { ...physical, robots: returnedRobots, maintenance: {
+      phase: "returning", history: [{ ...attempt, repairTicks, finishedTick: 12, outcome: "completed" }],
+    } } });
+    expect(parseWarehouseFrame(message("tick", returning(3)), parsed).snapshot.maintenance?.history?.[0].outcome).toBe("completed");
+    expect(() => parseWarehouseFrame(message("tick", returning(1)), parsed)).toThrow();
+    const unsafe = { ...active, snapshot: { ...active.snapshot, maintenance: {
+      phase: "repairing", active: { ...attempt, serviceCell: attempt.targetCell },
+    } } };
+    expect(() => parseWarehouseFrame(message("tick", unsafe), parsed)).toThrow();
+  });
+
   it("validates optional Operations data without treating a proposal as proof of execution", () => {
     const parsed = parseWarehouseStatus(status());
     if (!parsed.ready) throw new Error("Fixture should be ready");

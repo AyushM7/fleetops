@@ -20,11 +20,12 @@ const (
 type RobotStatus string
 
 const (
-	RobotIdle     RobotStatus = "idle"
-	RobotMoving   RobotStatus = "moving"
-	RobotCharging RobotStatus = "charging"
-	RobotFaulted  RobotStatus = "faulted"
-	RobotOffline  RobotStatus = "offline"
+	RobotIdle      RobotStatus = "idle"
+	RobotMoving    RobotStatus = "moving"
+	RobotCharging  RobotStatus = "charging"
+	RobotFaulted   RobotStatus = "faulted"
+	RobotOffline   RobotStatus = "offline"
+	RobotServicing RobotStatus = "servicing"
 )
 
 type RobotRole string
@@ -50,6 +51,9 @@ const (
 	ActivityParked            RobotActivity = "PARKED"
 	ActivityFaulted           RobotActivity = "FAULTED"
 	ActivityOutOfService      RobotActivity = "OUT_OF_SERVICE"
+	ActivityGoingToRepair     RobotActivity = "GOING_TO_REPAIR"
+	ActivityAtRepairSite      RobotActivity = "AT_REPAIR_SITE"
+	ActivityRepairing         RobotActivity = "REPAIRING"
 )
 
 type JobStatus string
@@ -147,6 +151,7 @@ type TrafficDeadlock struct {
 }
 
 type State struct {
+	Maintenance      *MaintenanceState `json:"maintenance,omitempty"`
 	TrafficDeadlocks []TrafficDeadlock `json:"trafficDeadlocks,omitempty"`
 	CompletedJobs    int               `json:"completedJobs,omitempty"`
 	Tick             int               `json:"tick"`

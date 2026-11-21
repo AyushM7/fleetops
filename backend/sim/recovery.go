@@ -84,6 +84,9 @@ func (s *Sim) recoveryOrder() []int {
 
 func (s *Sim) requiredCell(index int) (Point, bool) {
 	robot := s.state.Robots[index]
+	if s.maintenanceTravel(robot) {
+		return Point{}, false
+	}
 	recovery := s.recovery[robot.ID]
 	// resume also covers the last held tick, whose counter has just reached zero.
 	if recovery.hold > 0 || recovery.resume && robot.WaitTicks == 0 {

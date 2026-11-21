@@ -8,19 +8,22 @@ import (
 
 // Sim owns deterministic state and is not goroutine-safe.
 type Sim struct {
-	cfg               Config
-	state             State
-	rng               *rand.Rand
-	jobCells          []Point
-	jobSequence       int
-	nextBreakdown     int
-	idleTicks         map[string]int
-	unresponsiveTicks map[string]int
-	navigation        map[string]robotNavigation
-	recovery          map[string]robotRecovery
-	protected         map[Point]bool
-	traffic           *trafficReservations
-	operationsHold    dispatchHold
+	cfg                  Config
+	state                State
+	rng                  *rand.Rand
+	jobCells             []Point
+	jobSequence          int
+	nextBreakdown        int
+	idleTicks            map[string]int
+	unresponsiveTicks    map[string]int
+	navigation           map[string]robotNavigation
+	recovery             map[string]robotRecovery
+	protected            map[Point]bool
+	traffic              *trafficReservations
+	maintenance          MaintenanceState
+	maintenanceDeadline  int
+	maintenancePhaseTick int
+	operationsHold       dispatchHold
 }
 
 // New constructs an isolated deterministic simulator from a configuration and seed.
@@ -83,6 +86,7 @@ func (s *Sim) Tick() {
 	}
 	s.stepRobots()
 	s.applyScheduledBreakdowns()
+	s.advanceMaintenance()
 	if s.cfg.MaintenanceBay != nil {
 		for i := range s.state.Jobs {
 			if job := &s.state.Jobs[i]; job.Status != JobDone {
@@ -102,6 +106,7 @@ func (s *Sim) CellAt(p Point) CellType {
 // Snapshot is READ: it returns owned copies of state, including nested fault data.
 func (s *Sim) Snapshot() State {
 	state := s.state
+	state.Maintenance = s.maintenanceSnapshot()
 	state.Robots = append([]RobotState{}, s.state.Robots...)
 	if s.cfg.MaintenanceBay != nil {
 		for i := range state.Robots {

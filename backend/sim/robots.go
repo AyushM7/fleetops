@@ -34,7 +34,8 @@ func (s *Sim) stepRobots() {
 		skip[i] = s.prepareRobot(&s.state.Robots[i])
 	}
 	s.assignPending(skip) // Pass B.
-	s.seekCharging(skip)  // Pass C.
+	s.scheduleMaintenance()
+	s.seekCharging(skip) // Pass C.
 	s.seekParking(skip)
 	s.clearIdleAisles(skip) // Pass C2.
 	if s.cfg.MaintenanceBay != nil {
@@ -148,6 +149,10 @@ func (s *Sim) queuedForCharging(robot RobotState) bool {
 }
 
 func (s *Sim) stepMoving(robot *RobotState) {
+	if s.maintenanceTravel(*robot) {
+		s.stepMaintenanceTravel(robot)
+		return
+	}
 	if robot.JobID == "" {
 		if s.navigation[robot.ID].relocation {
 			s.stepRelocation(robot)
@@ -203,7 +208,15 @@ func (s *Sim) robotActivity(robot RobotState) RobotActivity {
 		return ActivityOutOfService
 	case RobotCharging:
 		return ActivityCharging
+	case RobotServicing:
+		if s.maintenance.Phase == MaintenanceAtTarget {
+			return ActivityAtRepairSite
+		}
+		return ActivityRepairing
 	case RobotMoving:
+		if s.maintenanceTravel(robot) {
+			return ActivityGoingToRepair
+		}
 		switch {
 		case s.occupiedStation(robot.ID) != nil:
 			return ActivityUndocking

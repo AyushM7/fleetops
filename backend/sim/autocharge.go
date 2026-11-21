@@ -36,9 +36,13 @@ func (s *Sim) seekCharging(skip []bool) {
 		if station == nil {
 			continue
 		}
-		station.ReservedBy, robot.Status = robot.ID, RobotMoving
-		s.navigation[robot.ID] = robotNavigation{target: Point{X: station.X, Y: station.Y}, route: route}
+		s.beginChargeTrip(robot, station, route)
 	}
+}
+
+func (s *Sim) beginChargeTrip(robot *RobotState, station *StationState, route []Point) {
+	station.ReservedBy, robot.Status = robot.ID, RobotMoving
+	s.navigation[robot.ID] = robotNavigation{target: Point{X: station.X, Y: station.Y}, route: route}
 }
 
 func (s *Sim) rebalanceCharging() {

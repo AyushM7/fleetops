@@ -9,6 +9,7 @@ import (
 func breakdownConfig() Config {
 	cfg := WarehouseV2Config()
 	cfg.InitialJobs, cfg.AutoDispatch, cfg.NewJobEvery = 0, false, 10000
+	cfg.MaintenanceRepairTicks = 0
 	return cfg
 }
 
