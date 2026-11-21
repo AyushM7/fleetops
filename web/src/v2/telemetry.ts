@@ -95,8 +95,9 @@ function parseLayout(value: unknown): Layout {
 }
 
 function isRobot(v: unknown): v is Robot {
-  return record(v) && point(v) && id(v.id) && member(v.status, robotStates) && member(v.activity, activities) &&
-    member(v.role, ["transport", "maintenance"]) && count(v.battery) && v.battery <= 100 &&
+  return record(v) && point(v) && text(v.id) && member(v.status, robotStates) && member(v.activity, activities) &&
+    (v.role === "maintenance" && v.id === "M1" || v.role === "transport" && /^R([1-9]|10)$/.test(v.id)) &&
+    count(v.battery) && v.battery <= 100 &&
     text(v.jobId) && typeof v.blocked === "boolean" && count(v.waitTicks);
 }
 

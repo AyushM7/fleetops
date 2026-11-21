@@ -9,12 +9,12 @@ const available: Robot = {
   id: "R1", role: "transport", status: "idle", activity: "AVAILABLE", battery: 90, x: 3, y: 4,
   jobId: "", blocked: false, waitTicks: 0,
 };
-const robots: Robot[] = Array.from({ length: 11 }, (_, index) => ({ ...available, id: "R" + (index + 1) }));
+const robots: Robot[] = Array.from({ length: 10 }, (_, index) => ({ ...available, id: "R" + (index + 1) }));
 robots[1] = { ...robots[1], activity: "DELIVERING", status: "moving", jobId: "J3", battery: 54 };
 robots[2] = { ...robots[2], activity: "CHARGING", status: "charging" };
 robots[3] = { ...robots[3], activity: "DELIVERING", status: "moving", blocked: true, waitTicks: 2 };
 robots[4] = { ...robots[4], status: "faulted", activity: "FAULTED" };
-robots[10] = { ...robots[10], activity: "PARKED", role: "maintenance" };
+robots.push({ ...available, id: "M1", activity: "PARKED", role: "maintenance" });
 const pending: Job = {
   id: "J1", type: "NORMAL", status: "pending", assignedRobot: "", from: { x: 4, y: 5 }, to: { x: 8, y: 2 },
 };
@@ -43,7 +43,7 @@ describe("Fleet", () => {
     expect(html.match(/class="v2-robot-card v2-fleet-tile"/g)).toHaveLength(11);
     expect(html.match(/class="v2-card-charge"[^>]*><svg aria-hidden="true"[^>]*>.*?<\/svg>\d+%<\/span>/g)).toHaveLength(11);
     expect(html).toContain('aria-label="Battery charge 54%, healthy"');
-    for (const text of ["R11", "Maintenance robot", "Parked", "Available", "Charging", "Traffic wait", "Delivering", "Faulted",
+    for (const text of ["M1", "Maintenance robot", "Parked", "Available", "Charging", "Traffic wait", "Delivering", "Faulted",
       "Job J3", "Cell 3, 4", "54%"]) expect(html).toContain(text);
     for (const tone of ["moving", "charging", "waiting", "fault"]) expect(html).toContain('data-tone="' + tone + '"');
   });

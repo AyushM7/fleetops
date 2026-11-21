@@ -71,7 +71,7 @@ func (c AutomaticCommand) validate() error {
 		}
 	} else {
 		r := c.ReassignUnstartedJob
-		if !prefixedCommandID(r.JobID, 'J') || !prefixedCommandID(r.FromRobotID, 'R') || !prefixedCommandID(r.ToRobotID, 'R') || r.FromRobotID == r.ToRobotID {
+		if !prefixedCommandID(r.JobID, 'J') || !sim.IsV2TransportID(r.FromRobotID) || !sim.IsV2TransportID(r.ToRobotID) || r.FromRobotID == r.ToRobotID {
 			return ErrAutomaticCommand
 		}
 		targets = []string{r.JobID, r.FromRobotID, r.ToRobotID}

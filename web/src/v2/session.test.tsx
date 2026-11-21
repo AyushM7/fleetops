@@ -18,7 +18,7 @@ const layout = {
   })),
 };
 const robots = Array.from({ length: 11 }, (_, i) => ({
-  id: "R" + (i + 1), x: i === 10 ? 9 : i * 2, y: i === 10 ? 0 : 12,
+  id: i === 10 ? "M1" : "R" + (i + 1), x: i === 10 ? 9 : i * 2, y: i === 10 ? 0 : 12,
   status: "idle", activity: "PARKED", role: i === 10 ? "maintenance" : "transport",
   battery: 100, jobId: "", blocked: false, waitTicks: 0,
 }));
@@ -74,9 +74,18 @@ describe("Warehouse V2 wire contracts", () => {
     if (!parsed.ready) throw new Error("Fixture should be ready");
     expect(parsed.layout.cells).toHaveLength(260);
     expect(parsed.snapshot.robots).toHaveLength(11);
+    expect(parsed.snapshot.robots[10]).toMatchObject({ id: "M1", role: "maintenance" });
     expect(parsed.snapshot.completedJobs).toBeUndefined();
     expect(parsed.operations).toEqual([]);
     expect(parseWarehouseFrame(message("snapshot", wire()), parsed)).toMatchObject({ eventId: 1, mode: "deterministic" });
+  });
+
+  it.each([{ id: "R11" }, { role: "transport" }, { id: "M2" }])("rejects noncanonical maintenance telemetry %j", fields => {
+    const parsed = parseWarehouseStatus(status());
+    if (!parsed.ready) throw new Error("Fixture should be ready");
+    const warehouse = { ...snapshot(0), robots: robots.map(robot => robot.id === "M1" ? { ...robot, ...fields } : robot) };
+    expect(() => parseWarehouseStatus({ ...status(), warehouse })).toThrow();
+    expect(() => parseWarehouseFrame(message("snapshot", { ...wire(), snapshot: warehouse }), parsed)).toThrow();
   });
 
   it("rejects malformed payloads, wrong runtime or generation, and inconsistent event cursors", () => {

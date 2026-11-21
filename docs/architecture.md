@@ -12,6 +12,12 @@ An independent authenticated operator reviews canonical pending proposals. [`dec
 
 The [local demo](phase4-demo.md) uses a separate loopback gateway and deterministic reasoning adapter. Normal-server automatic ticking is optional and disabled by default; the demo scripts its own tick progression. There are no runtime dashboard lifecycle controls or playback APIs. See [Phase 5 evaluation](phase5-evaluation-report.md) and [known limitations](known-limitations.md) for evidence boundaries.
 
+## V2 fleet identity
+
+The V2 simulator creates ten transport robots (`R1` through `R10`) and one maintenance robot (`M1`). M1 starts in its dedicated bay at `(9, 0)`, uses the existing autonomous charging and parking rules, and is ineligible for transport assignment and reassignment. Mixed-robot tie breaks retain the order `R1` through `R10`, then `M1`. Go snapshots supply that identity to the Operations Manager, visitor status, and the event stream rendered by the Warehouse and Fleet views.
+
+A fresh V2 runtime issues `M1` for live references, including charging reservations, occupancy, and fault reports. The runtime keeps physical state in memory and starts a fresh simulator after restart. Stored evidence, audit payloads, and historical fixtures retain the IDs recorded by their original runtime. In historical V2 evidence, `R11` identifies the maintenance robot from that runtime. Live V2 requests have no `R11` alias. V1 keeps its existing IDs and human approval workflow.
+
 ## Phase 2 closeout evidence
 
 The following closeout records historical Phase 2 acceptance, not a fresh whole-repository test result. DEMO-02's later native Windows run reported golden-file CRLF mismatches and no soak failure; see its [verification record](demo-inventory.md#10-tests-ci-and-inspection-verification). Neither observation silently resolves the historical limitation below.

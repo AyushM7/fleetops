@@ -16,7 +16,9 @@ describe("Operations Manager with a mocked model", () => {
 
   it.each([
     { kind: "assign", assignments: [{ jobId: "J1", robotId: "R11" }] },
-    { kind: "reassign", reassignment: { jobId: "J1", fromRobotId: "R11", toRobotId: "R2" } },
+    { kind: "assign", assignments: [{ jobId: "J1", robotId: "M1" }] },
+    { kind: "reassign", reassignment: { jobId: "J1", fromRobotId: "M1", toRobotId: "R2" } },
+    { kind: "reassign", reassignment: { jobId: "J1", fromRobotId: "R2", toRobotId: "M1" } },
     { kind: "fault", robotId: "R2" },
     { kind: "abstain", reason: "no_safe_option", runtimeId: "other" },
   ])("rejects unsafe or out-of-scope output %j without retrying", async decision => {

@@ -78,7 +78,7 @@ func (s *Sim) recoveryOrder() []int {
 	for i := range order {
 		order[i] = i
 	}
-	slices.SortFunc(order, func(a, b int) int { return idNumber(s.state.Robots[a].ID) - idNumber(s.state.Robots[b].ID) })
+	slices.SortFunc(order, func(a, b int) int { return compareRobots(s.state.Robots[a], s.state.Robots[b]) })
 	return order
 }
 
@@ -323,7 +323,7 @@ func (s *Sim) recoverCycle(cycle []int, skip []bool) recoveryEvent {
 	reasons := []string{}
 	candidates := slices.Clone(cycle)
 	slices.SortFunc(candidates, func(a, b int) int {
-		return idNumber(s.state.Robots[b].ID) - idNumber(s.state.Robots[a].ID)
+		return compareRobots(s.state.Robots[b], s.state.Robots[a])
 	})
 	// A legal but unaffordable higher-ID retreat must not suppress a feasible mover.
 	for _, i := range candidates {

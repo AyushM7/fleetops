@@ -36,7 +36,7 @@ func (s *Sim) PlanRoute(from, to Point) ([]Point, error) {
 	return points, nil
 }
 
-// AisleOccupant is READ: it returns the lowest numeric robot ID in an aisle.
+// AisleOccupant is READ: it returns the first occupant in robot ID order.
 func (s *Sim) AisleOccupant(aisleID int) (string, error) {
 	column, ok := s.cfg.AisleColumn(aisleID)
 	if !ok {
@@ -48,7 +48,7 @@ func (s *Sim) AisleOccupant(aisleID int) (string, error) {
 func (s *Sim) occupantAtColumn(column int) string {
 	occupant := ""
 	for _, robot := range s.state.Robots {
-		if robot.X == column && robot.Y >= s.cfg.AisleYMin && robot.Y <= s.cfg.AisleYMax && (occupant == "" || idNumber(robot.ID) < idNumber(occupant)) {
+		if robot.X == column && robot.Y >= s.cfg.AisleYMin && robot.Y <= s.cfg.AisleYMax && (occupant == "" || CompareRobotIDs(robot.ID, occupant) < 0) {
 			occupant = robot.ID
 		}
 	}

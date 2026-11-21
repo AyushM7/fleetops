@@ -26,13 +26,15 @@ func TestWarehouseV2Starts(t *testing.T) {
 	for i, robot := range state.Robots {
 		p := Point{robot.X, robot.Y}
 		maintenance := i == 10
+		wantID := fmt.Sprintf("R%d", i+1)
 		wantRole := RoleTransport
 		wantType := CellParking
 		if maintenance {
+			wantID = "M1"
 			wantRole = RoleMaintenance
 			wantType = CellMaintenanceBay
 		}
-		if robot.ID != fmt.Sprintf("R%d", i+1) || robot.Role != wantRole || robot.Maintenance != maintenance || p != starts[i] || s.CellAt(p) != wantType || robot.Activity != ActivityParked || robot.Status != RobotIdle || robot.Battery != 100 {
+		if robot.ID != wantID || robot.Role != wantRole || robot.Maintenance != maintenance || p != starts[i] || s.CellAt(p) != wantType || robot.Activity != ActivityParked || robot.Status != RobotIdle || robot.Battery != 100 {
 			t.Fatalf("robot %d has unexpected startup state: %+v", i+1, robot)
 		}
 		if slices.Contains(jobCells, p) {
@@ -48,6 +50,13 @@ func TestWarehouseV2Starts(t *testing.T) {
 					t.Fatalf("route from %s to %v uses resource cell %v for transit", robot.ID, station, step)
 				}
 			}
+		}
+	}
+	slices.Reverse(s.state.Robots)
+	s.Tick()
+	for i, robot := range s.Snapshot().Robots {
+		if robot.ID != state.Robots[i].ID {
+			t.Fatalf("robot order after tick: index %d holds %s, want %s", i, robot.ID, state.Robots[i].ID)
 		}
 	}
 	*cfg.MaintenanceBay = Point{0, 0}
@@ -93,9 +102,14 @@ func TestWarehouseV2KeepsMaintenanceOutOfTransport(t *testing.T) {
 	cfg.InitialJobs = 0
 	s := newTestSim(t, cfg, 42)
 	s.state.Jobs = []JobState{{ID: "J1", From: Point{9, 1}, To: Point{9, 2}, Status: JobPending}}
+	for _, option := range s.OperationsAssignments(s.state.Jobs) {
+		if option.RobotID == "M1" {
+			t.Fatalf("maintenance robot offered for transport: %+v", option)
+		}
+	}
 	s.Tick()
-	if assigned := s.state.Jobs[0].AssignedRobot; assigned == "" || assigned == "R11" || s.state.Robots[10].JobID != "" {
-		t.Fatalf("transport job assigned to %q with R11 job %q", assigned, s.state.Robots[10].JobID)
+	if assigned := s.state.Jobs[0].AssignedRobot; !IsV2TransportID(assigned) || s.state.Robots[10].JobID != "" {
+		t.Fatalf("transport job assigned to %q with M1 job %q", assigned, s.state.Robots[10].JobID)
 	}
 
 	for _, tc := range []struct {

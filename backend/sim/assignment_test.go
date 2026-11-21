@@ -19,7 +19,8 @@ func TestAssignJobBatchValidation(t *testing.T) {
 		{"leading zero", []JobAssignment{{"J01", "R1"}}},
 		{"wrong prefix", []JobAssignment{{"R1", "R2"}}},
 		{"overflow", []JobAssignment{{"J9999999999999999999", "R1"}}},
-		{"maintenance robot", []JobAssignment{{"J1", "R11"}}},
+		{"maintenance robot", []JobAssignment{{"J1", "M1"}}},
+		{"retired ID", []JobAssignment{{"J1", "R11"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := (AssignJobBatchRequest{tc.pairs}).Validate(); !errors.Is(err, ErrInvalidAssignmentBatch) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -17,7 +18,8 @@ func TestOperationsDecisionRequiresGroundedPairs(t *testing.T) {
 	for _, decision := range []OperationsDecision{
 		{Kind: "assign", Assignments: []sim.JobAssignment{pair, pair}},
 		{Kind: "assign", Assignments: []sim.JobAssignment{{JobID: "J2", RobotID: "R1"}}},
-		{Kind: "reassign", Reassignment: &safety.ReassignUnstartedJobRequest{JobID: "J1", FromRobotID: "R11", ToRobotID: "R1"}},
+		{Kind: "assign", Assignments: []sim.JobAssignment{{JobID: "J1", RobotID: "M1"}}},
+		{Kind: "reassign", Reassignment: &safety.ReassignUnstartedJobRequest{JobID: "J1", FromRobotID: "M1", ToRobotID: "R1"}},
 		{Kind: "abstain", Reason: "arbitrary_reason"},
 		{Kind: "inject_fault"},
 	} {
@@ -30,6 +32,23 @@ func TestOperationsDecisionRequiresGroundedPairs(t *testing.T) {
 	}
 }
 
+func TestAutomaticTransportIDs(t *testing.T) {
+	for _, robotID := range []string{"R10", "M1", "R11"} {
+		command := AutomaticCommand{
+			RuntimeID: strings.Repeat("r", 33), ObservationID: strings.Repeat("o", 33), IdempotencyKey: "idempotent",
+			Preconditions:        map[string]uint64{"J1": 1, "R1": 1, robotID: 1},
+			ReassignUnstartedJob: &safety.ReassignUnstartedJobRequest{JobID: "J1", FromRobotID: "R1", ToRobotID: robotID},
+		}
+		var want error
+		if robotID != "R10" {
+			want = ErrAutomaticCommand
+		}
+		if err := command.validate(); !errors.Is(err, want) {
+			t.Errorf("automatic reassignment to %s: %v, want %v", robotID, err, want)
+		}
+	}
+}
+
 func TestOperationsAssignmentReachesAutomaticBoundaryIntegration(t *testing.T) {
 	s, pool, _, ctx := automaticFixture(t)
 	if _, err := s.ObserveOperations(context.Background()); !errors.Is(err, ErrUnauthorized) {
@@ -38,6 +57,10 @@ func TestOperationsAssignmentReachesAutomaticBoundaryIntegration(t *testing.T) {
 	observed, err := s.ObserveOperations(ctx)
 	if err != nil || len(observed.Assignments) == 0 || len(observed.Robots) != 11 || len(observed.Stations) != 4 {
 		t.Fatalf("operations observation missing warehouse evidence: %v", err)
+	}
+	if maintenance := observed.Robots[10]; maintenance.ID != "M1" || maintenance.Role != sim.RoleMaintenance ||
+		slices.ContainsFunc(observed.Assignments, func(o sim.AssignmentOption) bool { return o.RobotID == "M1" }) {
+		t.Fatalf("operations observation must include M1 without offering transport jobs to it: %+v", maintenance)
 	}
 	raw, err := json.Marshal(observed)
 	if err != nil || strings.Contains(string(raw), s.RuntimeID()) || strings.Contains(string(raw), "observationId") {

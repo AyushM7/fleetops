@@ -26,7 +26,7 @@ const job: Job = {
   from: { x: 4, y: 3 }, to: { x: 18, y: 1 }, deadlineTick: 90, deadlineMissed: true,
 };
 const robots: Robot[] = Array.from({ length: 11 }, (_, index) => ({
-  id: "R" + (index + 1),
+  id: index === 10 ? "M1" : "R" + (index + 1),
   x: index === 10 ? 9 : index === 0 ? 1 : index === 7 ? 4 : index * 2,
   y: index === 10 || index === 0 ? 0 : index === 7 ? 5 : 12,
   status: index === 0 ? "charging" : index === 7 ? "moving" : "idle",
@@ -68,11 +68,12 @@ describe("Warehouse V2", () => {
     expect(output.match(/class="v2-wall-block"/g)).toHaveLength(12);
     expect(output).toMatch(/class="v2-wall-block"[^>]*height="7.84"/);
     expect(output.match(/aria-label="C\d charging station/g)).toHaveLength(4);
-    expect(output.match(/aria-label="Inspect R\d/g)).toHaveLength(11);
-    expect(output.match(/class="v2-card-charge" id="v2-fleet-battery-R\d+"[^>]*><svg aria-hidden="true"[^>]*>.*?<\/svg>\d+%<\/span>/g))
+    expect(output.match(/aria-label="Inspect R\d/g)).toHaveLength(10);
+    expect(output).toContain('aria-label="Inspect M1 maintenance robot"');
+    expect(output.match(/class="v2-card-charge" id="v2-fleet-battery-(?:R\d+|M1)"[^>]*><svg aria-hidden="true"[^>]*>.*?<\/svg>\d+%<\/span>/g))
       .toHaveLength(11);
     expect(output).toContain('aria-label="Battery charge 21%, critical"');
-    expect(output).toContain('aria-label="R11 maintenance robot, Parked, battery 89%"');
+    expect(output).toContain('aria-label="M1 maintenance robot, Parked, battery 89%"');
     expect(output).toContain('data-status-glyph="moving" aria-hidden="true"');
     expect(output).toContain('data-status-glyph="charging" aria-hidden="true"');
     expect(output).not.toContain("Pickup for");

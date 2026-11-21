@@ -25,7 +25,7 @@ func (s *Sim) seekCharging(skip []bool) {
 		if order := cmp.Compare(left.Battery, right.Battery); order != 0 {
 			return order
 		}
-		return cmp.Compare(idNumber(left.ID), idNumber(right.ID))
+		return compareRobots(left, right)
 	})
 	for _, i := range candidates {
 		robot := &s.state.Robots[i]

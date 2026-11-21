@@ -5,10 +5,29 @@ import (
 	"slices"
 )
 
+const MaintenanceRobotID = "M1"
+
+// CompareRobotIDs orders canonical robot IDs, with maintenance after transport.
+func CompareRobotIDs(a, b string) int {
+	if a == b {
+		return 0
+	}
+	if a == MaintenanceRobotID {
+		return 1
+	}
+	if b == MaintenanceRobotID {
+		return -1
+	}
+	if order := cmp.Compare(len(a), len(b)); order != 0 {
+		return order
+	}
+	return cmp.Compare(a, b)
+}
+
+func compareRobots(a, b RobotState) int { return CompareRobotIDs(a.ID, b.ID) }
+
 func (s *Sim) stepRobots() {
-	slices.SortFunc(s.state.Robots, func(a, b RobotState) int {
-		return cmp.Compare(idNumber(a.ID), idNumber(b.ID))
-	})
+	slices.SortFunc(s.state.Robots, compareRobots)
 	// Pass A finishes for all robots before dispatch or movement begins.
 	skip := make([]bool, len(s.state.Robots))
 	for i := range s.state.Robots {

@@ -211,7 +211,7 @@ func checkAisleInvariants(s State, cfg Config) error {
 			if robot.X != column || robot.Y < cfg.AisleYMin || robot.Y > cfg.AisleYMax {
 				continue
 			}
-			if occupant == "" || idNumber(robot.ID) < idNumber(occupant) {
+			if occupant == "" || CompareRobotIDs(robot.ID, occupant) < 0 {
 				occupant = robot.ID
 			}
 		}
@@ -309,7 +309,11 @@ func checkEntityOrder(s State, cfg Config) error {
 				previous = number
 				continue
 			}
-			if want := fmt.Sprintf("%s%d", prefix, i+1); id != want {
+			want := fmt.Sprintf("%s%d", prefix, i+1)
+			if prefix == "R" && cfg.MaintenanceBay != nil && i == warehouseTransportCount {
+				want = "M1"
+			}
+			if id != want {
 				return fmt.Errorf("I9: ID %q at index %d, want %s", id, i, want)
 			}
 		}

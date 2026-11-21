@@ -63,6 +63,9 @@ func TestWarehouseEventReplayAndSnapshotReconciliation(t *testing.T) {
 		if frame.RuntimeID != run.runtimeID || frame.Generation != run.generation || frame.EventID != latest || frame.Tick != frame.Snapshot.Tick || frame.Tick != int(latest-1) || len(frame.Snapshot.Robots) != 11 {
 			t.Fatalf("inconsistent event metadata: %+v", frame)
 		}
+		if maintenance := frame.Snapshot.Robots[10]; maintenance.ID != "M1" || !maintenance.Maintenance || maintenance.JobID != "" {
+			t.Fatalf("snapshot event lost M1's canonical identity: %+v", maintenance)
+		}
 	}
 	batch, changed := c.warehouseEventBatch(run, latest-2)
 	if len(batch) != 2 || batch[0].id != latest-1 || batch[1].id != latest || batch[0].kind != "tick" || batch[1].kind != "tick" {

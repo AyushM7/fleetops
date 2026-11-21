@@ -31,6 +31,7 @@ func TestCurrentIncidentsUseOneDetachedReadOnlySnapshot(t *testing.T) {
 		{"minimum normal", sim.RobotState{ID: "R1", Battery: 30, JobID: "J1"}, "", ""},
 		{"low without job", sim.RobotState{ID: "R1", Battery: 14}, "", ""},
 		{"offline", sim.RobotState{ID: "R1", Battery: 100, Status: sim.RobotOffline}, incident.RobotUnresponsive, incident.High},
+		{"maintenance offline", sim.RobotState{ID: "M1", Battery: 100, Role: sim.RoleMaintenance, Status: sim.RobotOffline}, incident.RobotUnresponsive, incident.High},
 		{"blocked zero", sim.RobotState{ID: "R1", Battery: 100, Blocked: true}, incident.TrafficBlocked, incident.Medium},
 		{"blocked boundary", sim.RobotState{ID: "R1", Battery: 100, Blocked: true, WaitTicks: 40}, incident.TrafficBlocked, incident.Medium},
 		{"blocked high", sim.RobotState{ID: "R1", Battery: 100, Blocked: true, WaitTicks: 41}, incident.TrafficBlocked, incident.High},
@@ -54,7 +55,7 @@ func TestCurrentIncidentsUseOneDetachedReadOnlySnapshot(t *testing.T) {
 					t.Fatal(view.ActiveIncidents)
 				}
 			} else {
-				want := IncidentView{RobotID: "R1", Type: string(tc.kind), Severity: string(tc.severity), Telemetry: view.Robots[0]}
+				want := IncidentView{RobotID: tc.robot.ID, Type: string(tc.kind), Severity: string(tc.severity), Telemetry: view.Robots[0]}
 				if len(view.ActiveIncidents) != 1 || view.ActiveIncidents[0] != want {
 					t.Fatal(view.ActiveIncidents)
 				}

@@ -46,16 +46,15 @@ func New(cfg Config, seed int64) (*Sim, error) {
 		},
 	}
 	for i, p := range starts {
-		id := fmt.Sprintf("R%d", i+1)
-		robot := RobotState{ID: id, X: p.X, Y: p.Y, Battery: 100, Status: RobotIdle}
+		robot := RobotState{ID: fmt.Sprintf("R%d", i+1), X: p.X, Y: p.Y, Battery: 100, Status: RobotIdle}
 		if cfg.MaintenanceBay != nil {
 			robot.Role = RoleTransport
 			if i == warehouseTransportCount {
-				robot.Role = RoleMaintenance
+				robot.ID, robot.Role = MaintenanceRobotID, RoleMaintenance
 			}
 		}
 		s.state.Robots = append(s.state.Robots, robot)
-		s.unresponsiveTicks[id] = 0
+		s.unresponsiveTicks[robot.ID] = 0
 	}
 	stationPrefix := "S"
 	if cfg.MaintenanceBay != nil {

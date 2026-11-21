@@ -71,7 +71,7 @@ func Reconcile(previous []Incident, state sim.State, counter uint64) ([]Incident
 		}
 	}
 	robots := slices.Clone(state.Robots)
-	slices.SortFunc(robots, func(a, b sim.RobotState) int { return compareIDs(a.ID, b.ID) })
+	slices.SortFunc(robots, func(a, b sim.RobotState) int { return sim.CompareRobotIDs(a.ID, b.ID) })
 	next := counter
 	for _, robot := range robots {
 		for _, condition := range detect(robot) {
@@ -116,7 +116,7 @@ func detect(robot sim.RobotState) []Incident {
 func validateRobots(robots []sim.RobotState) error {
 	seen := make(map[string]bool, len(robots))
 	for _, robot := range robots {
-		if _, ok := idNumber(robot.ID, 'R'); !ok || seen[robot.ID] {
+		if !validRobotID(robot.ID) || seen[robot.ID] {
 			return ErrInvalidSnapshot
 		}
 		seen[robot.ID] = true
@@ -130,8 +130,7 @@ func indexHistory(previous []Incident, counter uint64) (map[key]int, error) {
 	var highest uint64
 	for i, record := range previous {
 		number, validID := idNumber(record.ID, 'I')
-		_, validRobot := idNumber(record.RobotID, 'R')
-		if !validID || !validRobot || seen[record.ID] || !validRecord(record) {
+		if !validID || !validRobotID(record.RobotID) || seen[record.ID] || !validRecord(record) {
 			return nil, ErrInvalidHistory
 		}
 		seen[record.ID], highest = true, max(highest, number)
@@ -155,6 +154,11 @@ func validRecord(record Incident) bool {
 		(record.Severity == Medium || record.Severity == High)
 }
 
+func validRobotID(id string) bool {
+	_, validTransport := idNumber(id, 'R')
+	return validTransport || id == sim.MaintenanceRobotID
+}
+
 func idNumber(id string, prefix byte) (uint64, bool) {
 	if len(id) < 2 || id[0] != prefix {
 		return 0, false
@@ -163,18 +167,14 @@ func idNumber(id string, prefix byte) (uint64, bool) {
 	return number, err == nil && number > 0 && id[1:] == strconv.FormatUint(number, 10)
 }
 
-func compareIDs(a, b string) int {
-	aNumber, _ := idNumber(a, a[0])
-	bNumber, _ := idNumber(b, b[0])
-	return cmp.Compare(aNumber, bNumber)
-}
-
 func compareIncidents(a, b Incident) int {
-	if order := compareIDs(a.RobotID, b.RobotID); order != 0 {
+	if order := sim.CompareRobotIDs(a.RobotID, b.RobotID); order != 0 {
 		return order
 	}
 	if order := cmp.Compare(a.Type, b.Type); order != 0 {
 		return order
 	}
-	return compareIDs(a.ID, b.ID)
+	aNumber, _ := idNumber(a.ID, 'I')
+	bNumber, _ := idNumber(b.ID, 'I')
+	return cmp.Compare(aNumber, bNumber)
 }
