@@ -96,6 +96,19 @@ describe("Operations AI with telemetry fixtures", () => {
       "<dt>Accounted (USD)</dt><dd>Unavailable</dd>"]) expect(html).toContain(text);
   });
 
+  it("shows maintenance admission as a dispatch with a separate physical outcome", () => {
+    const dispatch: OperationsActivity = {
+      ...proposed, stage: "finished", status: "applied",
+      decision: { kind: "maintenance", maintenance: { robotId: "R1", faultId: "F1" } },
+      go: { auditId: 7, execution: "succeeded", auditCommitted: true },
+    };
+    expect(withActivities(dispatch)).toContain("Maintenance dispatch");
+    const html = details(dispatch);
+    expect(html).toContain('aria-label="Inspect robot R1"');
+    expect(html).toContain("<code>F1</code>");
+    expect(html).toContain("Go admitted the maintenance dispatch. The simulator records the repair outcome separately.");
+  });
+
   it("separates a loading or unavailable feed from empty and retained data", () => {
     expect(page({ ...live, phase: "connecting", frame: null })).toContain("Waiting for confirmed operations telemetry");
     const unavailable = page({ ...live, phase: "unavailable", frame: null });

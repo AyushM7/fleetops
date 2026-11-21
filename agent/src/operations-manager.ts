@@ -8,6 +8,7 @@ import { operationsModelId, operationsOutputLimit } from "./operations-fetch.js"
 
 const jobId = z.string().regex(/^J[1-9][0-9]{0,18}$/);
 const transportId = z.string().regex(/^R([1-9]|10)$/);
+const faultId = z.string().regex(/^F[1-9][0-9]{0,18}$/);
 const decisionSchema = z.object({
   decision: z.discriminatedUnion("kind", [
     z.strictObject({
@@ -22,17 +23,23 @@ const decisionSchema = z.object({
       kind: z.literal("reassign"),
       reassignment: z.strictObject({ jobId, fromRobotId: transportId, toRobotId: transportId }),
     }),
+    z.strictObject({
+      kind: z.literal("maintenance"),
+      maintenance: z.strictObject({ robotId: transportId, faultId }),
+    }),
   ]),
 }).strict();
 
 const instructions = [
-  "You manage transport jobs in the FleetOps warehouse simulation.",
+  "You coordinate transport jobs and M1 maintenance dispatch in the FleetOps warehouse simulation.",
   "A Go observation supplies robot roles, battery, job custody, charging reservations, aisle occupancy and deadlocks.",
   "The assignments and reassignments lists are snapshot-scoped Go route and energy previews, never reservations.",
   "Use only pairs listed in those previews. A batch needs distinct jobs and distinct robots.",
   "Favor feasible urgent PRIORITY deadlines while giving overdue and older NORMAL work a chance.",
   "Prefer short routes, spare battery after delivery and charging, and fewer traffic conflicts.",
   "Reassign only an explicitly listed uncollected job when it improves progress. Never interrupt carrying cargo.",
+  "To dispatch M1, copy exactly one robotId and faultId pair from maintenanceOptions. A breakdown without an option is ineligible.",
+  "Weigh offered repairs using cargo custody, route cost, energy reserve and traffic. Dispatch begins an attempt; only Go verifies repair and recovery.",
   "If the case is unclear or none of the commands would help, abstain using one of the allowed reasons.",
   "Return only the structured decision.",
 ].join(" ");

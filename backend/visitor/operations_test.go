@@ -13,6 +13,7 @@ import (
 	"github.com/AyushM7/fleetops/backend/db"
 	"github.com/AyushM7/fleetops/backend/fleet"
 	"github.com/AyushM7/fleetops/backend/operations"
+	"github.com/AyushM7/fleetops/backend/proposal"
 	"github.com/AyushM7/fleetops/backend/sim"
 )
 
@@ -55,6 +56,11 @@ func operationsTestController(t *testing.T, pool *db.Pool, decide operationsDeci
 	if err != nil {
 		t.Fatal(err)
 	}
+	return operationsTestRun(t, service, decide)
+}
+
+func operationsTestRun(t *testing.T, service *fleet.Service, decide operationsDecider) *demoController {
+	t.Helper()
 	manager, err := newRuntimeOperations(service, decide)
 	if err != nil {
 		t.Fatal(err)
@@ -65,6 +71,227 @@ func operationsTestController(t *testing.T, pool *db.Pool, decide operationsDeci
 		step: func(context.Context) error { return service.Tick() }, capture: func(context.Context) error { return nil },
 	}
 	return &demoController{run: run, ready: true, interactive: true, running: true}
+}
+
+func operationsMaintenanceTestRun(t *testing.T, pool *db.Pool, decide operationsDecider) (*demoController, *fleet.Service) {
+	t.Helper()
+	cfg := sim.WarehouseV2Config()
+	cfg.ScheduledBreakdowns = []sim.ScheduledBreakdown{{Tick: 48, RobotID: "R4", Type: sim.FaultSensorFailure}}
+	service, err := fleet.New(cfg, 42, pool, time.Now, func(context.Context, proposal.OperatorIdentity) bool { return false })
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 48 {
+		if err := service.Tick(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := operationsTestRun(t, service, decide)
+	t.Cleanup(func() { _ = c.close() })
+	return c, service
+}
+
+func TestOperationsMaintenanceMockDispatchHasSeparatePhysicalOutcomeIntegration(t *testing.T) {
+	pool := operationsTestPool(t)
+	offered := make(chan sim.MaintenanceOption, 1)
+	proceed := make(chan struct{})
+	c, service := operationsMaintenanceTestRun(t, pool, func(ctx context.Context, _ string, o fleet.OperationsObservation) operations.Outcome {
+		if len(o.MaintenanceOptions) != 1 || len(o.Assignments)+len(o.Reassignments) != 0 {
+			t.Errorf("wrong maintenance offers: %+v", o.MaintenanceOptions)
+			return operations.Outcome{Status: "invalid_output"}
+		}
+		option := o.MaintenanceOptions[0]
+		offered <- option
+		select {
+		case <-ctx.Done():
+			return operations.Outcome{Status: "model_unavailable"}
+		case <-proceed:
+			return operations.Outcome{Status: "decided", Decision: &fleet.OperationsDecision{Kind: "maintenance", Maintenance: &option.MaintenanceRequest}}
+		}
+	})
+	now := time.Now()
+	c.nextOperations = now.Add(operationsCooldown)
+	c.mu.Lock()
+	err := c.advanceInteractive(context.Background(), now)
+	cycle := c.operations
+	c.mu.Unlock()
+	if err != nil || cycle == nil {
+		t.Fatalf("new repair offer did not start a cycle during transport cooldown: %v", err)
+	}
+	select {
+	case option := <-offered:
+		if option.RobotID != "R4" || option.FaultID != "F1" || option.JobID != "J4" || option.RepairTicks != 3 {
+			t.Fatalf("mock did not choose the live R4/F1 offer: %+v", option)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("mock did not receive a maintenance offer")
+	}
+	if state := service.Snapshot(); state.Tick != 49 || state.Maintenance != nil && state.Maintenance.Active != nil {
+		t.Fatalf("deterministic dispatch raced or ticks froze: tick=%d maintenance=%+v", state.Tick, state.Maintenance)
+	}
+	close(proceed)
+	waitOperations(t, cycle.done)
+	finished := c.run.operationsActivity[0]
+	if finished.Status != "applied" || finished.Go == nil || !finished.Go.AuditCommitted ||
+		finished.Go.Execution != fleet.Succeeded || c.run.warehouseOperationsMode() != "ai_assisted" {
+		var reason string
+		if finished.Go != nil {
+			_ = pool.QueryRow(context.Background(), "SELECT reason FROM fleet_automatic_audit WHERE id=$1", finished.Go.AuditID).Scan(&reason)
+		}
+		t.Fatalf("missing confirmed dispatch activity: %+v, Go audit reason %q", finished, reason)
+	}
+	state := service.Snapshot()
+	work := state.Maintenance
+	if work == nil || work.Active == nil || work.Active.StartedTick != 49 || work.Active.RepairTicks != 0 || !work.Active.AIDirected ||
+		len(work.History) != 0 || state.Robots[10].Y != 0 || state.Robots[3].ActiveFault != sim.FaultSensorFailure {
+		t.Fatalf("dispatch receipt implied a physical result: %+v", work)
+	}
+	var status string
+	var payload []byte
+	if err := pool.QueryRow(context.Background(), "SELECT status, command FROM fleet_automatic_audit WHERE id=$1", finished.Go.AuditID).
+		Scan(&status, &payload); err != nil || status != "applied" {
+		t.Fatalf("missing durable command receipt: %q %v", status, err)
+	}
+	var command fleet.AutomaticCommand
+	if err := json.Unmarshal(payload, &command); err != nil || command.DispatchMaintenance == nil ||
+		*command.DispatchMaintenance != work.Active.MaintenanceRequest {
+		t.Fatalf("receipt does not bind the dispatched fault: %+v %v", command.DispatchMaintenance, err)
+	}
+	for state.Tick < 150 {
+		if err := service.Tick(); err != nil {
+			t.Fatal(err)
+		}
+		state = service.Snapshot()
+	}
+	if len(state.Maintenance.History) != 1 || state.Maintenance.History[0].Outcome != sim.MaintenanceCompleted ||
+		state.Maintenance.History[0].FinishedTick <= work.Active.StartedTick ||
+		state.Robots[3].ActiveFault != "" {
+		t.Fatalf("the dispatched physical attempt did not actually repair R4: %+v", state.Maintenance)
+	}
+	for _, job := range state.Jobs {
+		if job.ID == "J4" && job.AssignedRobot == "R4" && job.Status == sim.JobDone &&
+			job.CompletedTick > state.Maintenance.History[0].FinishedTick {
+			t.Logf("Mock selected R4/F1; Go committed dispatch receipt %d at tick 49, simulator verified repair at %d, R4 delivered J4 at %d",
+				finished.Go.AuditID, state.Maintenance.History[0].FinishedTick, job.CompletedTick)
+			return
+		}
+	}
+	t.Fatal("R4 did not complete its own delivery after verification")
+}
+
+func TestOperationsMaintenanceFallbackAfterNoUsableDecisionIntegration(t *testing.T) {
+	pool := operationsTestPool(t)
+	for _, tc := range []struct {
+		name, want string
+		decide     operationsDecider
+	}{
+		{"abstain", "abstained", func(context.Context, string, fleet.OperationsObservation) operations.Outcome {
+			return operations.Outcome{Status: "decided", Decision: &fleet.OperationsDecision{Kind: "abstain", Reason: "no_safe_option"}}
+		}},
+		{"invalid", "invalid_output", func(context.Context, string, fleet.OperationsObservation) operations.Outcome {
+			return operations.Outcome{Status: "decided", Decision: &fleet.OperationsDecision{Kind: "maintenance",
+				Maintenance: &sim.MaintenanceRequest{RobotID: "R4", FaultID: "F99"}}}
+		}},
+		{"budget", "budget_denied", func(context.Context, string, fleet.OperationsObservation) operations.Outcome {
+			return operations.Outcome{Status: "budget_denied"}
+		}},
+		{"unavailable", "model_unavailable", func(context.Context, string, fleet.OperationsObservation) operations.Outcome {
+			return operations.Outcome{Status: "model_unavailable"}
+		}},
+		{"timeout", "cancelled", func(ctx context.Context, _ string, _ fleet.OperationsObservation) operations.Outcome {
+			<-ctx.Done()
+			return operations.Outcome{Status: "model_unavailable"}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, service := operationsMaintenanceTestRun(t, pool, tc.decide)
+			ctx, cancel := context.WithTimeout(context.Background(), 600*time.Millisecond)
+			defer cancel()
+			now := time.Now()
+			c.mu.Lock()
+			err := c.advanceInteractive(ctx, now)
+			cycle := c.operations
+			c.mu.Unlock()
+			if err != nil || cycle == nil {
+				t.Fatalf("failed to start review: %v", err)
+			}
+			waitOperations(t, cycle.done)
+			if activity := c.run.operationsActivity[0]; activity.Status != tc.want || activity.Go != nil {
+				t.Fatalf("unusable model response issued a command: %+v", activity)
+			}
+			if err := c.advanceInteractive(context.Background(), now.Add(warehouseTickInterval)); err != nil {
+				t.Fatal(err)
+			}
+			if work := service.Snapshot().Maintenance; c.operations != nil || work == nil || work.Active == nil || work.Active.AIDirected {
+				t.Fatalf("fallback failed or the same review opened twice: %+v", work)
+			}
+		})
+	}
+	var receipts int
+	if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM fleet_automatic_audit").Scan(&receipts); err != nil || receipts != 0 {
+		t.Fatalf("fallback incorrectly claimed AI execution: %d %v", receipts, err)
+	}
+}
+
+func TestPausedMaintenanceReviewCannotDispatchAfterResumeIntegration(t *testing.T) {
+	pool := operationsTestPool(t)
+	started, cancelled, respond := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	defer func() {
+		select {
+		case <-respond:
+		default:
+			close(respond)
+		}
+	}()
+	c, service := operationsMaintenanceTestRun(t, pool, func(ctx context.Context, _ string, o fleet.OperationsObservation) operations.Outcome {
+		close(started)
+		<-ctx.Done()
+		close(cancelled)
+		<-respond
+		return operations.Outcome{Status: "decided", Decision: &fleet.OperationsDecision{
+			Kind: "maintenance", Maintenance: &o.MaintenanceOptions[0].MaintenanceRequest,
+		}}
+	})
+	c.mu.Lock()
+	err := c.advanceInteractive(context.Background(), time.Now())
+	cycle := c.operations
+	c.mu.Unlock()
+	if err != nil || cycle == nil {
+		t.Fatalf("could not start maintenance review: %v", err)
+	}
+	waitOperations(t, started)
+	if w := controllerRequest(c, "/demo/pause", c.run.generation); w.Code != http.StatusOK {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	waitOperations(t, cancelled)
+	paused := service.Snapshot()
+	if paused.Tick != 49 || (paused.Maintenance != nil && paused.Maintenance.Active != nil) {
+		t.Fatalf("pause consumed a maintenance attempt: %+v", paused.Maintenance)
+	}
+	if w := controllerRequest(c, "/demo/play", c.run.generation); w.Code != http.StatusOK {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	c.mu.Lock()
+	err = c.advanceInteractive(context.Background(), c.nextTick)
+	c.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumed := service.Snapshot()
+	if resumed.Tick != 50 || resumed.Maintenance == nil || resumed.Maintenance.Active == nil ||
+		resumed.Maintenance.Active.AIDirected {
+		t.Fatalf("resume failed to restore deterministic maintenance: %+v", resumed.Maintenance)
+	}
+	close(respond)
+	waitOperations(t, cycle.done)
+	if work := service.Snapshot().Maintenance; work == nil || work.Active == nil || *work.Active != *resumed.Maintenance.Active ||
+		len(work.History) != 0 || c.run.warehouseOperationsMode() != "deterministic" {
+		t.Fatalf("cancelled AI changed the resumed attempt: %+v", work)
+	}
+	var receipts int
+	if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM fleet_automatic_audit").Scan(&receipts); err != nil || receipts != 0 {
+		t.Fatalf("cancelled review reached automatic execution: %d %v", receipts, err)
+	}
 }
 
 func waitOperations(t *testing.T, done <-chan struct{}) {

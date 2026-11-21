@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { Icon } from "./WarehouseIcon";
-import { chargerStatus, jobLabels, robotActivityLabel, robotTone, type PickEntity, type RobotTone, type Selection } from "./warehousePresentation";
+import { breakdownLabels, cellLabel, chargerStatus, jobLabels, maintenancePhaseLabel, robotActivityLabel, robotTone,
+  type PickEntity, type RobotTone, type Selection } from "./warehousePresentation";
 import type { Job, Layout, Point, Robot, Snapshot, Station, WarehouseFrame } from "./telemetry";
 import { mapTargetVisible, placeMapLabels, type Camera, type MapLabel } from "./warehouseLabels";
 const mapKeys = [["road", "Aisle"], ["wall", "Wall"], ["bolt", "Charger"], ["parking", "Parking"], ["diamond", "Maintenance bay"]] as const;
@@ -96,13 +97,19 @@ function ChargerMarker({ station, selection, pick, label, visible }: MarkerProps
   </MapTarget>;
 }
 
-function RobotMarker({ robot, selection, pick, label, visible }: MarkerProps & { robot: Robot }) {
+function RobotMarker({ robot, selection, pick, label, visible, work, highlight }: MarkerProps & {
+  robot: Robot; work?: string; highlight?: "target" | "worker" | "recovered";
+}) {
   const tone = robotTone(robot);
   const centered = label && label.x === 0 && label.y === 0;
   const maintenance = robot.role === "maintenance";
   return <MapTarget target={{ kind: "robot", id: robot.id }} point={robot} visible={visible} tone={tone}
-    label={robot.id + (maintenance ? " maintenance robot, " : ", ") + robotActivityLabel(robot) + ", battery " + robot.battery + "%"}
+    label={robot.id + (maintenance ? " maintenance robot, " : ", ") + (work ?? robotActivityLabel(robot)) +
+      (robot.activeFault ? ", " + breakdownLabels[robot.activeFault] : "") +
+      (work || robot.activeFault ? ", " + cellLabel(robot) : "") + ", battery " + robot.battery + "%"}
     selection={selection} pick={pick}>
+    {highlight && <rect className="v2-maintenance-cell" data-highlight={highlight} x={-.45} y={-.45} width={.9} height={.9} rx={.1}
+      aria-hidden="true" />}
     {maintenance
       ? <polygon className="v2-robot-marker is-maintenance" points="-.42,0 -.26,-.29 .26,-.29 .42,0 .26,.29 -.26,.29" />
       : !centered && <rect className="v2-robot-marker" x={-0.38} y={-0.29} width={0.76} height={0.58} rx={0.14} />}
@@ -346,8 +353,20 @@ export function WarehouseMap({ frame, selection, job, pick }: { frame: Warehouse
             </g>)}
           {snapshot.stations.map(station => <ChargerMarker key={station.id} station={station} selection={selection} pick={pick}
             label={labels.get(station.id)} visible={isVisible(station)} />)}
-          {snapshot.robots.map(robot => <RobotMarker key={robot.id} robot={robot} selection={selection} pick={pick}
-            label={labels.get(robot.id)} visible={isVisible(robot)} />)}
+          {snapshot.robots.map(robot => {
+            const active = snapshot.maintenance?.active;
+            const last = snapshot.maintenance?.history?.at(-1);
+            const isM1 = robot.role === "maintenance";
+            const target = active?.robotId === robot.id;
+            const recovered = !robot.activeFault && snapshot.maintenance?.phase === "returning" &&
+              last?.robotId === robot.id && last.outcome === "completed";
+            return <RobotMarker key={robot.id} robot={robot} selection={selection} pick={pick}
+              label={labels.get(robot.id)} visible={isVisible(robot)}
+              work={isM1 ? active ? maintenancePhaseLabel(snapshot) + ", target " + active.robotId
+                : snapshot.maintenance?.phase === "returning" ? maintenancePhaseLabel(snapshot) : undefined :
+                target ? robotActivityLabel(robot) + ", M1 assigned" : recovered ? "Recovery verified, " + robotActivityLabel(robot) : undefined}
+              highlight={active && isM1 ? "worker" : target ? "target" : recovered ? "recovered" : undefined} />;
+          })}
           {job && <><JobMarker job={job} pin={pins[0]} label="Pickup" selection={selection} pick={pick} isVisible={isVisible} />
             <JobMarker job={job} pin={pins[1]} label="Drop-off" selection={selection} pick={pick} isVisible={isVisible} /></>}
         </g>

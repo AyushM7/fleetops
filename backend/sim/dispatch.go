@@ -85,7 +85,7 @@ func (s *Sim) dispatchDistance() scheduler.Distance {
 func (s *Sim) travelDistance(liveOccupancy bool) scheduler.Distance {
 	blocked := make(map[Point]bool)
 	for _, robot := range s.state.Robots {
-		if !liveOccupancy && robot.Status != RobotOffline && robot.Status != RobotFaulted && robot.Status != RobotCharging {
+		if !liveOccupancy && robot.Status != RobotOffline && robot.Status != RobotFaulted && robot.Status != RobotCharging && robot.Status != RobotServicing {
 			continue
 		}
 		position := Point{X: robot.X, Y: robot.Y}
@@ -121,6 +121,7 @@ const operationsDispatchTicks = 20
 type dispatchHold struct {
 	until        int
 	robots, jobs map[string]bool
+	maintenance  bool
 }
 
 // SetOperationsDispatchHold only delays the deterministic dispatcher for
@@ -135,4 +136,16 @@ func (s *Sim) SetOperationsDispatchHold(options []AssignmentOption) {
 		hold.robots[option.RobotID], hold.jobs[option.JobID] = true, true
 	}
 	s.operationsHold = hold
+}
+
+// HoldOperationsMaintenance shares the transport window's tick deadline.
+func (s *Sim) HoldOperationsMaintenance() {
+	if s.cfg.MaintenanceRepairTicks > 0 {
+		s.operationsHold.maintenance = true
+		s.operationsHold.until = s.state.Tick + operationsDispatchTicks
+	}
+}
+
+func (s *Sim) operationsMaintenanceHeld() bool {
+	return s.operationsHold.maintenance && s.state.Tick <= s.operationsHold.until
 }

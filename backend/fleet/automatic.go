@@ -30,6 +30,7 @@ type AutomaticCommand struct {
 	ExpiresAt            time.Time                           `json:"expiresAt"`
 	AssignJobBatch       *sim.AssignJobBatchRequest          `json:"assignJobBatch,omitempty"`
 	ReassignUnstartedJob *safety.ReassignUnstartedJobRequest `json:"reassignUnstartedJob,omitempty"`
+	DispatchMaintenance  *sim.MaintenanceRequest             `json:"dispatchMaintenance,omitempty"`
 }
 
 type AutomaticResult struct {
@@ -49,6 +50,7 @@ func (s *Service) SetAutomaticCommandsEnabled(enabled bool) error {
 	}
 	s.automaticEnabled = enabled
 	if !enabled {
+		s.operationsWindow = ""
 		s.commander.SetOperationsDispatchHold(nil)
 		s.automaticReads, s.automaticVersions = nil, nil
 	}
@@ -56,12 +58,12 @@ func (s *Service) SetAutomaticCommandsEnabled(enabled bool) error {
 }
 
 func (c AutomaticCommand) validate() error {
-	if len(c.RuntimeID) != 33 || len(c.ObservationID) != 33 || !validCommandKey(c.IdempotencyKey) ||
-		(c.AssignJobBatch == nil) == (c.ReassignUnstartedJob == nil) {
+	if len(c.RuntimeID) != 33 || len(c.ObservationID) != 33 || !validCommandKey(c.IdempotencyKey) {
 		return ErrAutomaticCommand
 	}
 	var targets []string
-	if c.AssignJobBatch != nil {
+	switch {
+	case c.AssignJobBatch != nil && c.ReassignUnstartedJob == nil && c.DispatchMaintenance == nil:
 		if err := c.AssignJobBatch.Validate(); err != nil {
 			return err
 		}
@@ -69,12 +71,27 @@ func (c AutomaticCommand) validate() error {
 		for _, assignment := range c.AssignJobBatch.Assignments {
 			targets = append(targets, assignment.JobID, assignment.RobotID)
 		}
-	} else {
+	case c.AssignJobBatch == nil && c.ReassignUnstartedJob != nil && c.DispatchMaintenance == nil:
 		r := c.ReassignUnstartedJob
-		if !prefixedCommandID(r.JobID, 'J') || !prefixedCommandID(r.FromRobotID, 'R') || !prefixedCommandID(r.ToRobotID, 'R') || r.FromRobotID == r.ToRobotID {
+		if !prefixedCommandID(r.JobID, 'J') || !sim.IsV2TransportID(r.FromRobotID) || !sim.IsV2TransportID(r.ToRobotID) || r.FromRobotID == r.ToRobotID {
 			return ErrAutomaticCommand
 		}
 		targets = []string{r.JobID, r.FromRobotID, r.ToRobotID}
+	case c.AssignJobBatch == nil && c.ReassignUnstartedJob == nil && c.DispatchMaintenance != nil:
+		r := c.DispatchMaintenance
+		if !sim.IsV2TransportID(r.RobotID) || !prefixedCommandID(r.FaultID, 'F') {
+			return ErrAutomaticCommand
+		}
+		targets = []string{r.RobotID, sim.MaintenanceRobotID}
+		if len(c.Preconditions) == 3 {
+			for id := range c.Preconditions {
+				if prefixedCommandID(id, 'J') {
+					targets = append(targets, id)
+				}
+			}
+		}
+	default:
+		return ErrAutomaticCommand
 	}
 	if len(c.Preconditions) != len(targets) {
 		return ErrAutomaticCommand
@@ -217,6 +234,9 @@ func (s *Service) applyAutomatic(command AutomaticCommand) error {
 	}
 	if command.AssignJobBatch != nil {
 		return s.commander.AssignJobBatch(*command.AssignJobBatch)
+	}
+	if command.DispatchMaintenance != nil {
+		return s.commander.DispatchMaintenance(*command.DispatchMaintenance)
 	}
 	r := *command.ReassignUnstartedJob
 	if err := safety.PreflightReassignment(s.commander, r); err != nil {

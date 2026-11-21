@@ -24,19 +24,19 @@ func TestWarehouseV2ChargesAndUndocksBeforeReturningToBay(t *testing.T) {
 	cfg := WarehouseV2Config()
 	cfg.InitialJobs, cfg.AutoDispatch = 0, false
 	s := newTestSim(t, cfg, 42)
-	requireInjection(t, s.InjectLowBattery("R11"))
+	requireInjection(t, s.InjectLowBattery("M1"))
 
 	var charger StationState
 	for range cfg.Width {
 		s.Tick()
 		assertInvariants(t, s, cfg)
-		if station := s.occupiedStation("R11"); station != nil {
+		if station := s.occupiedStation("M1"); station != nil {
 			charger = *station
 			break
 		}
 	}
-	if charger.ID != "C2" || charger.ReservedBy != "" || s.Snapshot().Robots[10].Activity != ActivityCharging {
-		t.Fatalf("R11 did not dock at the nearest charger with deterministic tie breaking: %+v", charger)
+	if charger.ID != "C2" || charger.OccupiedBy != "M1" || charger.ReservedBy != "" || s.Snapshot().Robots[10].Activity != ActivityCharging {
+		t.Fatalf("M1 did not dock at the nearest charger with deterministic tie breaking: %+v", charger)
 	}
 	robot := &s.state.Robots[10]
 	for range cfg.ChargeRelease {
@@ -49,12 +49,12 @@ func TestWarehouseV2ChargesAndUndocksBeforeReturningToBay(t *testing.T) {
 			t.Fatalf("charging did not apply tick gain: before %d, after %d", before, robot.Battery)
 		}
 	}
-	if state := s.Snapshot().Robots[10]; state.Activity != ActivityUndocking || s.occupiedStation("R11") == nil {
+	if state := s.Snapshot().Robots[10]; state.Activity != ActivityUndocking || s.occupiedStation("M1") == nil {
 		t.Fatalf("reaching the release threshold freed an occupied dock: %+v", state)
 	}
 	s.Tick()
 	assertInvariants(t, s, cfg)
-	if state := s.Snapshot().Robots[10]; state.Activity != ActivityGoingToPark || s.occupiedStation("R11") != nil {
+	if state := s.Snapshot().Robots[10]; state.Activity != ActivityGoingToPark || s.occupiedStation("M1") != nil {
 		t.Fatalf("physical undocking should release the charger and begin return: %+v", state)
 	}
 	for range cfg.Width {
@@ -62,7 +62,7 @@ func TestWarehouseV2ChargesAndUndocksBeforeReturningToBay(t *testing.T) {
 		assertInvariants(t, s, cfg)
 	}
 	if state := s.Snapshot().Robots[10]; state.Activity != ActivityParked || (Point{state.X, state.Y}) != *cfg.MaintenanceBay {
-		t.Fatalf("R11 did not return to its dedicated bay: %+v", state)
+		t.Fatalf("M1 did not return to its dedicated bay: %+v", state)
 	}
 }
 

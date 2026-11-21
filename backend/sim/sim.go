@@ -8,18 +8,22 @@ import (
 
 // Sim owns deterministic state and is not goroutine-safe.
 type Sim struct {
-	cfg               Config
-	state             State
-	rng               *rand.Rand
-	jobCells          []Point
-	jobSequence       int
-	idleTicks         map[string]int
-	unresponsiveTicks map[string]int
-	navigation        map[string]robotNavigation
-	recovery          map[string]robotRecovery
-	protected         map[Point]bool
-	traffic           *trafficReservations
-	operationsHold    dispatchHold
+	cfg                  Config
+	state                State
+	rng                  *rand.Rand
+	jobCells             []Point
+	jobSequence          int
+	nextBreakdown        int
+	idleTicks            map[string]int
+	unresponsiveTicks    map[string]int
+	navigation           map[string]robotNavigation
+	recovery             map[string]robotRecovery
+	protected            map[Point]bool
+	traffic              *trafficReservations
+	maintenance          MaintenanceState
+	maintenanceDeadline  int
+	maintenancePhaseTick int
+	operationsHold       dispatchHold
 }
 
 // New constructs an isolated deterministic simulator from a configuration and seed.
@@ -46,16 +50,15 @@ func New(cfg Config, seed int64) (*Sim, error) {
 		},
 	}
 	for i, p := range starts {
-		id := fmt.Sprintf("R%d", i+1)
-		robot := RobotState{ID: id, X: p.X, Y: p.Y, Battery: 100, Status: RobotIdle}
+		robot := RobotState{ID: fmt.Sprintf("R%d", i+1), X: p.X, Y: p.Y, Battery: 100, Status: RobotIdle}
 		if cfg.MaintenanceBay != nil {
 			robot.Role = RoleTransport
 			if i == warehouseTransportCount {
-				robot.Role = RoleMaintenance
+				robot.ID, robot.Role = MaintenanceRobotID, RoleMaintenance
 			}
 		}
 		s.state.Robots = append(s.state.Robots, robot)
-		s.unresponsiveTicks[id] = 0
+		s.unresponsiveTicks[robot.ID] = 0
 	}
 	stationPrefix := "S"
 	if cfg.MaintenanceBay != nil {
@@ -70,6 +73,7 @@ func New(cfg Config, seed int64) (*Sim, error) {
 	for i := 0; i < cfg.InitialJobs; i++ {
 		s.addJob()
 	}
+	s.applyScheduledBreakdowns()
 	s.state.Aisles = s.snapshotAisles()
 	return s, nil
 }
@@ -81,6 +85,8 @@ func (s *Sim) Tick() {
 		s.addJob()
 	}
 	s.stepRobots()
+	s.applyScheduledBreakdowns()
+	s.advanceMaintenance()
 	if s.cfg.MaintenanceBay != nil {
 		for i := range s.state.Jobs {
 			if job := &s.state.Jobs[i]; job.Status != JobDone {
@@ -100,6 +106,7 @@ func (s *Sim) CellAt(p Point) CellType {
 // Snapshot is READ: it returns owned copies of state, including nested fault data.
 func (s *Sim) Snapshot() State {
 	state := s.state
+	state.Maintenance = s.maintenanceSnapshot()
 	state.Robots = append([]RobotState{}, s.state.Robots...)
 	if s.cfg.MaintenanceBay != nil {
 		for i := range state.Robots {

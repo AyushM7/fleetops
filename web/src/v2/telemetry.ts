@@ -1,11 +1,20 @@
 export const warehouseScenario = "warehouse-v2";
 
 const cellKinds = ["free", "wall", "aisle", "station", "parking", "maintenance_bay"] as const;
-const robotStates = ["idle", "moving", "charging", "faulted", "offline"] as const;
+const robotStates = ["idle", "moving", "charging", "faulted", "offline", "servicing"] as const;
+const breakdowns = ["motor_failure", "sensor_failure", "robot_unresponsive", "critical_battery"] as const;
 const activities = [
   "AVAILABLE", "GOING_TO_PICKUP", "PICKING_UP", "DELIVERING", "WAITING_FOR_TRAFFIC",
   "GOING_TO_CHARGE", "CHARGING", "UNDOCKING", "GOING_TO_PARK", "RELOCATING",
   "PARKED", "FAULTED", "OUT_OF_SERVICE",
+  "GOING_TO_REPAIR", "AT_REPAIR_SITE", "REPAIRING",
+] as const;
+const maintenancePhases = ["available", "assigned", "traveling", "at_target", "repairing", "verifying", "returning", "unavailable"] as const;
+const maintenanceOutcomes = ["completed", "failed", "unresolved", "cancelled"] as const;
+const maintenanceReasons = [
+  "maintenance_unavailable", "external_power_required", "awaiting_offline", "service_cell_unreachable",
+  "insufficient_maintenance_energy", "target_changed", "service_position_lost", "travel_blocked",
+  "target_recovery_blocked", "self_repair_unsupported",
 ] as const;
 const jobStates = ["pending", "assigned", "in_progress", "done"] as const;
 const jobTypes = ["NORMAL", "PRIORITY"] as const;
@@ -25,6 +34,7 @@ export type Layout = { width: number; height: number; cells: Cell[] };
 export type Robot = Point & {
   id: string; status: typeof robotStates[number]; activity: typeof activities[number];
   role: "transport" | "maintenance"; battery: number; jobId: string; blocked: boolean; waitTicks: number;
+  activeFault?: typeof breakdowns[number];
 };
 export type Job = {
   id: string; status: typeof jobStates[number]; type: typeof jobTypes[number]; assignedRobot: string;
@@ -36,15 +46,39 @@ export type Station = Point & { id: string; occupiedBy: string; reservedBy: stri
 type Fault = { id: string; type: string; robots: string[]; tick: number; aisle?: number };
 type Aisle = { id: number; occupiedBy: string };
 type Deadlock = { robots: string[]; yieldingRobot?: string };
+export type MaintenanceTarget = { robotId: string; faultId: string };
+export type MaintenanceAttempt = MaintenanceTarget & {
+  id: string; fault: typeof breakdowns[number]; targetCell: Point; serviceCell: Point;
+  jobId?: string;
+  startedTick: number; finishedTick?: number; repairTicks: number; requiredRepairTicks: number;
+  outcome?: typeof maintenanceOutcomes[number]; reason?: typeof maintenanceReasons[number];
+  aiDirected?: boolean;
+};
+export type MaintenanceIssue = MaintenanceTarget & { reason: typeof maintenanceReasons[number] };
+export type MaintenanceState = {
+  phase: typeof maintenancePhases[number]; active?: MaintenanceAttempt;
+  history?: MaintenanceAttempt[]; issues?: MaintenanceIssue[];
+};
 export type Snapshot = {
   tick: number; seed: number; completedJobs?: number; priorityDeadlinesMet?: number;
   priorityDeadlinesMissed?: number; robots: Robot[]; jobs: Job[]; stations: Station[];
   faults: Fault[]; aisles: Aisle[]; trafficDeadlocks?: Deadlock[];
+  maintenance?: MaintenanceState;
 };
+
+export function activeBreakdown(snapshot: Snapshot, robot: Robot): Fault | undefined {
+  if (!robot.activeFault) return undefined;
+  for (let i = snapshot.faults.length - 1; i >= 0; i--) {
+    const fault = snapshot.faults[i];
+    if (fault.type === robot.activeFault && fault.tick <= snapshot.tick &&
+        fault.robots.length === 1 && fault.robots[0] === robot.id) return fault;
+  }
+}
 type Assignment = { jobId: string; robotId: string };
 type Decision =
   | { kind: "assign"; assignments: Assignment[] }
   | { kind: "reassign"; reassignment: { JobID: string; FromRobotID: string; ToRobotID: string } }
+  | { kind: "maintenance"; maintenance: MaintenanceTarget }
   | { kind: "abstain"; reason: string };
 type Usage = { model: string; inputTokens: number; outputTokens: number };
 export type OperationsActivity = {
@@ -66,6 +100,8 @@ export type WarehouseFrame = {
 const record = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const text = (v: unknown): v is string => typeof v === "string";
 const id = (v: unknown): v is string => text(v) && v.length > 0;
+const transportId = (v: unknown): v is string => text(v) && /^R([1-9]|10)$/.test(v);
+const faultId = (v: unknown): v is string => text(v) && /^F[1-9][0-9]{0,18}$/.test(v);
 const count = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
 const optionalCount = (v: unknown): boolean => v === undefined || count(v);
 const optionalText = (v: unknown): boolean => v === undefined || text(v);
@@ -95,8 +131,14 @@ function parseLayout(value: unknown): Layout {
 }
 
 function isRobot(v: unknown): v is Robot {
-  return record(v) && point(v) && id(v.id) && member(v.status, robotStates) && member(v.activity, activities) &&
-    member(v.role, ["transport", "maintenance"]) && count(v.battery) && v.battery <= 100 &&
+  return record(v) && point(v) && text(v.id) && member(v.status, robotStates) && member(v.activity, activities) &&
+    (v.role === "maintenance" && v.id === "M1" || v.role === "transport" && transportId(v.id)) &&
+    (v.status !== "servicing" || v.role === "maintenance" && v.jobId === "" &&
+      (v.activity === "AT_REPAIR_SITE" || v.activity === "REPAIRING")) &&
+    count(v.battery) && v.battery <= 100 &&
+    (v.activeFault === undefined || member(v.activeFault, breakdowns) &&
+      (v.status === "faulted" || v.status === "offline" && v.activeFault === "robot_unresponsive") &&
+      (v.activeFault !== "critical_battery" || v.battery === 0)) &&
     text(v.jobId) && typeof v.blocked === "boolean" && count(v.waitTicks);
 }
 
@@ -129,6 +171,64 @@ function uniqueIds(values: { id: string }[]): boolean {
   return new Set(values.map(value => value.id)).size === values.length;
 }
 
+function isMaintenanceAttempt(v: unknown): v is MaintenanceAttempt {
+  return record(v) && text(v.id) && /^MA[1-9][0-9]*$/.test(v.id) && transportId(v.robotId) && faultId(v.faultId) &&
+    member(v.fault, breakdowns) && v.fault !== "critical_battery" &&
+    (v.jobId === undefined || text(v.jobId) && /^J[1-9][0-9]{0,18}$/.test(v.jobId)) &&
+    (v.aiDirected === undefined || typeof v.aiDirected === "boolean") &&
+    point(v.targetCell) && point(v.serviceCell) && Math.abs(v.targetCell.x - v.serviceCell.x) + Math.abs(v.targetCell.y - v.serviceCell.y) === 1 &&
+    count(v.startedTick) && count(v.repairTicks) && count(v.requiredRepairTicks) &&
+    v.requiredRepairTicks > 0 && v.repairTicks <= v.requiredRepairTicks &&
+    (v.outcome === undefined && v.finishedTick === undefined && v.reason === undefined ||
+      member(v.outcome, maintenanceOutcomes) && count(v.finishedTick) && v.finishedTick - v.startedTick >= v.repairTicks &&
+      (v.outcome === "completed" ? v.reason === undefined && v.repairTicks === v.requiredRepairTicks : member(v.reason, maintenanceReasons)));
+}
+
+function isMaintenanceIssue(v: unknown): v is MaintenanceIssue {
+  return record(v) && (transportId(v.robotId) || v.robotId === "M1") && faultId(v.faultId) && member(v.reason, maintenanceReasons);
+}
+
+function isMaintenance(v: unknown): v is MaintenanceState {
+  if (!record(v) || !member(v.phase, maintenancePhases)) return false;
+  const idle = v.phase === "available" || v.phase === "returning" || v.phase === "unavailable";
+  return (idle ? v.active === undefined : isMaintenanceAttempt(v.active) && v.active.outcome === undefined) &&
+    (v.history === undefined || Array.isArray(v.history) && v.history.every(item => isMaintenanceAttempt(item) && item.outcome !== undefined)) &&
+    (v.issues === undefined || Array.isArray(v.issues) && v.issues.every(isMaintenanceIssue));
+}
+
+function maintenanceConsistent(snapshot: Snapshot, cells: Map<number, Cell["kind"]>): boolean {
+  const work = snapshot.maintenance;
+  if (!work) return true;
+  const active = work.active;
+  const attempts = [...(work.history ?? []), ...(active ? [active] : [])];
+  const matchesFault = (ref: MaintenanceTarget, type?: string, before = snapshot.tick) =>
+    snapshot.faults.some(fault => fault.id === ref.faultId && fault.robots.length === 1 &&
+      fault.robots[0] === ref.robotId && fault.tick <= before && (type ? fault.type === type : member(fault.type, breakdowns)));
+  if (!uniqueIds(attempts) || new Set(attempts.map(attempt => attempt.faultId)).size !== attempts.length ||
+      attempts.some(attempt => (attempt.finishedTick ?? attempt.startedTick) > snapshot.tick ||
+        cells.get(cellKey(attempt.serviceCell)) !== "free" || cells.get(cellKey(attempt.targetCell)) === "wall" ||
+        !matchesFault(attempt, attempt.fault, attempt.startedTick)) ||
+      work.issues?.some(issue => !matchesFault(issue))) return false;
+  if (work.history?.some(attempt => {
+    const target = snapshot.robots.find(robot => robot.id === attempt.robotId);
+    return attempt.outcome === "completed" && target && activeBreakdown(snapshot, target)?.id === attempt.faultId;
+  })) return false;
+  if (!active) return true;
+  const target = snapshot.robots.find(robot => robot.id === active.robotId);
+  const m1 = snapshot.robots.find(robot => robot.id === "M1");
+  if (!m1 || m1.activeFault || !target || target.activeFault !== active.fault ||
+      activeBreakdown(snapshot, target)?.id !== active.faultId ||
+      cellKey(target) !== cellKey(active.targetCell) ||
+      (active.fault === "robot_unresponsive" ? target.status !== "offline" : target.status !== "faulted")) return false;
+  if (active.jobId && (target.jobId !== active.jobId || !snapshot.jobs.some(job => job.id === active.jobId &&
+    job.assignedRobot === target.id && (job.status === "assigned" || job.status === "in_progress" && job.cargoRobotId === target.id)))) return false;
+  const traveling = work.phase === "assigned" || work.phase === "traveling";
+  if (traveling) return m1.status === "moving" && active.repairTicks === 0;
+  if (m1.status !== "servicing" || cellKey(m1) !== cellKey(active.serviceCell)) return false;
+  if (work.phase === "verifying") return active.repairTicks === active.requiredRepairTicks;
+  return work.phase === "at_target" ? active.repairTicks === 0 : active.repairTicks < active.requiredRepairTicks;
+}
+
 function parseSnapshot(v: unknown, layout: Layout): Snapshot {
   if (!record(v) || !count(v.tick) || !count(v.seed) ||
       ![v.completedJobs, v.priorityDeadlinesMet, v.priorityDeadlinesMissed].every(optionalCount) ||
@@ -136,17 +236,20 @@ function parseSnapshot(v: unknown, layout: Layout): Snapshot {
       !Array.isArray(v.stations) || v.stations.length !== 4 || !v.stations.every(isStation) || !uniqueIds(v.stations) ||
       !Array.isArray(v.jobs) || !v.jobs.every(isJob) || !uniqueIds(v.jobs) ||
       !Array.isArray(v.faults) || !v.faults.every(isFault) || !Array.isArray(v.aisles) || !v.aisles.every(isAisle) ||
+      (v.maintenance !== undefined && !isMaintenance(v.maintenance)) ||
       (v.trafficDeadlocks !== undefined && (!Array.isArray(v.trafficDeadlocks) || !v.trafficDeadlocks.every(isDeadlock)))) return invalid();
   const cells = new Map(layout.cells.map(value => [cellKey(value), value.kind]));
   if (new Set(v.robots.map(cellKey)).size !== v.robots.length ||
       new Set(v.stations.map(cellKey)).size !== v.stations.length ||
       v.robots.some(robot => cells.get(cellKey(robot)) === "wall") ||
       v.stations.some(station => cells.get(cellKey(station)) !== "station")) return invalid();
-  return {
+  const snapshot: Snapshot = {
     tick: v.tick, seed: v.seed, robots: v.robots, stations: v.stations, jobs: v.jobs, faults: v.faults, aisles: v.aisles,
     completedJobs: v.completedJobs as number | undefined, priorityDeadlinesMet: v.priorityDeadlinesMet as number | undefined,
     priorityDeadlinesMissed: v.priorityDeadlinesMissed as number | undefined, trafficDeadlocks: v.trafficDeadlocks,
+    maintenance: v.maintenance,
   };
+  return maintenanceConsistent(snapshot, cells) ? snapshot : invalid();
 }
 
 function isDecision(v: unknown): v is Decision {
@@ -155,6 +258,10 @@ function isDecision(v: unknown): v is Decision {
   if (v.kind === "assign") {
     return Array.isArray(v.assignments) && v.assignments.length > 0 &&
       v.assignments.every(item => record(item) && id(item.jobId) && id(item.robotId));
+  }
+  if (v.kind === "maintenance") {
+    const request = v.maintenance;
+    return record(request) && transportId(request.robotId) && faultId(request.faultId);
   }
   const pair = v.reassignment;
   // Go embeds the safety request as-is, using its exported field names.

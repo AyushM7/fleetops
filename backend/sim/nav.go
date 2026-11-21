@@ -24,7 +24,7 @@ func (s *Sim) navigationBlocked(robot RobotState, point Point, dynamic bool) boo
 		return false
 	}
 	for _, other := range s.state.Robots {
-		if other.ID == robot.ID || !dynamic && other.Status != RobotOffline && other.Status != RobotFaulted && other.Status != RobotCharging {
+		if other.ID == robot.ID || !dynamic && other.Status != RobotOffline && other.Status != RobotFaulted && other.Status != RobotCharging && other.Status != RobotServicing {
 			continue
 		}
 		if point == (Point{X: other.X, Y: other.Y}) {
@@ -44,10 +44,8 @@ func (s *Sim) planNavigation(robot *RobotState, target Point, dynamic bool) bool
 	if !ok {
 		return false
 	}
-	if s.cfg.MaintenanceBay != nil {
-		if exit, restricted := s.passageExit(Point{robot.X, robot.Y}, points); restricted && s.exitBlocker(*robot, exit) >= 0 {
-			return false
-		}
+	if !s.navigationExitAvailable(*robot, points) {
+		return false
 	}
 	nav := s.navigation[robot.ID]
 	nav.target, nav.route = target, points
@@ -55,13 +53,29 @@ func (s *Sim) planNavigation(robot *RobotState, target Point, dynamic bool) bool
 	return true
 }
 
+func (s *Sim) navigationExitAvailable(robot RobotState, route []Point) bool {
+	if s.cfg.MaintenanceBay == nil {
+		return true
+	}
+	exit, restricted := s.passageExit(Point{robot.X, robot.Y}, route)
+	return !restricted || s.exitBlocker(robot, exit) < 0
+}
+
 func (s *Sim) navigationRoute(robot RobotState, target Point, dynamic bool) ([]Point, bool) {
+	route, ok := s.findNavigationRoute(robot, target, dynamic)
+	if !ok || !s.routeAffordable(robot, target, len(route)) {
+		return nil, false
+	}
+	return route, true
+}
+
+func (s *Sim) findNavigationRoute(robot RobotState, target Point, dynamic bool) ([]Point, bool) {
 	route, err := routing.FindPath(routingGrid{cfg: s.cfg}, routing.Cell{X: robot.X, Y: robot.Y}, routing.Cell{X: target.X, Y: target.Y}, routing.Options{
 		Blocked: func(cell routing.Cell) bool {
 			return s.navigationBlocked(robot, Point{X: cell.X, Y: cell.Y}, dynamic)
 		},
 	})
-	if err != nil || !s.routeAffordable(robot, target, len(route)) {
+	if err != nil {
 		return nil, false
 	}
 	points := make([]Point, len(route))

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/AyushM7/fleetops/backend/sim"
 )
@@ -20,6 +22,20 @@ func run(args []string, stdout, stderr io.Writer) int {
 	seed := flags.Int64("seed", 42, "random seed")
 	ticks := flags.Int("ticks", 200, "number of ticks (0–100000)")
 	layout := flags.String("layout", "default", "layout (default|warehouse|warehouse-v2)")
+	repairTicks := flags.Int("repair-ticks", 0, "repair duration in ticks (0 disables V2 maintenance, omit for layout default)")
+	var breakdowns []sim.ScheduledBreakdown
+	flags.Func("breakdown", "schedule a V2 breakdown as TICK:ROBOT:TYPE (repeat in tick order)", func(value string) error {
+		fields := strings.Split(value, ":")
+		if len(fields) != 3 {
+			return fmt.Errorf("breakdown must be TICK:ROBOT:TYPE")
+		}
+		tick, err := strconv.Atoi(fields[0])
+		if err != nil {
+			return fmt.Errorf("breakdown tick must be an integer")
+		}
+		breakdowns = append(breakdowns, sim.ScheduledBreakdown{Tick: tick, RobotID: fields[1], Type: sim.FaultType(fields[2])})
+		return nil
+	})
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -42,6 +58,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "simrun: layout must be default, warehouse, or warehouse-v2")
 		return 2
 	}
+	cfg.ScheduledBreakdowns = breakdowns
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == "repair-ticks" {
+			cfg.MaintenanceRepairTicks = *repairTicks
+		}
+	})
 	s, err := sim.New(cfg, *seed)
 	if err != nil {
 		fmt.Fprintf(stderr, "simrun: create simulator: %v\n", err)

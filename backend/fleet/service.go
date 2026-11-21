@@ -70,6 +70,7 @@ type Service struct {
 	automaticEnabled  bool
 	automaticVersions map[string]commandEntity
 	automaticReads    []commandObservation
+	operationsWindow  string
 }
 
 // New creates and exclusively owns a simulator. Callers never receive its

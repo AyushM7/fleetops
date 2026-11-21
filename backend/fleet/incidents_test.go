@@ -4,10 +4,41 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 
+	"github.com/AyushM7/fleetops/backend/db"
 	"github.com/AyushM7/fleetops/backend/incident"
 	"github.com/AyushM7/fleetops/backend/sim"
 )
+
+func TestWarehouseV2BreakdownReadState(t *testing.T) {
+	ctx := context.Background()
+	cfg := sim.WarehouseV2Config()
+	cfg.InitialJobs = 0
+	cfg.ScheduledBreakdowns = []sim.ScheduledBreakdown{{Tick: 1, RobotID: "R2", Type: sim.FaultSensorFailure}}
+	service, err := New(cfg, 42, &db.Pool{}, time.Now, visitorOperator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := service.ReadState(ctx)
+	if err != nil || len(before.ActiveIncidents) != 0 || before.Robots[1].Status != string(sim.RobotIdle) {
+		t.Fatalf("pre-fault read: %+v, %v", before.ActiveIncidents, err)
+	}
+	for range 2 {
+		if err := service.Tick(); err != nil {
+			t.Fatal(err)
+		}
+		after, err := service.ReadState(ctx)
+		if err != nil || len(after.ActiveIncidents) != 1 {
+			t.Fatalf("post-fault read: %+v, %v", after.ActiveIncidents, err)
+		}
+		robot := after.Robots[1]
+		if got := after.ActiveIncidents[0]; got != (IncidentView{RobotID: "R2", Type: string(incident.SensorFailure), Severity: string(incident.High), Telemetry: robot}) ||
+			robot.Status != string(sim.RobotFaulted) || robot.X != before.Robots[1].X || robot.Y != before.Robots[1].Y {
+			t.Fatalf("unexpected active incident: %+v", got)
+		}
+	}
+}
 
 // Only trusted tests supply synthetic snapshots; no runtime injection endpoint exists.
 type incidentCommander struct {
@@ -31,6 +62,7 @@ func TestCurrentIncidentsUseOneDetachedReadOnlySnapshot(t *testing.T) {
 		{"minimum normal", sim.RobotState{ID: "R1", Battery: 30, JobID: "J1"}, "", ""},
 		{"low without job", sim.RobotState{ID: "R1", Battery: 14}, "", ""},
 		{"offline", sim.RobotState{ID: "R1", Battery: 100, Status: sim.RobotOffline}, incident.RobotUnresponsive, incident.High},
+		{"maintenance offline", sim.RobotState{ID: "M1", Battery: 100, Role: sim.RoleMaintenance, Status: sim.RobotOffline}, incident.RobotUnresponsive, incident.High},
 		{"blocked zero", sim.RobotState{ID: "R1", Battery: 100, Blocked: true}, incident.TrafficBlocked, incident.Medium},
 		{"blocked boundary", sim.RobotState{ID: "R1", Battery: 100, Blocked: true, WaitTicks: 40}, incident.TrafficBlocked, incident.Medium},
 		{"blocked high", sim.RobotState{ID: "R1", Battery: 100, Blocked: true, WaitTicks: 41}, incident.TrafficBlocked, incident.High},
@@ -54,7 +86,7 @@ func TestCurrentIncidentsUseOneDetachedReadOnlySnapshot(t *testing.T) {
 					t.Fatal(view.ActiveIncidents)
 				}
 			} else {
-				want := IncidentView{RobotID: "R1", Type: string(tc.kind), Severity: string(tc.severity), Telemetry: view.Robots[0]}
+				want := IncidentView{RobotID: tc.robot.ID, Type: string(tc.kind), Severity: string(tc.severity), Telemetry: view.Robots[0]}
 				if len(view.ActiveIncidents) != 1 || view.ActiveIncidents[0] != want {
 					t.Fatal(view.ActiveIncidents)
 				}

@@ -89,6 +89,12 @@ func checkTripInvariants(state State, cfg Config, navigation ...map[string]robot
 				}
 			}
 		}
+		if maintenanceTrip(state, robot.ID) {
+			if !recorded || reservations != 0 || nav.relocation || nav.target != state.Maintenance.Active.ServiceCell {
+				return fmt.Errorf("I19: %s lost its assigned service destination", robot.ID)
+			}
+			continue
+		}
 		if !recorded || nav.relocation && reservations != 0 || !nav.relocation && reservations != 1 {
 			return fmt.Errorf("I19: %s missing or ambiguous trip", robot.ID)
 		}
@@ -109,8 +115,12 @@ func checkRobotInvariants(robot RobotState, cfg Config, jobs map[string]JobState
 	if !cfg.InBounds(Point{robot.X, robot.Y}) || cfg.CellTypeAt(Point{robot.X, robot.Y}) == CellWall {
 		return fmt.Errorf("I2: %s outside %dx%d grid", robot.ID, cfg.Width, cfg.Height)
 	}
-	if !slices.Contains([]RobotStatus{RobotIdle, RobotMoving, RobotCharging, RobotFaulted, RobotOffline}, robot.Status) {
+	if !slices.Contains([]RobotStatus{RobotIdle, RobotMoving, RobotCharging, RobotFaulted, RobotOffline, RobotServicing}, robot.Status) {
 		return fmt.Errorf("I3: %s invalid robot status %q", robot.ID, robot.Status)
+	}
+	if robot.ActiveFault != "" && (cfg.MaintenanceBay == nil || !robot.ActiveFault.isBreakdown() ||
+		robot.Status != RobotFaulted && (robot.Status != RobotOffline || robot.ActiveFault != FaultRobotUnresponsive)) {
+		return fmt.Errorf("I6: %s has inconsistent active fault %q", robot.ID, robot.ActiveFault)
 	}
 	if robot.JobID != "" {
 		job, exists := jobs[robot.JobID]
@@ -123,12 +133,16 @@ func checkRobotInvariants(robot RobotState, cfg Config, jobs map[string]JobState
 		if robot.JobID != "" {
 			return fmt.Errorf("I6: %s is %s with a job", robot.ID, robot.Status)
 		}
+	case RobotServicing:
+		if robot.Role != RoleMaintenance || robot.JobID != "" {
+			return fmt.Errorf("I6: %s servicing without a maintenance capability", robot.ID)
+		}
 	case RobotMoving:
 		if robot.JobID == "" && !cfg.AutoCharge && cfg.MaintenanceBay == nil {
 			return fmt.Errorf("I6: %s moving without a job", robot.ID)
 		}
 	case RobotFaulted:
-		if robot.Battery != 0 {
+		if (robot.ActiveFault == "" || robot.ActiveFault == FaultCriticalBattery) && robot.Battery != 0 {
 			return fmt.Errorf("I6: %s faulted with battery %d", robot.ID, robot.Battery)
 		}
 	}
@@ -175,11 +189,16 @@ func checkReservationInvariants(s State, cfg Config, robots map[string]RobotStat
 		reserved[robot.ID] = true
 	}
 	for _, robot := range s.Robots {
-		if robot.Status == RobotMoving && robot.JobID == "" && !reserved[robot.ID] && !relocating[robot.ID] {
-			return fmt.Errorf("I6: %s moving without a job or valid charging/relocation trip", robot.ID)
+		if robot.Status == RobotMoving && robot.JobID == "" && !reserved[robot.ID] && !relocating[robot.ID] && !maintenanceTrip(s, robot.ID) {
+			return fmt.Errorf("I6: %s moving without a job or valid charging, relocation or maintenance trip", robot.ID)
 		}
 	}
 	return nil
+}
+
+func maintenanceTrip(state State, robotID string) bool {
+	return robotID == MaintenanceRobotID && state.Maintenance != nil && state.Maintenance.Active != nil &&
+		(state.Maintenance.Phase == MaintenanceAssigned || state.Maintenance.Phase == MaintenanceTraveling)
 }
 
 func checkTrafficInvariants(robots []RobotState, cfg Config) error {
@@ -211,7 +230,7 @@ func checkAisleInvariants(s State, cfg Config) error {
 			if robot.X != column || robot.Y < cfg.AisleYMin || robot.Y > cfg.AisleYMax {
 				continue
 			}
-			if occupant == "" || idNumber(robot.ID) < idNumber(occupant) {
+			if occupant == "" || CompareRobotIDs(robot.ID, occupant) < 0 {
 				occupant = robot.ID
 			}
 		}
@@ -245,7 +264,7 @@ func checkStationInvariants(stations []StationState, robots map[string]RobotStat
 			continue
 		}
 		robot, exists := robots[station.OccupiedBy]
-		if !exists || robot.X != station.X || robot.Y != station.Y || (robot.Status != RobotCharging && robot.Status != RobotOffline && robot.Activity != ActivityUndocking) {
+		if !exists || robot.X != station.X || robot.Y != station.Y || (robot.Status != RobotCharging && robot.Status != RobotOffline && robot.ActiveFault == "" && robot.Activity != ActivityUndocking) {
 			return fmt.Errorf("I7: station %s has invalid occupant %s", station.ID, station.OccupiedBy)
 		}
 		occupancy[robot.ID]++
@@ -264,7 +283,7 @@ func checkStationInvariants(stations []StationState, robots map[string]RobotStat
 func checkFaultInvariants(faults []FaultState, tick int, robots map[string]RobotState) error {
 	seen := make(map[string]bool)
 	for _, fault := range faults {
-		if !slices.Contains([]FaultType{FaultLowBattery, FaultRobotUnresponsive, FaultAisleConflict}, fault.Type) {
+		if fault.Type != FaultLowBattery && fault.Type != FaultAisleConflict && !fault.Type.isBreakdown() {
 			return fmt.Errorf("I3: %s invalid fault type %q", fault.ID, fault.Type)
 		}
 		if seen[fault.ID] || fault.Tick > tick {
@@ -309,7 +328,11 @@ func checkEntityOrder(s State, cfg Config) error {
 				previous = number
 				continue
 			}
-			if want := fmt.Sprintf("%s%d", prefix, i+1); id != want {
+			want := fmt.Sprintf("%s%d", prefix, i+1)
+			if prefix == "R" && cfg.MaintenanceBay != nil && i == warehouseTransportCount {
+				want = "M1"
+			}
+			if id != want {
 				return fmt.Errorf("I9: ID %q at index %d, want %s", id, i, want)
 			}
 		}

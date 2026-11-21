@@ -15,6 +15,9 @@ const (
 	LowBattery        Type = "low_battery"
 	RobotUnresponsive Type = "robot_unresponsive"
 	TrafficBlocked    Type = "traffic_blocked"
+	MotorFailure      Type = Type(sim.FaultMotorFailure)
+	SensorFailure     Type = Type(sim.FaultSensorFailure)
+	CriticalBattery   Type = Type(sim.FaultCriticalBattery)
 )
 
 type Status string
@@ -40,7 +43,7 @@ type Incident struct {
 }
 
 var (
-	ErrInvalidSnapshot  = errors.New("snapshot robot IDs must be unique canonical R<n> identifiers")
+	ErrInvalidSnapshot  = errors.New("snapshot robot IDs must be unique canonical robot identifiers")
 	ErrInvalidHistory   = errors.New("invalid incident history or duplicate open robot/type")
 	ErrInvalidCounter   = errors.New("counter is below an existing incident ID")
 	ErrCounterExhausted = errors.New("incident counter exhausted")
@@ -71,7 +74,7 @@ func Reconcile(previous []Incident, state sim.State, counter uint64) ([]Incident
 		}
 	}
 	robots := slices.Clone(state.Robots)
-	slices.SortFunc(robots, func(a, b sim.RobotState) int { return compareIDs(a.ID, b.ID) })
+	slices.SortFunc(robots, func(a, b sim.RobotState) int { return sim.CompareRobotIDs(a.ID, b.ID) })
 	next := counter
 	for _, robot := range robots {
 		for _, condition := range detect(robot) {
@@ -93,15 +96,19 @@ func Reconcile(previous []Incident, state sim.State, counter uint64) ([]Incident
 
 func detect(robot sim.RobotState) []Incident {
 	var conditions []Incident
-	if robot.Battery < 30 && robot.JobID != "" {
+	kind := Type(robot.ActiveFault)
+	if kind == "" && robot.Status == sim.RobotOffline {
+		kind = RobotUnresponsive
+	}
+	if robot.Battery < 30 && robot.JobID != "" && kind != CriticalBattery {
 		severity := Medium
 		if robot.Battery < 15 {
 			severity = High
 		}
 		conditions = append(conditions, Incident{RobotID: robot.ID, Type: LowBattery, Status: Open, Severity: severity})
 	}
-	if robot.Status == sim.RobotOffline {
-		conditions = append(conditions, Incident{RobotID: robot.ID, Type: RobotUnresponsive, Status: Open, Severity: High})
+	if breakdownIncident(kind) {
+		conditions = append(conditions, Incident{RobotID: robot.ID, Type: kind, Status: Open, Severity: High})
 	}
 	if robot.Blocked {
 		severity := Medium
@@ -116,7 +123,7 @@ func detect(robot sim.RobotState) []Incident {
 func validateRobots(robots []sim.RobotState) error {
 	seen := make(map[string]bool, len(robots))
 	for _, robot := range robots {
-		if _, ok := idNumber(robot.ID, 'R'); !ok || seen[robot.ID] {
+		if !validRobotID(robot.ID) || seen[robot.ID] {
 			return ErrInvalidSnapshot
 		}
 		seen[robot.ID] = true
@@ -130,8 +137,7 @@ func indexHistory(previous []Incident, counter uint64) (map[key]int, error) {
 	var highest uint64
 	for i, record := range previous {
 		number, validID := idNumber(record.ID, 'I')
-		_, validRobot := idNumber(record.RobotID, 'R')
-		if !validID || !validRobot || seen[record.ID] || !validRecord(record) {
+		if !validID || !validRobotID(record.RobotID) || seen[record.ID] || !validRecord(record) {
 			return nil, ErrInvalidHistory
 		}
 		seen[record.ID], highest = true, max(highest, number)
@@ -150,9 +156,18 @@ func indexHistory(previous []Incident, counter uint64) (map[key]int, error) {
 }
 
 func validRecord(record Incident) bool {
-	return (record.Type == LowBattery || record.Type == RobotUnresponsive || record.Type == TrafficBlocked) &&
+	return (record.Type == LowBattery || record.Type == TrafficBlocked || breakdownIncident(record.Type)) &&
 		(record.Status == Open || record.Status == Resolved) &&
 		(record.Severity == Medium || record.Severity == High)
+}
+
+func breakdownIncident(kind Type) bool {
+	return kind == RobotUnresponsive || kind == MotorFailure || kind == SensorFailure || kind == CriticalBattery
+}
+
+func validRobotID(id string) bool {
+	_, validTransport := idNumber(id, 'R')
+	return validTransport || id == sim.MaintenanceRobotID
 }
 
 func idNumber(id string, prefix byte) (uint64, bool) {
@@ -163,18 +178,14 @@ func idNumber(id string, prefix byte) (uint64, bool) {
 	return number, err == nil && number > 0 && id[1:] == strconv.FormatUint(number, 10)
 }
 
-func compareIDs(a, b string) int {
-	aNumber, _ := idNumber(a, a[0])
-	bNumber, _ := idNumber(b, b[0])
-	return cmp.Compare(aNumber, bNumber)
-}
-
 func compareIncidents(a, b Incident) int {
-	if order := compareIDs(a.RobotID, b.RobotID); order != 0 {
+	if order := sim.CompareRobotIDs(a.RobotID, b.RobotID); order != 0 {
 		return order
 	}
 	if order := cmp.Compare(a.Type, b.Type); order != 0 {
 		return order
 	}
-	return compareIDs(a.ID, b.ID)
+	aNumber, _ := idNumber(a.ID, 'I')
+	bNumber, _ := idNumber(b.ID, 'I')
+	return cmp.Compare(aNumber, bNumber)
 }

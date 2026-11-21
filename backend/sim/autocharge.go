@@ -25,7 +25,7 @@ func (s *Sim) seekCharging(skip []bool) {
 		if order := cmp.Compare(left.Battery, right.Battery); order != 0 {
 			return order
 		}
-		return cmp.Compare(idNumber(left.ID), idNumber(right.ID))
+		return compareRobots(left, right)
 	})
 	for _, i := range candidates {
 		robot := &s.state.Robots[i]
@@ -36,9 +36,13 @@ func (s *Sim) seekCharging(skip []bool) {
 		if station == nil {
 			continue
 		}
-		station.ReservedBy, robot.Status = robot.ID, RobotMoving
-		s.navigation[robot.ID] = robotNavigation{target: Point{X: station.X, Y: station.Y}, route: route}
+		s.beginChargeTrip(robot, station, route)
 	}
+}
+
+func (s *Sim) beginChargeTrip(robot *RobotState, station *StationState, route []Point) {
+	station.ReservedBy, robot.Status = robot.ID, RobotMoving
+	s.navigation[robot.ID] = robotNavigation{target: Point{X: station.X, Y: station.Y}, route: route}
 }
 
 func (s *Sim) rebalanceCharging() {
@@ -189,7 +193,7 @@ func (s *Sim) stepChargeTrip(robot *RobotState) {
 		return
 	}
 	if robot.Battery == 0 {
-		robot.Status = RobotFaulted
+		s.depleteBattery(robot)
 		return
 	}
 	if !s.advanceNavigation(robot, target) {
@@ -200,7 +204,7 @@ func (s *Sim) stepChargeTrip(robot *RobotState) {
 		// Successful arrival permits charging at zero; gain starts next tick.
 		s.beginCharging(robot, station)
 	} else if robot.Battery == 0 {
-		robot.Status = RobotFaulted
+		s.depleteBattery(robot)
 	}
 }
 
