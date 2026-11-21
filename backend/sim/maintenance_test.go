@@ -12,6 +12,131 @@ func maintenanceTestConfig() Config {
 	return cfg
 }
 
+func TestOperationsMaintenanceOffersOnlyAdmissibleFaults(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		kind FaultType
+		cell Point
+		low  bool
+		want MaintenanceReason
+	}{
+		{"motor", FaultMotorFailure, Point{8, 10}, false, ""},
+		{"no legal site", FaultSensorFailure, Point{9, 5}, false, maintenanceUnreachable},
+		{"low M1 battery", FaultSensorFailure, Point{8, 10}, true, maintenanceInsufficient},
+		{"awaiting offline", FaultRobotUnresponsive, Point{8, 10}, false, maintenanceAwaitingOffline},
+		{"needs external power", FaultCriticalBattery, Point{8, 10}, false, maintenanceExternalPower},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := maintenanceTestConfig()
+			s := newTestSim(t, cfg, 42)
+			r1, m1 := s.faultRobot("R1"), s.faultRobot(MaintenanceRobotID)
+			r1.X, r1.Y = tc.cell.X, tc.cell.Y
+			if tc.low {
+				m1.Battery = cfg.ReserveBattery - 1
+			}
+			requireInjection(t, s.injectBreakdown(r1.ID, tc.kind))
+			breakdowns, options := s.OperationsMaintenance()
+			if len(breakdowns) != 1 || breakdowns[0].FaultID != "F1" || breakdowns[0].Fault != tc.kind ||
+				breakdowns[0].Status != RobotFaulted || breakdowns[0].Reason != tc.want {
+				t.Fatalf("wrong observed breakdown: %+v", breakdowns)
+			}
+			request := MaintenanceRequest{RobotID: "R1", FaultID: "F1"}
+			s.HoldOperationsMaintenance()
+			err := s.DispatchMaintenance(request)
+			if tc.want == "" {
+				if err != nil || len(options) != 1 || options[0].MaintenanceRequest != request ||
+					options[0].TravelSteps == 0 || options[0].RequiredBattery <= options[0].RepairTicks ||
+					s.maintenance.Active == nil || !s.maintenance.Active.AIDirected {
+					t.Fatalf("eligible maintenance was not admitted: %+v %+v %v", options, s.maintenance, err)
+				}
+				for range 90 {
+					s.Tick()
+					if s.maintenance.Phase == MaintenanceRepairing {
+						break
+					}
+				}
+				if s.maintenance.Phase != MaintenanceRepairing {
+					t.Fatalf("AI dispatch did not reach physical repair: %+v", s.maintenance)
+				}
+				requireInjection(t, s.injectBreakdown(m1.ID, FaultSensorFailure))
+				s.Tick()
+				history := s.maintenance.History
+				if len(history) != 1 || history[0].Outcome != MaintenanceFailed || !history[0].AIDirected ||
+					r1.ActiveFault != tc.kind || s.maintenance.Active != nil {
+					t.Fatalf("M1 breakdown reported false recovery: %+v", s.maintenance)
+				}
+				s.HoldOperationsMaintenance()
+				if err := s.DispatchMaintenance(request); err == nil || err.Error() != "maintenance dispatch rejected: attempt_already_recorded" {
+					t.Fatalf("terminal AI-dispatched attempt could dispatch again: %v", err)
+				}
+			} else if err == nil || len(options) != 0 || s.maintenance.Active != nil || len(s.maintenance.History) != 0 {
+				t.Fatalf("ineligible maintenance consumed an attempt: %+v %+v %v", options, s.maintenance, err)
+			}
+			if tc.kind == FaultCriticalBattery && r1.Battery != 0 {
+				t.Fatal("critical fault acquired energy without power")
+			}
+			if tc.kind == FaultRobotUnresponsive {
+				for range cfg.UnresponsiveDelay {
+					s.Tick()
+				}
+				breakdowns, options = s.OperationsMaintenance()
+				if len(options) != 1 || options[0].MaintenanceRequest != request || breakdowns[0].Status != RobotOffline {
+					t.Fatalf("offline confirmation did not retain the original occurrence: %+v %+v", breakdowns, options)
+				}
+			}
+		})
+	}
+}
+
+func TestOperationsMaintenanceHoldExpiresWithoutStoppingTicks(t *testing.T) {
+	cfg := maintenanceTestConfig()
+	s := newTestSim(t, cfg, 42)
+	r1 := s.faultRobot("R1")
+	r1.X, r1.Y = 8, 10
+	requireInjection(t, s.injectBreakdown(r1.ID, FaultSensorFailure))
+	s.HoldOperationsMaintenance()
+	for range operationsDispatchTicks {
+		s.Tick()
+		assertInvariants(t, s, cfg)
+		if s.maintenance.Active != nil {
+			t.Fatal("deterministic maintenance dispatched during the Operations window")
+		}
+	}
+	s.Tick()
+	work := s.maintenance.Active
+	if work == nil || work.AIDirected || work.StartedTick != operationsDispatchTicks+1 {
+		t.Fatalf("window expiry did not yield to deterministic dispatch: %+v", work)
+	}
+	if err := s.DispatchMaintenance(work.MaintenanceRequest); err != ErrMaintenanceWindow {
+		t.Fatalf("late AI dispatch reached the attempt slot: %v", err)
+	}
+}
+
+func TestOperationsMaintenanceRechecksLiveRouteAndFault(t *testing.T) {
+	cfg := maintenanceTestConfig()
+	s := newTestSim(t, cfg, 42)
+	r1 := s.faultRobot("R1")
+	r1.X, r1.Y = 8, 10
+	requireInjection(t, s.injectBreakdown(r1.ID, FaultSensorFailure))
+	_, options := s.OperationsMaintenance()
+	if len(options) != 1 {
+		t.Fatalf("missing initial offer: %+v", options)
+	}
+	s.HoldOperationsMaintenance()
+	blocker := s.faultRobot("R2")
+	blocker.X, blocker.Y = cfg.MaintenanceBay.X, cfg.MaintenanceBay.Y+1
+	requireInjection(t, s.injectBreakdown(blocker.ID, FaultMotorFailure))
+	if err := s.DispatchMaintenance(options[0].MaintenanceRequest); err == nil || s.maintenance.Active != nil {
+		t.Fatalf("maintenance was admitted after the bay exit was blocked: %+v %v", s.maintenance, err)
+	}
+	if err := s.DispatchMaintenance(MaintenanceRequest{RobotID: "R1", FaultID: "F2"}); err == nil {
+		t.Fatal("substituted fault occurrence was admitted")
+	}
+	if len(s.maintenance.History) != 0 {
+		t.Fatalf("a denied command consumed an attempt: %+v", s.maintenance)
+	}
+}
+
 func TestWarehouseV2MaintenanceDeliveryIntegration(t *testing.T) {
 	cfg := WarehouseV2Config()
 	cfg.ScheduledBreakdowns = []ScheduledBreakdown{{Tick: 48, RobotID: "R4", Type: FaultSensorFailure}}

@@ -121,6 +121,7 @@ const operationsDispatchTicks = 20
 type dispatchHold struct {
 	until        int
 	robots, jobs map[string]bool
+	maintenance  bool
 }
 
 // SetOperationsDispatchHold only delays the deterministic dispatcher for
@@ -135,4 +136,16 @@ func (s *Sim) SetOperationsDispatchHold(options []AssignmentOption) {
 		hold.robots[option.RobotID], hold.jobs[option.JobID] = true, true
 	}
 	s.operationsHold = hold
+}
+
+// HoldOperationsMaintenance shares the transport window's tick deadline.
+func (s *Sim) HoldOperationsMaintenance() {
+	if s.cfg.MaintenanceRepairTicks > 0 {
+		s.operationsHold.maintenance = true
+		s.operationsHold.until = s.state.Tick + operationsDispatchTicks
+	}
+}
+
+func (s *Sim) operationsMaintenanceHeld() bool {
+	return s.operationsHold.maintenance && s.state.Tick <= s.operationsHold.until
 }

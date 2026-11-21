@@ -44,6 +44,14 @@ The optional V2 `maintenance` snapshot carries the current phase, active work, a
 
 Run the complete R4 delivery recovery from the Go module with `go run ./cmd/simrun -layout=warehouse-v2 -seed=42 -ticks=139 -breakdown=48:R4:sensor_failure`. Use `-repair-ticks=0` to reproduce Session 2 behavior or a positive repair duration to vary the work cost.
 
+### Operations AI maintenance dispatch
+
+Go continues to dispatch deterministic maintenance when no Operations decision window is active. With Operations AI enabled, an authenticated window gives the model time to choose one action while physical ticks, charging, safety, and any ongoing repair continue. A fresh eligible occurrence can start one maintenance-only review during the normal transport cooldown. Go restores deterministic admission when the window closes, AI is disabled, or the 20-tick deadline expires. Abstention, unavailable inference, timeout, invalid output, and budget denial release the window. An expired maintenance choice cannot execute even if M1 remains idle.
+
+The model receives active breakdowns with immutable fault IDs, robot status, and live admission blockers. It sees M1 and cargo custody in the warehouse observation, recent maintenance attempts, and Go-computed options with the service cell, travel and exit steps, repair ticks, and required battery. A maintenance choice has the shape `{"kind":"maintenance","maintenance":{"robotId":"R4","faultId":"F1"}}`. The Go host retains the offered pairs, observation identity, expiry, and entity versions. The model has no tools, receives no runtime credentials, and uses the existing bounded inference and spending ledger.
+
+The automatic command checks the active window, authenticated runtime and observation, exact offered fault pair, and versions of M1, the affected robot, and its job when assigned. It recomputes feasibility against live occupancy, energy, active fault, and attempt history before admission. The PostgreSQL command receipt confirms dispatch admission. The simulator labels AI-admitted attempts with `aiDirected`, and later simulator records establish the repair result, recovery, and delivery. Deterministic attempts retain their existing snapshot shape. A command receipt with an uncertain persistence outcome still poisons the runtime.
+
 ## Phase 2 closeout evidence
 
 The following closeout records historical Phase 2 acceptance, not a fresh whole-repository test result. DEMO-02's later native Windows run reported golden-file CRLF mismatches and no soak failure; see its [verification record](demo-inventory.md#10-tests-ci-and-inspection-verification). Neither observation silently resolves the historical limitation below.

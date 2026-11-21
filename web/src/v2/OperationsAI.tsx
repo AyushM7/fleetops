@@ -72,6 +72,7 @@ function decisionEntry(activity: OperationsActivity): Entry {
     ? lifecycle.execution_unconfirmed : status;
   const title = decision?.kind === "assign" ? "Job assignment"
     : decision?.kind === "reassign" ? "Job reassignment"
+    : decision?.kind === "maintenance" ? "Maintenance dispatch"
     : decision?.kind === "abstain" ? "No action recommended" : "Dispatch review";
   return { source: "decision", key: activity.observationId, tick: activity.tick, activity, title, state: state.label, tone: state.tone, references };
 }
@@ -131,6 +132,12 @@ function Recommendation({ activity, snapshot, inspect }: {
       <Field label="To">{ref("robot", ToRobotID)}</Field>
     </dl>;
   }
+  if (decision?.kind === "maintenance") {
+    return <dl>
+      <Field label="Target">{ref("robot", decision.maintenance.robotId)}</Field>
+      <Field label="Fault occurrence"><code>{decision.maintenance.faultId}</code></Field>
+    </dl>;
+  }
   if (decision?.kind === "abstain") return <p>{Object.hasOwn(abstentionLabels, decision.reason) ? abstentionLabels[decision.reason] : "Reason unavailable"}.</p>;
   return <p>{activity.stage === "observed" ? "Waiting for the review to finish." : "No recommendation was recorded."}</p>;
 }
@@ -154,7 +161,9 @@ function CommandDetails({ activity }: { activity: OperationsActivity }) {
         : activity.goReason === "admission_rejected" ? "Admission rejected" : activity.goReason}</Field>}
       {activity.finishedAt && <Field label="Review finished"><Time value={activity.finishedAt} /></Field>}
     </dl>
-    {receipt?.auditCommitted && receipt.execution === "succeeded" && <p>The receipt confirms the dispatch change. Check Jobs for later delivery outcomes.</p>}
+    {receipt?.auditCommitted && receipt.execution === "succeeded" && <p>{activity.decision?.kind === "maintenance"
+      ? "Go admitted the maintenance dispatch. The simulator records the repair outcome separately."
+      : "The receipt confirms the dispatch change. Check Jobs for later delivery outcomes."}</p>}
   </section>;
 }
 

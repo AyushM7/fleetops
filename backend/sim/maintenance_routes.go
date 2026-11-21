@@ -21,7 +21,7 @@ func (s *Sim) planServiceCell(target, m1 RobotState) (maintenancePlan, Maintenan
 			continue
 		}
 		if !feasible || len(route) < len(best.route) {
-			best = maintenancePlan{fault: target.ActiveFault, target: targetCell, service: point, route: route}
+			best = maintenancePlan{fault: target.ActiveFault, target: targetCell, service: point, route: route, exit: exit}
 			feasible = true
 		}
 	}

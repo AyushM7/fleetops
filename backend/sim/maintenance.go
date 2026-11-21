@@ -2,6 +2,7 @@ package sim
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"slices"
 )
@@ -45,7 +46,7 @@ const (
 )
 
 // MaintenanceRequest binds admission to a specific active fault occurrence.
-// The trusted scheduler uses the same preview and admission path as future callers.
+// Deterministic and Operations dispatch share the preview and admission path.
 type MaintenanceRequest struct {
 	RobotID string `json:"robotId"`
 	FaultID string `json:"faultId"`
@@ -55,6 +56,26 @@ type MaintenanceIssue struct {
 	MaintenanceRequest
 	Reason MaintenanceReason `json:"reason"`
 }
+
+type MaintenanceBreakdown struct {
+	MaintenanceRequest
+	Fault  FaultType         `json:"fault"`
+	Tick   int               `json:"tick"`
+	Status RobotStatus       `json:"status"`
+	Reason MaintenanceReason `json:"reason,omitempty"`
+}
+
+type MaintenanceOption struct {
+	MaintenanceRequest
+	JobID           string `json:"jobId,omitempty"`
+	ServiceCell     Point  `json:"serviceCell"`
+	TravelSteps     int    `json:"travelSteps"`
+	ExitSteps       int    `json:"exitSteps"`
+	RepairTicks     int    `json:"repairTicks"`
+	RequiredBattery int    `json:"requiredBattery"`
+}
+
+var ErrMaintenanceWindow = errors.New("maintenance dispatch window is closed")
 
 type MaintenanceAttempt struct {
 	MaintenanceRequest
@@ -68,6 +89,7 @@ type MaintenanceAttempt struct {
 	RequiredRepairTicks int                `json:"requiredRepairTicks"`
 	Outcome             MaintenanceOutcome `json:"outcome,omitempty"`
 	Reason              MaintenanceReason  `json:"reason,omitempty"`
+	AIDirected          bool               `json:"aiDirected,omitempty"`
 }
 
 type MaintenanceState struct {
@@ -82,6 +104,7 @@ type maintenancePlan struct {
 	target  Point
 	service Point
 	route   []Point
+	exit    int
 }
 
 func (s *Sim) maintenanceSnapshot() *MaintenanceState {
@@ -195,6 +218,39 @@ func (s *Sim) assignMaintenance(request MaintenanceRequest) MaintenanceReason {
 	return ""
 }
 
+// OperationsMaintenance previews current breakdowns without reserving M1 or an attempt.
+func (s *Sim) OperationsMaintenance() ([]MaintenanceBreakdown, []MaintenanceOption) {
+	breakdowns, options := []MaintenanceBreakdown{}, []MaintenanceOption{}
+	for _, request := range s.maintenanceRequests() {
+		target := s.faultRobot(request.RobotID)
+		fault := s.activeFault(target)
+		plan, reason := s.previewMaintenance(request)
+		breakdowns = append(breakdowns, MaintenanceBreakdown{
+			MaintenanceRequest: request, Fault: fault.Type, Tick: fault.Tick, Status: target.Status, Reason: reason,
+		})
+		if reason == "" {
+			options = append(options, MaintenanceOption{
+				MaintenanceRequest: request, JobID: target.JobID, ServiceCell: plan.service,
+				TravelSteps: len(plan.route), ExitSteps: plan.exit, RepairTicks: s.cfg.MaintenanceRepairTicks,
+				RequiredBattery: (len(plan.route)+plan.exit)*s.cfg.MovingDrain + s.cfg.MaintenanceRepairTicks + max(1, s.cfg.ReserveBattery),
+			})
+		}
+	}
+	return breakdowns, options
+}
+
+// DispatchMaintenance is COMMAND. The trusted caller serializes it with ticks.
+func (s *Sim) DispatchMaintenance(request MaintenanceRequest) error {
+	if !s.operationsMaintenanceHeld() {
+		return ErrMaintenanceWindow
+	}
+	if reason := s.assignMaintenance(request); reason != "" {
+		return fmt.Errorf("maintenance dispatch rejected: %s", reason)
+	}
+	s.maintenance.Active.AIDirected = true
+	return nil
+}
+
 func (s *Sim) scheduleMaintenance() {
 	if s.cfg.MaintenanceRepairTicks == 0 {
 		return
@@ -218,7 +274,13 @@ func (s *Sim) scheduleMaintenance() {
 		if active := s.maintenance.Active; active != nil && active.FaultID == request.FaultID {
 			continue
 		}
-		if issue := s.assignMaintenance(request); issue != "" && issue != maintenanceAlreadyTried {
+		var issue MaintenanceReason
+		if s.operationsMaintenanceHeld() {
+			_, issue = s.previewMaintenance(request)
+		} else {
+			issue = s.assignMaintenance(request)
+		}
+		if issue != "" && issue != maintenanceAlreadyTried {
 			s.maintenance.Issues = append(s.maintenance.Issues, MaintenanceIssue{MaintenanceRequest: request, Reason: issue})
 		}
 	}

@@ -159,6 +159,14 @@ describe("Warehouse V2 wire contracts", () => {
     expect(() => parseWarehouseFrame(message("operations", {
       ...payload, operationsActivity: [{ ...proposed, usage: { ...proposed.usage, inputTokens: -1 } }],
     }), parsed)).toThrow();
+    const maintenance = {
+      ...proposed, decision: { kind: "maintenance", maintenance: { robotId: "R4", faultId: "F1" } },
+    };
+    expect(parseWarehouseFrame(message("operations", { ...payload, operationsActivity: [maintenance] }), parsed)
+      .operations).toEqual([maintenance]);
+    expect(() => parseWarehouseFrame(message("operations", { ...payload, operationsActivity: [{
+      ...maintenance, decision: { kind: "maintenance", maintenance: { robotId: "M1", faultId: "F1" } },
+    }] }), parsed)).toThrow();
   });
 
   it("posts the fixed launch operation with the expected generation and confirms the replacement", async () => {

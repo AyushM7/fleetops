@@ -51,6 +51,7 @@ type MaintenanceAttempt = MaintenanceTarget & {
   id: string; fault: typeof breakdowns[number]; targetCell: Point; serviceCell: Point;
   startedTick: number; finishedTick?: number; repairTicks: number; requiredRepairTicks: number;
   outcome?: typeof maintenanceOutcomes[number]; reason?: typeof maintenanceReasons[number];
+  aiDirected?: boolean;
 };
 type MaintenanceIssue = MaintenanceTarget & { reason: typeof maintenanceReasons[number] };
 export type MaintenanceState = {
@@ -67,6 +68,7 @@ type Assignment = { jobId: string; robotId: string };
 type Decision =
   | { kind: "assign"; assignments: Assignment[] }
   | { kind: "reassign"; reassignment: { JobID: string; FromRobotID: string; ToRobotID: string } }
+  | { kind: "maintenance"; maintenance: MaintenanceTarget }
   | { kind: "abstain"; reason: string };
 type Usage = { model: string; inputTokens: number; outputTokens: number };
 export type OperationsActivity = {
@@ -159,6 +161,7 @@ function uniqueIds(values: { id: string }[]): boolean {
 
 function isMaintenanceAttempt(v: unknown): v is MaintenanceAttempt {
   return record(v) && id(v.id) && id(v.robotId) && id(v.faultId) && member(v.fault, breakdowns) &&
+    (v.aiDirected === undefined || typeof v.aiDirected === "boolean") &&
     point(v.targetCell) && point(v.serviceCell) && Math.abs(v.targetCell.x - v.serviceCell.x) + Math.abs(v.targetCell.y - v.serviceCell.y) === 1 &&
     count(v.startedTick) && count(v.repairTicks) && count(v.requiredRepairTicks) &&
     v.requiredRepairTicks > 0 && v.repairTicks <= v.requiredRepairTicks &&
@@ -207,6 +210,11 @@ function isDecision(v: unknown): v is Decision {
   if (v.kind === "assign") {
     return Array.isArray(v.assignments) && v.assignments.length > 0 &&
       v.assignments.every(item => record(item) && id(item.jobId) && id(item.robotId));
+  }
+  if (v.kind === "maintenance") {
+    const request = v.maintenance;
+    return record(request) && typeof request.robotId === "string" && /^R([1-9]|10)$/.test(request.robotId) &&
+      typeof request.faultId === "string" && /^F[1-9][0-9]{0,18}$/.test(request.faultId);
   }
   const pair = v.reassignment;
   // Go embeds the safety request as-is, using its exported field names.

@@ -4,6 +4,7 @@ package sim
 type Reader interface {
 	Snapshot() State
 	OperationsAssignments(jobs []JobState) []AssignmentOption
+	OperationsMaintenance() ([]MaintenanceBreakdown, []MaintenanceOption)
 	CellAt(Point) CellType
 	PlanRoute(from, to Point) ([]Point, error)
 	AisleOccupant(aisleID int) (string, error)
@@ -18,6 +19,8 @@ type Commander interface {
 	ReassignUnstartedJob(jobID, fromRobotID, toRobotID string) error
 	AssignJobBatch(request AssignJobBatchRequest) error
 	SetOperationsDispatchHold([]AssignmentOption)
+	HoldOperationsMaintenance()
+	DispatchMaintenance(MaintenanceRequest) error
 }
 
 // Driver exposes trusted scenario injections, never agent tools.

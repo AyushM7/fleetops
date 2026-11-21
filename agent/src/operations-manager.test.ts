@@ -14,12 +14,25 @@ describe("Operations Manager with a mocked model", () => {
     expect(onCall).toHaveBeenCalledTimes(1);
   });
 
+  it("selects a maintenance request in one model invocation", async () => {
+    const onCall = vi.fn();
+    const maintenance = { robotId: "R4", faultId: "F1" };
+    const decision = { kind: "maintenance", maintenance };
+    const result = await makeOperationsDecision(JSON.stringify({ tick: 48, maintenanceOptions: [maintenance] }),
+      offlineModelFixture({ decision }, onCall), signal());
+    expect(result.decision).toEqual(decision);
+    expect(onCall).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     { kind: "assign", assignments: [{ jobId: "J1", robotId: "R11" }] },
     { kind: "assign", assignments: [{ jobId: "J1", robotId: "M1" }] },
     { kind: "reassign", reassignment: { jobId: "J1", fromRobotId: "M1", toRobotId: "R2" } },
     { kind: "reassign", reassignment: { jobId: "J1", fromRobotId: "R2", toRobotId: "M1" } },
     { kind: "fault", robotId: "R2" },
+    { kind: "maintenance", maintenance: { robotId: "M1", faultId: "F1" } },
+    { kind: "maintenance", maintenance: { robotId: "R4", faultId: "F01" } },
+    { kind: "maintenance", maintenance: { robotId: "R4", faultId: "F1", completed: true } },
     { kind: "abstain", reason: "no_safe_option", runtimeId: "other" },
   ])("rejects unsafe or out-of-scope output %j without retrying", async decision => {
     const onCall = vi.fn();
