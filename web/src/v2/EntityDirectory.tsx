@@ -21,13 +21,13 @@ export function EntityDirectory({ page, feed, selection, selectEntity, viewWareh
     {lastConfirmedTick !== undefined && <p className="v2-directory-notice" role="status">
       Showing last confirmed snapshot at tick {lastConfirmedTick}.
     </p>}
-    {snapshot ? page === "Fleet" ? <Fleet robots={snapshot.robots} selection={selection} pick={pick} />
+    {snapshot ? page === "Fleet" ? <Fleet snapshot={snapshot} selection={selection} pick={pick} />
       : <Jobs snapshot={snapshot} selection={selection} pick={pick} />
       : <section className="v2-panel v2-empty">
         <h2 tabIndex={-1}>{page === "Fleet" ? "Robots" : "Job queue"}</h2>
         <p>Waiting for confirmed {page === "Fleet" ? "fleet" : "job"} telemetry.</p>
       </section>}
-    <WarehouseInspector entity={entity} job={job} onWarehouse={viewWarehouse} lastConfirmedTick={lastConfirmedTick}
+    <WarehouseInspector entity={entity} snapshot={snapshot} job={job} onWarehouse={viewWarehouse} lastConfirmedTick={lastConfirmedTick}
       canInspectAssigned={canInspectAssigned} inspect={inspectRelated} close={close} restoreFocus={restoreFocus} />
   </div>;
 }

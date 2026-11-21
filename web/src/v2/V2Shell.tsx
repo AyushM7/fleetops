@@ -139,14 +139,15 @@ function SessionView({ returning, returnError, onReturn, onControl }: SessionAct
 
 function WorkspaceView({ feed, ...actions }: { feed: WarehouseFeed } & SessionActions): JSX.Element {
   const [page, navigate] = useState<Page>("Warehouse");
-  const generation = feed.status?.generation ?? feed.frame?.generation;
-  const [selected, setSelected] = useState<{ generation: string | undefined; entity: Selection } | null>(null);
-  const selection = selected && selected.generation === generation && feed.frame && findEntity(feed.frame.snapshot, selected.entity)
+  const scope = feed.status && !feed.status.ready ? undefined
+    : feed.frame && feed.frame.generation + ":" + feed.frame.runtimeId;
+  const [selected, setSelected] = useState<{ scope: string; entity: Selection } | null>(null);
+  const selection = selected && selected.scope === scope && feed.frame && findEntity(feed.frame.snapshot, selected.entity)
     ? selected.entity : null;
   if (selected && !selection) setSelected(null);
   const selectEntity = useCallback((entity: Selection | null) => {
-    setSelected(entity ? { generation, entity } : null);
-  }, [generation]);
+    setSelected(entity && scope ? { scope, entity } : null);
+  }, [scope]);
   return <WorkspaceContext.Provider value={{ page, navigate, selection, selectEntity, feed }}>
     <SessionView {...actions} />
   </WorkspaceContext.Provider>;

@@ -131,7 +131,9 @@ describe("Warehouse V2 wire contracts", () => {
       targetCell: { x: 0, y: 12 }, serviceCell: { x: 0, y: 11 },
       startedTick: 5, repairTicks: 1, requiredRepairTicks: 3,
     };
-    const physical = { ...frame.snapshot, robots: [...robots.slice(0, 10), m1] };
+    const target = { ...robots[0], status: "faulted", activity: "FAULTED", activeFault: "sensor_failure" };
+    const physical = { ...frame.snapshot, robots: [target, ...robots.slice(1, 10), m1],
+      faults: [{ id: "F1", type: "sensor_failure", robots: ["R1"], tick: 4 }] };
     const active = { ...frame, snapshot: { ...physical, maintenance: { phase: "repairing", active: attempt } } };
     expect(parseWarehouseFrame(message("tick", active), parsed).snapshot.maintenance?.active).toEqual(attempt);
     const returnedRobots = [...robots.slice(0, 10), { ...m1, status: "idle", activity: "AVAILABLE" }];
@@ -140,10 +142,25 @@ describe("Warehouse V2 wire contracts", () => {
     } } });
     expect(parseWarehouseFrame(message("tick", returning(3)), parsed).snapshot.maintenance?.history?.[0].outcome).toBe("completed");
     expect(() => parseWarehouseFrame(message("tick", returning(1)), parsed)).toThrow();
+    const premature = returning(3);
+    premature.snapshot.robots = [target, ...returnedRobots.slice(1)];
+    expect(() => parseWarehouseFrame(message("tick", premature), parsed)).toThrow();
+    const critical = returning(3);
+    critical.snapshot.faults = [{ ...physical.faults[0], type: "critical_battery" }];
+    critical.snapshot.maintenance.history[0].fault = "critical_battery";
+    expect(() => parseWarehouseFrame(message("tick", critical), parsed)).toThrow();
     const unsafe = { ...active, snapshot: { ...active.snapshot, maintenance: {
       phase: "repairing", active: { ...attempt, serviceCell: attempt.targetCell },
     } } };
     expect(() => parseWarehouseFrame(message("tick", unsafe), parsed)).toThrow();
+    const wrongPosition = { ...active, snapshot: { ...active.snapshot, robots: [
+      target, ...robots.slice(1, 10), { ...m1, x: 1 },
+    ] } };
+    expect(() => parseWarehouseFrame(message("tick", wrongPosition), parsed)).toThrow();
+    const falseVerification = { ...active, snapshot: { ...active.snapshot, maintenance: { phase: "verifying", active: attempt } } };
+    expect(() => parseWarehouseFrame(message("tick", falseVerification), parsed)).toThrow();
+    const unknownOccurrence = { ...active, snapshot: { ...active.snapshot, faults: [] } };
+    expect(() => parseWarehouseFrame(message("tick", unknownOccurrence), parsed)).toThrow();
   });
 
   it("validates optional Operations data without treating a proposal as proof of execution", () => {
@@ -288,7 +305,19 @@ describe("Warehouse V2 stream lifecycle", () => {
     const emit = vi.fn();
     subscriptions.push(subscribeWarehouse(emit, vi.fn()).close);
     await vi.advanceTimersByTimeAsync(0);
-    FakeSource.opened[0].send("snapshot", wire());
+    const old = wire(1, 12);
+    const oldWithMaintenance = { ...old, snapshot: {
+      ...old.snapshot, faults: [{ id: "F1", type: "sensor_failure", robots: ["R1"], tick: 3 }],
+      maintenance: { phase: "available", history: [{
+        id: "MA1", robotId: "R1", faultId: "F1", fault: "sensor_failure", targetCell: { x: 0, y: 12 },
+        serviceCell: { x: 0, y: 11 }, startedTick: 4, finishedTick: 12, repairTicks: 3, requiredRepairTicks: 3,
+        outcome: "completed",
+      }] },
+    } };
+    FakeSource.opened[0].send("snapshot", oldWithMaintenance);
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ frame: expect.objectContaining({
+      snapshot: expect.objectContaining({ maintenance: expect.objectContaining({ history: [expect.objectContaining({ id: "MA1" })] }) }),
+    }) }));
     FakeSource.opened[0].onerror?.();
     await vi.advanceTimersByTimeAsync(2000);
     expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "connecting", frame: null }));

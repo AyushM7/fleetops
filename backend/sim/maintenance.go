@@ -80,6 +80,7 @@ var ErrMaintenanceWindow = errors.New("maintenance dispatch window is closed")
 type MaintenanceAttempt struct {
 	MaintenanceRequest
 	ID                  string             `json:"id"`
+	JobID               string             `json:"jobId,omitempty"`
 	Fault               FaultType          `json:"fault"`
 	TargetCell          Point              `json:"targetCell"`
 	ServiceCell         Point              `json:"serviceCell"`
@@ -210,6 +211,7 @@ func (s *Sim) assignMaintenance(request MaintenanceRequest) MaintenanceReason {
 	m1.Status = RobotMoving
 	s.maintenance.Active = &MaintenanceAttempt{
 		MaintenanceRequest: request, ID: fmt.Sprintf("MA%d", len(s.maintenance.History)+1),
+		JobID: s.faultRobot(request.RobotID).JobID,
 		Fault: plan.fault, TargetCell: plan.target, ServiceCell: plan.service,
 		StartedTick: s.state.Tick, RequiredRepairTicks: s.cfg.MaintenanceRepairTicks,
 	}

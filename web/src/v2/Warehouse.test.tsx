@@ -58,6 +58,29 @@ describe("Warehouse V2", () => {
     expect(output).not.toContain("Robot details");
   });
 
+  it("moves M1 to the reported cell and keeps cargo with the faulted robot", () => {
+    const active = {
+      id: "MA1", robotId: "R8", faultId: "F1", fault: "sensor_failure" as const, jobId: job.id,
+      targetCell: { x: 4, y: 10 }, serviceCell: { x: 5, y: 10 },
+      startedTick: 161, repairTicks: 0, requiredRepairTicks: 3,
+    };
+    const traveling = (x: number, y: number): WarehouseFrame => ({ ...frame, snapshot: {
+      ...frame.snapshot,
+      faults: [{ id: "F1", type: "sensor_failure", robots: ["R8"], tick: 160 }],
+      robots: robots.map(robot => robot.id === "M1" ? { ...robot, x, y, status: "moving", activity: "GOING_TO_REPAIR" }
+        : robot.id === "R8" ? { ...robot, ...active.targetCell, status: "faulted", activity: "FAULTED", activeFault: "sensor_failure" }
+        : robot),
+      jobs: [{ ...job, cargoRobotId: "R8" }], maintenance: { phase: "traveling", active },
+    } });
+    const first = render({ kind: "robot", id: "R8" }, traveling(9, 1));
+    const next = render({ kind: "robot", id: "R8" }, traveling(8, 1));
+    expect(first).toMatch(/transform="translate\(9\.5 1\.5\)"[^>]*aria-label="M1 maintenance robot, Traveling to repair, target R8/);
+    expect(next).toMatch(/transform="translate\(8\.5 1\.5\)"[^>]*aria-label="M1 maintenance robot, Traveling to repair, target R8/);
+    expect(next).toContain('data-highlight="target"');
+    expect(next).toContain("Onboard R8 · J18");
+    expect(next).toContain("Sensor failure · F1");
+  });
+
   it("renders the full supplied layout, 11 robots, four chargers, and the fleet strip", () => {
     const output = render();
     expect(output.match(/data-cell-kind=/g)).toHaveLength(260);

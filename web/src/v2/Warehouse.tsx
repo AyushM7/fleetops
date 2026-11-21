@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { BatteryCharge } from "./BatteryCharge";
+import { WarehouseMaintenance } from "./Maintenance";
 import { Icon } from "./WarehouseIcon";
 import { WarehouseInspector, useInspectorFocus } from "./WarehouseInspector";
 import { WarehouseMap } from "./WarehouseMap";
@@ -71,9 +72,11 @@ export function Warehouse({ frame, selection, selectEntity, viewFleet, hidden }:
   return <div className="v2-warehouse" hidden={hidden} ref={surface}>
     <WarehouseMetrics snapshot={frame?.snapshot} />
     {frame ? <>
+      <WarehouseMaintenance snapshot={frame.snapshot} inspect={pick} />
       <div className={'v2-map-row' + (entity ? ' has-inspector' : '')}>
         <WarehouseMap frame={frame} selection={selection} job={job} pick={pick} />
-        <WarehouseInspector entity={hidden ? null : entity} job={job} inspect={selectEntity} close={close} restoreFocus={restoreFocus} />
+        <WarehouseInspector entity={hidden ? null : entity} snapshot={frame.snapshot} job={job}
+          inspect={selectEntity} close={close} restoreFocus={restoreFocus} />
       </div>
       <FleetStrip robots={frame.snapshot.robots} selection={selection} pick={pick} viewFleet={viewFleet} />
     </> : <section className="v2-panel v2-empty"><h2>Warehouse map</h2><p>Waiting for confirmed warehouse telemetry.</p></section>}

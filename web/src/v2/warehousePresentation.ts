@@ -1,4 +1,5 @@
-import type { Job, Point, Robot, Snapshot, Station } from "./telemetry";
+import { activeBreakdown, type Job, type MaintenanceAttempt, type MaintenanceIssue, type MaintenanceState,
+  type MaintenanceTarget, type OperationsActivity, type Point, type Robot, type Snapshot, type Station } from "./telemetry";
 
 export type Selection = { kind: "robot" | "job" | "station"; id: string };
 export type PickEntity = (selection: Selection, opener: HTMLElement | SVGElement) => void;
@@ -17,6 +18,84 @@ export const activityLabels: Record<Robot["activity"], string> = {
 
 export const cellLabel = (point: Point): string => "Cell " + point.x + ", " + point.y;
 export const robotRoleLabel = (robot: Robot): string => robot.role === "maintenance" ? "Maintenance robot" : "Transport robot";
+
+export const breakdownLabels: Record<NonNullable<Robot["activeFault"]>, string> = {
+  motor_failure: "Motor failure", sensor_failure: "Sensor failure",
+  robot_unresponsive: "Communication loss", critical_battery: "Critical battery",
+};
+export const maintenancePhaseLabels: Record<MaintenanceState["phase"], string> = {
+  available: "Available", assigned: "Assigned", traveling: "Traveling to repair", at_target: "At repair site",
+  repairing: "Repairing", verifying: "Verifying recovery", returning: "Returning", unavailable: "Unavailable",
+};
+export const maintenanceOutcomeLabels: Record<NonNullable<MaintenanceAttempt["outcome"]>, string> = {
+  completed: "Recovery verified", failed: "Repair failed", unresolved: "Repair unresolved", cancelled: "Attempt cancelled",
+};
+export const maintenanceReasonLabels: Record<MaintenanceIssue["reason"] | "attempt_already_recorded", string> = {
+  maintenance_unavailable: "M1 unavailable", external_power_required: "External power required",
+  awaiting_offline: "Waiting for offline confirmation", service_cell_unreachable: "No legal service cell",
+  insufficient_maintenance_energy: "Insufficient maintenance energy", target_changed: "Repair target changed",
+  service_position_lost: "Service cell lost", travel_blocked: "Travel blocked",
+  target_recovery_blocked: "Recovery verification blocked", self_repair_unsupported: "M1 requires assistance",
+  attempt_already_recorded: "Repair attempt already recorded",
+};
+
+export function maintenancePhaseLabel(snapshot: Snapshot): string {
+  const m1 = snapshot.robots.find(robot => robot.id === "M1");
+  const phase = snapshot.maintenance?.phase;
+  if (m1?.activeFault || m1?.status === "offline") return "Unavailable";
+  if (m1?.status === "charging") return "Charging";
+  if (phase === "returning" && m1?.activity === "GOING_TO_CHARGE") return "Returning to charge";
+  if (phase === "returning" && m1?.activity === "PARKED") return "Parked";
+  if (phase) return maintenancePhaseLabels[phase];
+  if (m1?.status === "idle" && !snapshot.stations.some(station => station.occupiedBy === m1.id || station.reservedBy === m1.id)) return "Available";
+  return m1 ? robotActivityLabel(m1) : "Unknown";
+}
+
+export function sameMaintenanceTarget(a: MaintenanceTarget, b: MaintenanceTarget): boolean {
+  return a.robotId === b.robotId && a.faultId === b.faultId;
+}
+
+export function maintenanceForRobot(snapshot: Snapshot, robot: Robot) {
+  const breakdown = activeBreakdown(snapshot, robot);
+  const work = snapshot.maintenance;
+  const active = work?.active;
+  const ref = breakdown && { robotId: robot.id, faultId: breakdown.id };
+  const attempt = robot.role === "maintenance" || (ref && active && sameMaintenanceTarget(ref, active)) ? active : undefined;
+  const history = (work?.history ?? []).filter(item => robot.role === "maintenance" ||
+    (item.robotId === robot.id && (!robot.activeFault || ref && sameMaintenanceTarget(ref, item))));
+  const recent = history.at(-1);
+  const reason: keyof typeof maintenanceReasonLabels | undefined = ref && (work?.issues?.find(issue => sameMaintenanceTarget(ref, issue))?.reason ??
+    (recent?.outcome ? "attempt_already_recorded" : undefined));
+  return { breakdown, attempt, history, recent, reason };
+}
+
+export function acceptedMaintenanceAttempt(snapshot: Snapshot, activity: OperationsActivity): MaintenanceAttempt | undefined {
+  const decision = activity.decision;
+  const receipt = activity.go;
+  if (decision?.kind !== "maintenance" || activity.stage !== "finished" || activity.status !== "applied" ||
+      receipt?.execution !== "succeeded" || !receipt.auditCommitted || !receipt.auditId) return;
+  const active = snapshot.maintenance?.active;
+  const matches = (attempt: MaintenanceAttempt) => attempt.aiDirected === true &&
+    attempt.startedTick >= activity.tick && sameMaintenanceTarget(attempt, decision.maintenance);
+  return active && matches(active) ? active : snapshot.maintenance?.history?.find(matches);
+}
+
+export function maintenanceJobResult(snapshot: Snapshot, attempt: MaintenanceAttempt): string | undefined {
+  const finished = attempt.finishedTick;
+  if (attempt.outcome !== "completed" || finished === undefined || !attempt.jobId) return;
+  if (snapshot.maintenance?.history?.some(item => item.jobId === attempt.jobId && item.robotId === attempt.robotId &&
+    item.outcome === "completed" && (item.finishedTick ?? 0) > finished)) return;
+  const job = snapshot.jobs.find(item => item.id === attempt.jobId && item.assignedRobot === attempt.robotId);
+  if (!job) return;
+  if (job.status === "done" && job.completedTick !== undefined && job.completedTick > finished) {
+    return "Delivered at tick " + job.completedTick;
+  }
+  const robot = snapshot.robots.find(item => item.id === attempt.robotId);
+  if (robot?.jobId === job.id && robot.status === "moving" && !robot.activeFault) {
+    if (job.status === "in_progress" && job.cargoRobotId === robot.id) return "Delivery resumed";
+    if (job.status === "assigned") return "Pickup route resumed";
+  }
+}
 
 export type RobotTone = "moving" | "charging" | "waiting" | "fault";
 

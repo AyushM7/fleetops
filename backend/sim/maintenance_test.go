@@ -163,7 +163,7 @@ func TestWarehouseV2MaintenanceDeliveryIntegration(t *testing.T) {
 		if state.Maintenance != nil {
 			attempt := state.Maintenance.Active
 			if attempt != nil {
-				if attempt.RobotID != "R4" || attempt.FaultID != "F1" || m1.JobID != "" {
+				if attempt.RobotID != "R4" || attempt.FaultID != "F1" || attempt.JobID != "J4" || m1.JobID != "" {
 					t.Fatalf("maintenance not grounded in the R4 breakdown: %+v", attempt)
 				}
 				if assignment == 0 {
@@ -199,7 +199,7 @@ func TestWarehouseV2MaintenanceDeliveryIntegration(t *testing.T) {
 			if verified == 0 && len(state.Maintenance.History) != 0 {
 				finished := state.Maintenance.History[0]
 				verified = state.Tick
-				if finished.Outcome != MaintenanceCompleted || finished.FinishedTick != verified || finished.RepairTicks != cfg.MaintenanceRepairTicks ||
+				if finished.Outcome != MaintenanceCompleted || finished.JobID != "J4" || finished.FinishedTick != verified || finished.RepairTicks != cfg.MaintenanceRepairTicks ||
 					r4.ActiveFault != "" || r4.Status != RobotMoving || (Point{r4.X, r4.Y}) != (Point{9, 9}) {
 					t.Fatalf("unexpected verification: %+v and %+v", finished, r4)
 				}
