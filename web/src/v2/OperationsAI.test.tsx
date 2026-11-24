@@ -41,7 +41,7 @@ describe("Operations AI with telemetry fixtures", () => {
     expect(html.indexOf("Job delivered")).toBeLessThan(html.indexOf("Low battery recorded"));
     expect(html).not.toContain('data-tone="assisted"');
     expect(html).not.toMatch(/>Approve|>Reject</);
-    expect(html).toContain("Go validates and executes V2 dispatch commands automatically. Scripted proposals in the V1 demo require operator approval.");
+    expect(html).toContain("Go validates and executes routine dispatch automatically. Proposals require operator approval.");
   });
 
   it("shows the latest cycle first and distinguishes observed, reserved and decided activity", () => {

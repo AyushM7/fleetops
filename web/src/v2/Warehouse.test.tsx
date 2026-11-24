@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import V2Shell from "./V2Shell";
 import { Warehouse } from "./Warehouse";
 import { fitWarehouseCamera, mapDragIntent, reframeWarehouseCamera } from "./WarehouseMap";
+import { robotGlide, type RobotSample } from "./robotMotion";
 import { mapTargetVisible, placeMapLabels } from "./warehouseLabels";
 import { robotActivityLabel, robotTone, warehouseCounts, type Selection } from "./warehousePresentation";
 import type { Job, Layout, Robot, Station, WarehouseFrame } from "./telemetry";
@@ -97,6 +98,8 @@ describe("Warehouse V2", () => {
       .toHaveLength(11);
     expect(output).toContain('aria-label="Battery charge 21%, critical"');
     expect(output).toContain('aria-label="M1 maintenance robot, Parked, battery 89%"');
+    const mapLabels = [...output.matchAll(/class="v2-robot-id"[^>]*>([^<]+)</g)].map(match => match[1]);
+    expect(mapLabels).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "M"]);
     expect(output).toContain('data-status-glyph="moving" aria-hidden="true"');
     expect(output).toContain('data-status-glyph="charging" aria-hidden="true"');
     expect(output).not.toContain("Pickup for");
@@ -153,15 +156,34 @@ describe("Warehouse V2", () => {
       .toEqual({ x: 13, y: 4, scale: 4 });
   });
 
-  it("fits the real aspect ratio inside the inspector-safe viewport and explicitly centers Fit", () => {
-    const initial = fitWarehouseCamera(layout, 1250, 394, 332);
+  it("fits square cells and centers the warehouse in the measured stage", () => {
+    const initial = fitWarehouseCamera(layout, 1250, 394);
     expect(initial.y).toBe(8);
-    expect(initial.x + initial.scale * layout.width).toBeLessThan(918);
+    expect(initial.x + initial.scale * layout.width / 2).toBe(625);
     const explicit = fitWarehouseCamera(layout, 918, 394);
     expect(explicit.x + explicit.scale * layout.width / 2).toBe(459);
     const mobile = fitWarehouseCamera(layout, 366, 260);
     expect(mobile.x).toBe(12);
     expect(mobile.x + mobile.scale * layout.width).toBe(354);
+  });
+
+  it("scales each single-edge glide by the tick interval and snaps for discontinuities", () => {
+    const before: RobotSample = { frame: { ...frame, state: "running", eventId: 7 },
+      point: { x: 2, y: 3 }, receivedAt: 100, live: true };
+    const next: RobotSample = { ...before, receivedAt: 600, point: { x: 3, y: 3 },
+      frame: { ...before.frame, type: "tick", eventId: 8, snapshot: { ...frame.snapshot, tick: frame.snapshot.tick + 1 } } };
+    expect(robotGlide(before, next)).toEqual({ x: -1, y: 0, duration: 410 });
+    expect(robotGlide(before, { ...next, receivedAt: 350 })).toEqual({ x: -1, y: 0, duration: 205 });
+    expect(robotGlide(before, { ...next, receivedAt: 1300 })?.duration).toBe(900);
+    for (const sample of [
+      { ...next, receivedAt: 110 }, { ...next, receivedAt: 2600 }, { ...next, live: false },
+      { ...next, point: { x: 3, y: 4 } }, { ...next, point: { x: 5, y: 3 } },
+      { ...next, frame: { ...next.frame, state: "paused" as const } },
+      { ...next, frame: { ...next.frame, eventId: 9 } },
+      { ...next, frame: { ...next.frame, generation: "replacement" } },
+      { ...next, frame: { ...next.frame, runtimeId: "replacement" } },
+    ]) expect(robotGlide(before, sample)).toBeNull();
+    expect(robotGlide(null, next)).toBeNull();
   });
 
   it("maps confirmed activity with fault and traffic taking precedence over moving", () => {

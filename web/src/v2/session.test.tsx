@@ -356,7 +356,8 @@ describe("Warehouse V2 stream lifecycle", () => {
 
   it("renders the V2 pages without the legacy proposal UI or synthetic telemetry", () => {
     const html = renderToString(<V2Shell onLegacy={vi.fn()} />);
-    for (const label of ["Warehouse V2", "Fleet", "Jobs", "Operations AI", "Connecting", 'aria-current="page"']) expect(html).toContain(label);
+    for (const label of ['aria-label="FleetOps"', 'aria-label="FleetOps pages"', 'aria-label="Open demo scenarios"', "Fleet", "Jobs", "Operations AI", "Connecting", 'aria-current="page"']) expect(html).toContain(label);
+    expect(html).not.toMatch(/\bV[123]\b/);
     expect(html).not.toContain("Approval inbox");
     expect(html).not.toContain("Simulation tick");
   });

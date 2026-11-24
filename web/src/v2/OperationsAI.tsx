@@ -4,6 +4,7 @@ import { operationsModeLabel, type MaintenanceAttempt, type OperationsActivity, 
 import { Icon } from "./WarehouseIcon";
 import { useInspectorDialog, useInspectorFocus } from "./WarehouseInspector";
 import { MaintenanceAttemptDetails } from "./Maintenance";
+import { RecoveryApprovals } from "./RecoveryApprovals";
 import { acceptedMaintenanceAttempt, breakdownLabels, findEntity, isPriorityOverdue, jobOutcomeLabels,
   maintenanceForRobot, maintenanceOutcomeLabels, maintenancePhaseLabel, maintenanceReasonLabels, type Selection } from "./warehousePresentation";
 
@@ -360,13 +361,14 @@ export function OperationsAI({ feed, inspect }: { feed: WarehouseFeed; inspect: 
     </p>}
     <div className={"v2-ops-work" + (selected ? " has-inspector" : "")}>
       {frame && snapshot && <div className="v2-ops-history">
+        {scope && <RecoveryApprovals key={scope} generation={frame.generation} snapshot={snapshot} live={feed.phase === "live"} />}
         <ActivityGroup title="Decision activity" description="Operations Manager reviews for this run, newest observation first."
           entries={decisions} selected={selected?.key} pick={pick} empty="No decision activity recorded in this run." />
         <ActivityGroup title="Maintenance & incidents" description="Active breakdowns and physical attempts reported by Go."
           entries={repairs} selected={selected?.key} pick={pick} empty="No breakdowns or maintenance attempts in this run." />
         <ActivityGroup title="Warehouse events" description="Faults and deliveries reported by Go, newest tick first."
           entries={events} selected={selected?.key} pick={pick} empty="No faults or deliveries in the current snapshot." />
-        <p className="v2-ops-workflow">Go validates and executes V2 dispatch commands automatically. Scripted proposals in the V1 demo require operator approval.</p>
+        <p className="v2-ops-workflow">Go validates and executes routine dispatch automatically. Proposals require operator approval.</p>
       </div>}
       <dialog ref={dialog} className="v2-panel v2-inspector v2-ops-inspector" inert={!selected} aria-labelledby={titleId}
         onCancel={event => { event.preventDefault(); close(); }}>
