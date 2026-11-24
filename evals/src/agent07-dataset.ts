@@ -11,10 +11,18 @@ export interface Scenario {
   id: string; variant: string; objective: DecisionObjective; expected: string;
   quality: "pareto-only" | "pickup-regret" | "headroom-regret" | "not-applicable";
   comparable: boolean; probe?: "false-evidence" | "invalid-tool";
+  category?: string; evidence?: string; deliveryRequired?: boolean; race?: "advance-on-admission"; sample?: boolean;
 }
+type Dataset = { version: string; fixtureVersion: string; seed?: number; horizonTicks: number; scenarios: Scenario[] };
 const raw = readFileSync(new URL("../fixtures/agent07-v1.json", import.meta.url), "utf8").replaceAll("\r\n", "\n");
-export const dataset = JSON.parse(raw) as { version: "agent07-v1"; fixtureVersion: string; seed: number; horizonTicks: number; measurementFaults: []; scenarios: Scenario[] };
+export const dataset = JSON.parse(raw) as Dataset & { version: "agent07-v1"; seed: number; measurementFaults: [] };
 export const datasetSHA256 = createHash("sha256").update(raw).digest("hex");
+const phase4Raw = readFileSync(new URL("../fixtures/phase4-v3.json", import.meta.url), "utf8").replaceAll("\r\n", "\n");
+const phase4Dataset = JSON.parse(phase4Raw) as Dataset;
+const phase4DatasetSHA256 = createHash("sha256").update(phase4Raw).digest("hex");
+export function agent07Dataset(phase4 = false) {
+  return phase4 ? { manifest: phase4Dataset, hash: phase4DatasetSHA256 } : { manifest: dataset, hash: datasetSHA256 };
+}
 export const key = (c: CandidateKey): CandidateKey => ({ jobId: c.jobId, fromRobotId: c.fromRobotId, toRobotId: c.toRobotId });
 export const sameKey = (a: CandidateKey, b: CandidateKey): boolean => JSON.stringify(key(a)) === JSON.stringify(key(b));
 export function candidates(state: FleetState) {

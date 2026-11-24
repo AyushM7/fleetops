@@ -26,7 +26,7 @@ export function checkConfig(config: ModelConfig, scenarios: number): number {
   return requests;
 }
 export function verifyLiveCost(config: ModelConfig, requests: number, rawReview: string | undefined,
-  approvedHash: string | undefined, budgetUSD: number, env: NodeJS.ProcessEnv, now = Date.now()) {
+  approvedHash: string | undefined, budgetUSD: number | null, env: NodeJS.ProcessEnv, now = Date.now()) {
   checkConfig(config, 1);
   if (env.CI && env.CI !== "false" && env.CI !== "0") throw new Error("Live evaluation is disabled in CI.");
   if (!Number.isSafeInteger(requests) || requests < 1 || requests > config.maxRequests) throw new Error("Request ceiling invalid.");
@@ -44,7 +44,10 @@ export function verifyLiveCost(config: ModelConfig, requests: number, rawReview:
     ![r.inputUSDPerMillion, r.outputUSDPerMillion].every(n => typeof n === "number" && Number.isFinite(n) && n > 0) ||
     r.outputLimitIncludesAllBilledTokens !== true) throw new Error("Cost bounds cannot be verified against reviewed configuration.");
   const estimatedMaximumUSD = requests * (r.maxBillableInputTokens * r.inputUSDPerMillion + config.maxOutputTokens * r.outputUSDPerMillion) / 1_000_000;
-  if (!Number.isFinite(budgetUSD) || budgetUSD <= 0 || !Number.isFinite(estimatedMaximumUSD) || estimatedMaximumUSD > budgetUSD) throw new Error("Estimated maximum exceeds spending ceiling or budget missing.");
+  if (!Number.isFinite(estimatedMaximumUSD)) throw new Error("Estimated cost is not representable.");
+  if (budgetUSD !== null && (!Number.isFinite(budgetUSD) || budgetUSD <= 0 || estimatedMaximumUSD > budgetUSD)) {
+    throw new Error("Estimated maximum exceeds the operator's spending ceiling or the ceiling is invalid.");
+  }
   if (!hasProviderKey(`${config.provider}/${config.model}`, env)) throw new Error("Provider credential missing.");
   return { estimatedMaximumUSD, budgetUSD, pricingSource: r.source, reviewSHA256: approvedHash,
     verification: "operator-reviewed provider context/billing bound" as const };

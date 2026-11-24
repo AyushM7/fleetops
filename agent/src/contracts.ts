@@ -5,8 +5,9 @@ export const robotSchema = z.object({
   id: z.string().min(1), ...position, battery: z.number().int().min(0).max(100),
   status: z.string(), jobId: z.string(), waitTicks: z.number().int(), blocked: z.boolean(),
 });
+export const legacyIncidentTypeSchema = z.enum(["low_battery", "robot_unresponsive", "traffic_blocked"]);
 export const incidentSchema = z.object({
-  robotId: z.string().min(1), type: z.enum(["low_battery", "robot_unresponsive", "traffic_blocked"]),
+  robotId: z.string().min(1), type: z.enum([...legacyIncidentTypeSchema.options, "motor_failure", "sensor_failure", "critical_battery"]),
   severity: z.enum(["medium", "high"]), telemetry: robotSchema,
 });
 export type ActiveIncident = z.infer<typeof incidentSchema>;

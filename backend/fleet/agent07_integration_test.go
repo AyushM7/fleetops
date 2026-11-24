@@ -31,23 +31,31 @@ import (
 
 type agent07Scenario struct {
 	ID, Variant, Objective, Expected, Quality, Probe string
+	Race                                             string
 	Comparable                                       bool
 }
 type agent07Config struct {
 	Live                 bool
 	TestHarnessApprovals bool
+	Phase4V3, RecoveryV3 bool
 	Scenarios            []string
 	Trials, MaxElapsedMs int
 }
 type agent07Outcome struct {
-	StartTick           int    `json:"startTick"`
-	EndTick             int    `json:"endTick"`
-	CompletedDeliveries int    `json:"completedDeliveries"`
-	CompletionTick      *int   `json:"completionTick"`
-	UnresolvedJobs      int    `json:"unresolvedJobs"`
-	JobProgress         string `json:"jobProgress"`
-	BlockedRobotSamples int    `json:"blockedRobotSamples"`
-	AggregateBattery    int    `json:"aggregateBatteryPercentagePoints"`
+	StartTick           int                          `json:"startTick"`
+	EndTick             int                          `json:"endTick"`
+	CompletedDeliveries int                          `json:"completedDeliveries"`
+	CompletionTick      *int                         `json:"completionTick"`
+	UnresolvedJobs      int                          `json:"unresolvedJobs"`
+	JobProgress         string                       `json:"jobProgress"`
+	BlockedRobotSamples int                          `json:"blockedRobotSamples"`
+	AggregateBattery    int                          `json:"aggregateBatteryPercentagePoints"`
+	TrackedJobs         map[string]agent07JobOutcome `json:"trackedJobs,omitempty"`
+}
+type agent07JobOutcome struct {
+	Status        sim.JobStatus `json:"status"`
+	Owner         string        `json:"owner"`
+	CompletedTick int           `json:"completedTick,omitempty"`
 }
 type agent07Branch struct {
 	Source                  string          `json:"source"`
@@ -91,13 +99,19 @@ func agent07Auth(t *testing.T) (*auth.Authenticator, string, string) {
 	}
 	return a, tokens[0], tokens[1]
 }
-func agent07Measure(t *testing.T, s *fleet.Service, initial sim.State, horizon int) *agent07Outcome {
+func agent07Measure(t *testing.T, s *fleet.Service, initial sim.State, horizon int, trackAssigned bool) *agent07Outcome {
 	t.Helper()
 	o := &agent07Outcome{StartTick: initial.Tick, JobProgress: "no target job"}
 	done := map[string]bool{}
+	if trackAssigned {
+		o.TrackedJobs = map[string]agent07JobOutcome{}
+	}
 	for _, j := range initial.Jobs {
 		if j.Status == sim.JobDone {
 			done[j.ID] = true
+		}
+		if trackAssigned && (j.Status == sim.JobAssigned || j.Status == sim.JobInProgress) {
+			o.TrackedJobs[j.ID] = agent07JobOutcome{j.Status, j.AssignedRobot, j.CompletedTick}
 		}
 	}
 	for range horizon {
@@ -111,6 +125,13 @@ func agent07Measure(t *testing.T, s *fleet.Service, initial sim.State, horizon i
 			}
 		}
 		for _, j := range state.Jobs {
+			if tracked, track := o.TrackedJobs[j.ID]; track {
+				if j.Status == sim.JobDone && tracked.Status != sim.JobDone {
+					tracked.CompletedTick = state.Tick
+				}
+				tracked.Status, tracked.Owner = j.Status, j.AssignedRobot
+				o.TrackedJobs[j.ID] = tracked
+			}
 			if j.Status == sim.JobDone && !done[j.ID] {
 				done[j.ID] = true
 				o.CompletedDeliveries++
@@ -234,9 +255,10 @@ func agent07RunBranch(t *testing.T, scenario agent07Scenario, policy string, tri
 	}
 	if policy != "no-intervention" {
 		a, proposerToken, operatorToken := agent07Auth(t)
+		stale := scenario.ID == "stale" || scenario.Race == "advance-on-admission"
 		// Deterministically inject the tick AFTER the final client read but BEFORE
 		// production Go acquires its finish/admission lock. No timing sleeps.
-		server := agent07Server(t, service, a, scenario.ID == "stale")
+		server := agent07Server(t, service, a, stale)
 		defer server.Close()
 		output, completed := agent07Child(t, scenario.ID, policy, rawConfig, server.URL, proposerToken, deadline)
 		if !completed {
@@ -265,7 +287,7 @@ func agent07RunBranch(t *testing.T, scenario agent07Scenario, policy string, tri
 		if decision.SubmissionAttempts > 1 {
 			t.Fatal("submission retried")
 		}
-		if scenario.ID != "stale" && !reflect.DeepEqual(initial, service.Snapshot()) {
+		if !stale && !reflect.DeepEqual(initial, service.Snapshot()) {
 			t.Fatal("model mutated simulator before controlled approval")
 		}
 		if decision.Provenance != nil && decision.Provenance.Status == "recorded" {
@@ -293,10 +315,10 @@ func agent07RunBranch(t *testing.T, scenario agent07Scenario, policy string, tri
 		} else if decision.Proposal != nil && decision.Proposal.Status == "rejected" {
 			branch.GoValidation = "denied"
 		}
-		if scenario.ID == "stale" && decision.SubmissionAttempts != 0 && branch.GoValidation != "denied" {
+		if stale && decision.SubmissionAttempts != 0 && branch.GoValidation != "denied" {
 			t.Fatal("stale observation admitted")
 		}
-		if scenario.ID == "stale" {
+		if stale {
 			expected, err := sim.NewAgent07TestFixture(scenario.Variant)
 			if err != nil {
 				t.Fatal(err)
@@ -321,7 +343,7 @@ func agent07RunBranch(t *testing.T, scenario agent07Scenario, policy string, tri
 		return branch
 	}
 	if scenario.Comparable && cfg.TestHarnessApprovals {
-		branch.Outcome = agent07Measure(t, service, service.Snapshot(), 200)
+		branch.Outcome = agent07Measure(t, service, service.Snapshot(), 200, cfg.Phase4V3)
 	} else {
 		branch.NotComparable = "No comparable intervention window (poisoned/stale/negative probe or submission-disabled live trial); no speedup claimed"
 	}
@@ -340,7 +362,16 @@ func TestAgent07PairedEvaluation(t *testing.T) {
 	if json.Unmarshal([]byte(rawConfig), &cfg) != nil || cfg.Trials < 1 || cfg.Trials > 3 || len(cfg.Scenarios) == 0 || len(cfg.Scenarios) > 12 || cfg.MaxElapsedMs < 1000 || cfg.MaxElapsedMs > 600000 {
 		t.Fatal("invalid controlled evaluation configuration")
 	}
-	raw, err := os.ReadFile("../../evals/fixtures/agent07-v1.json")
+	fixturePath, fixtureVersion, fixtureSeed := "../../evals/fixtures/agent07-v1.json", "agent07-v1", 42
+	setup := "sim.NewAgent07TestFixture: deterministic tick-42 blocked prelude; tagged initial position/battery variants before runtime creation; no measurement faults"
+	if cfg.Phase4V3 {
+		if !cfg.RecoveryV3 {
+			t.Fatal("the Phase 4 manifest requires V3")
+		}
+		fixturePath, fixtureVersion, fixtureSeed = "../../evals/fixtures/phase4-v3.json", "phase4-v3-v1", 0
+		setup = "Phase 4 tagged seed/tick/profile fixtures; matched Go state across branches"
+	}
+	raw, err := os.ReadFile(fixturePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +381,7 @@ func TestAgent07PairedEvaluation(t *testing.T) {
 		HorizonTicks            int
 		Scenarios               []agent07Scenario
 	}
-	if json.Unmarshal(raw, &manifest) != nil || manifest.Version != "agent07-v1" || manifest.Seed != 42 || manifest.HorizonTicks != 200 {
+	if json.Unmarshal(raw, &manifest) != nil || manifest.Version != fixtureVersion || manifest.Seed != fixtureSeed || manifest.HorizonTicks != 200 {
 		t.Fatal("unsupported fixture manifest")
 	}
 	deadline := time.Now().Add(time.Duration(cfg.MaxElapsedMs) * time.Millisecond)
@@ -403,7 +434,8 @@ func TestAgent07PairedEvaluation(t *testing.T) {
 						Failure *string
 					}
 					_ = json.Unmarshal(branch.Decision, &d)
-					if d.Status != "accepted" || d.Failure != nil {
+					expectedDenial := selected.Race == "advance-on-admission" && branch.GoValidation == "denied" && branch.Execution == fleet.NotExecuted
+					if d.Status != "accepted" || (d.Failure != nil && !expectedDenial) {
 						stoppedReason = "live trial failed/rejected/unknown; no automatic retry"
 						goto finished
 					}
@@ -422,8 +454,8 @@ finished:
 			attempted++
 		}
 	}
-	report := map[string]any{"version": "agent07-v1", "fixtureVersion": manifest.FixtureVersion, "mode": "go-backed-isolated-evaluation", "seed": 42, "horizonTicks": 200,
-		"setup": "sim.NewAgent07TestFixture: deterministic tick-42 blocked prelude; tagged initial position/battery variants before runtime creation; no measurement faults", "measurementFaults": []any{},
+	report := map[string]any{"version": fixtureVersion, "fixtureVersion": manifest.FixtureVersion, "mode": "go-backed-isolated-evaluation", "seed": fixtureSeed, "horizonTicks": 200,
+		"setup": setup, "measurementFaults": []any{},
 		"concurrencySchedule": "stale control only: one simulator tick after final client read and before Go finish admission lock", "fixtureManifest": manifest,
 		"plannedInvestigationTrials": len(cfg.Scenarios) * cfg.Trials, "attemptedInvestigationTrials": attempted, "notAttemptedInvestigationTrials": len(cfg.Scenarios)*cfg.Trials - attempted, "stoppedReason": stoppedReason,
 		"requestedLiveMode": cfg.Live, "actualLLM": inferenceEvidence, "actualHumanApproval": "not_measured; explicitly controlled test-harness approvals only", "rows": rows}

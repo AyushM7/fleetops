@@ -48,23 +48,22 @@ const model = { specificationVersion: "v2", provider: "offline-agent05", modelId
       const results = evidence(options.prompt), candidates = results.flatMap(r => r.candidates ?? []);
       content = [{ toolName: "readRobots", args: { ids: [...new Set(candidates.flatMap(c => [c.fromRobotId, c.toRobotId]))] } },
         { toolName: "readJobs", args: { ids: [...new Set(candidates.map(c => c.jobId))] } }];
-    } else if (index === 2) content = "Evidence ready.";
-    else { assert.equal(index, 3); assert.equal(options.toolChoice.type, "none"); content = JSON.stringify(decision(evidence(options.prompt))); }
+    } else { assert.equal(index, 2); assert.equal(options.toolChoice.type, "none"); content = JSON.stringify(decision(evidence(options.prompt))); }
     return { content: typeof content === "string" ? [{ type: "text", text: content }] : content.map((call, id) => ({ type: "tool-call", toolCallId: `${index}-${id}`, toolName: call.toolName, input: JSON.stringify(call.args) })),
       finishReason: typeof content === "string" ? "stop" : "tool-calls", usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, warnings: [] };
   }, doStream() { throw new Error("Unexpected streaming method"); } };
 const result = await runRecoveryDecision(api, { enabled: true, model, source: "mocked", objective: "compare_tradeoffs", allowSubmit: true });
 assert.equal(result.aiAnalysis.status, "accepted"); assert.equal(result.provenance.status, "recorded");
-assert.equal(result.proposal.status, "pending_approval"); assert.equal(calls, 4);
+assert.equal(result.proposal.status, "pending_approval"); assert.equal(calls, 3);
 const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
   body: JSON.stringify({ query: `query($id:ID!){agentRun(id:$id){data proposal{id state execution}}}`, variables: { id: result.provenance.runId } }) });
 const body = await response.json(); assert.equal(body.errors, undefined);
 const stored = body.data.agentRun, record = JSON.parse(stored.data);
 assert.equal(stored.proposal.id, result.proposal.proposalId); assert.equal(stored.proposal.state, "pending"); assert.equal(stored.proposal.execution, "none");
 assert.equal(record.serverVerifiedDecision, true); assert.equal(record.agentReportedMetadata.reportedSource, "mocked");
-assert.equal(record.agentReportedCompletion.modelRequests, 4); assert.equal(record.agentReportedCompletion.toolExecutions, 6);
-assert.equal(record.agentReportedCompletion.reportedUsage.totalTokens, 8); assert.equal(record.estimatedCostStatus, "unavailable");
-assert.equal(record.agentReportedCompletion.steps.length, 10);
+assert.equal(record.agentReportedCompletion.modelRequests, 3); assert.equal(record.agentReportedCompletion.toolExecutions, 6);
+assert.equal(record.agentReportedCompletion.reportedUsage.totalTokens, 6); assert.equal(record.estimatedCostStatus, "unavailable");
+assert.equal(record.agentReportedCompletion.steps.length, 9);
 assert.notEqual(result.recommendedAction.toRobotId, record.serverVerifiedObservation.candidates[0].key.toRobotId);
 if (process.env.FLEETOPS_AGENT_RECORD_PATH) writeFileSync(process.env.FLEETOPS_AGENT_RECORD_PATH, JSON.stringify({ ...record, proposal: stored.proposal }, null, 2));
 console.log("PASS: actual Mastra tools -> non-first validated decision -> atomic durable run/proposal -> authenticated retrieval; zero paid requests.");

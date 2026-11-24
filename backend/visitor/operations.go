@@ -19,6 +19,7 @@ type operationsRecorder func(context.Context, string, operations.Activity) error
 
 type runtimeOperations struct {
 	service             *fleet.Service
+	recovery            *recoveryOperations
 	authorize           func(context.Context) (context.Context, error)
 	decide              operationsDecider
 	record              operationsRecorder
@@ -65,6 +66,10 @@ func (c *demoController) startOperations(ctx context.Context, now time.Time) {
 	run := c.run
 	manager := run.operations
 	if manager == nil || c.operations != nil {
+		return
+	}
+	if manager.recovery != nil {
+		c.startRecovery(ctx, now, manager.recovery)
 		return
 	}
 	cooldown := now.Before(c.nextOperations)
@@ -116,7 +121,9 @@ func (c *demoController) startOperations(ctx context.Context, now time.Time) {
 func (c *demoController) cancelOperations() {
 	if cycle := c.operations; cycle != nil {
 		cycle.cancel()
-		_ = cycle.run.operations.service.SetOperationsWindow(cycle.ctx, nil)
+		if cycle.run.operations.recovery == nil {
+			_ = cycle.run.operations.service.SetOperationsWindow(cycle.ctx, nil)
+		}
 		cycle.run.operationsMode = "deterministic"
 	}
 	if c.run.warehouse != nil {

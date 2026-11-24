@@ -14,6 +14,7 @@ import (
 
 	"github.com/AyushM7/fleetops/backend/db"
 	"github.com/AyushM7/fleetops/backend/fleet"
+	"github.com/AyushM7/fleetops/backend/sim"
 )
 
 func warehouseTestRun(seed int64) (*demoRun, error) {
@@ -178,7 +179,7 @@ func TestWarehouseVisitorLifecycleIntegration(t *testing.T) {
 
 	session := m.lookup(a.Value)
 	session.mu.Lock()
-	session.deadline = time.Now().Add(-time.Second)
+	session.deadline.Store(new(time.Now().Add(-time.Second)))
 	session.mu.Unlock()
 	select {
 	case <-session.done:
@@ -190,5 +191,34 @@ func TestWarehouseVisitorLifecycleIntegration(t *testing.T) {
 	}
 	if err := m.close(); err != nil || cleaned.Load() != 2 {
 		t.Fatalf("visitor cleanup count %d, error %v", cleaned.Load(), err)
+	}
+}
+
+func TestWarehouseConfiguredChargeTargetIntegration(t *testing.T) {
+	_, pool, _, dir := visitorArchiveFixture(t)
+	ctx := context.Background()
+	authenticator, tokens, _, err := visitorCredentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	factory := demoFactory{pool: pool, auth: authenticator, tokens: tokens, evidenceDir: dir, warehouseChargeTarget: 100}
+	run, err := factory.createScenario(ctx, warehouseScenario)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := sim.WarehouseV2Config()
+	cfg.ChargeRelease = 100
+	want, err := sim.New(cfg, run.warehouse().Seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 1000 {
+		want.Tick()
+		if err := run.step(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := run.warehouse(); !reflect.DeepEqual(got, want.Snapshot()) {
+		t.Fatalf("configured warehouse diverged at tick %d", got.Tick)
 	}
 }

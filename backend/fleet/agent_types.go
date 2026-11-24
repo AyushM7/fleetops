@@ -132,7 +132,7 @@ func allowed(value string, values ...string) bool {
 }
 func (m AgentMetadata) valid() bool {
 	lower := strings.ToLower(m.RequestedModel)
-	return m.Version == "agent-run-v1" && m.Contract == "recovery-decision-v2" &&
+	return m.Version == "agent-run-v1" && allowed(m.Contract, "recovery-decision-v2", "recovery-decision-v3") &&
 		allowed(m.Objective, "compare_tradeoffs", "minimize_pickup_steps", "preserve_battery_headroom") &&
 		allowed(m.Source, "deterministic", "mocked", "recorded", "live-model") && (m.RequestedModel == "" || modelID.MatchString(m.RequestedModel)) &&
 		!strings.Contains(lower, "sk-") && !strings.Contains(lower, "secret") && !strings.Contains(lower, "bearer") && !strings.Contains(lower, "token")

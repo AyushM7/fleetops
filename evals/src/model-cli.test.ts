@@ -78,9 +78,9 @@ it("scales dry-run cost/budget checks to selected trials, retaining credential c
     const hash = createHash("sha256").update(review).digest("hex");
     const args = ["--model-eval", "--live", "--provider", "openai", "--model", "test-only", "--scenario-limit", "2",
       "--trials", "2", "--max-requests", "4", "--cost-review", file, "--approve-cost-sha256", hash, "--plan"];
-    await modelCLI([...args, "--budget-usd", "5"]);
+    await modelCLI(args);
     expect(report()).toMatchObject({ requests: 4, selectedScenarioCount: 2,
-      selectedScenarioIds: ["traffic-eligible", "traffic-no-candidate"] });
+      selectedScenarioIds: ["traffic-eligible", "traffic-no-candidate"], cost: { budgetUSD: null } });
     expect(report().cost.estimatedMaximumUSD).toBeCloseTo(4.192);
     await expect(modelCLI([...args, "--budget-usd", "4"])).rejects.toThrow("spending ceiling");
     vi.stubEnv("OPENAI_API_KEY", "");

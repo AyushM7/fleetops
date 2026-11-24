@@ -53,15 +53,13 @@ export function createInvestigationTools(input: FleetState, budget: Investigatio
       }
     } catch { throw budget.fail(); }
   }
-  function assertComplete(): void {
-    budget.check();
-    for (const row of state.activeIncidents) {
+  function hasCompleteEvidence(): boolean {
+    const readIncidents = state.activeIncidents.every(row => {
       const ref = JSON.stringify(snapshotReference(state, row));
-      if (!incidents.has(ref) || !candidateReads.has(ref)) throw budget.fail();
-    }
-    for (const candidate of state.reassignmentCandidates) {
-      if (!robots.has(candidate.fromRobotId) || !robots.has(candidate.toRobotId) || !jobs.has(candidate.jobId)) throw budget.fail();
-    }
+      return incidents.has(ref) && candidateReads.has(ref);
+    });
+    return readIncidents && state.reassignmentCandidates.every(candidate =>
+      robots.has(candidate.fromRobotId) && robots.has(candidate.toRobotId) && jobs.has(candidate.jobId));
   }
-  return { tools, inspectTool, assertComplete };
+  return { tools, inspectTool, hasCompleteEvidence };
 }

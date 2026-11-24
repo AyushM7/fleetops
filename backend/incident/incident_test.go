@@ -282,6 +282,57 @@ func TestFaultHistoryDoesNotInventActiveConditions(t *testing.T) {
 	}
 }
 
+func TestWarehouseTerminalAttemptsKeepInterruptedIncidentOpen(t *testing.T) {
+	for _, tc := range []struct {
+		outcome sim.MaintenanceOutcome
+		other   sim.ScheduledBreakdown
+		end     int
+	}{
+		{sim.MaintenanceFailed, sim.ScheduledBreakdown{Tick: 106, RobotID: "M1", Type: sim.FaultMotorFailure}, 139},
+		{sim.MaintenanceUnresolved, sim.ScheduledBreakdown{Tick: 48, RobotID: "R1", Type: sim.FaultMotorFailure}, 240},
+	} {
+		t.Run(string(tc.outcome), func(t *testing.T) {
+			cfg := sim.WarehouseV2Config()
+			cfg.ScheduledBreakdowns = []sim.ScheduledBreakdown{{Tick: 48, RobotID: "R4", Type: sim.FaultSensorFailure}, tc.other}
+			if tc.other.Tick == 48 {
+				cfg.ScheduledBreakdowns[0], cfg.ScheduledBreakdowns[1] = cfg.ScheduledBreakdowns[1], cfg.ScheduledBreakdowns[0]
+			}
+			world, err := sim.New(cfg, 42)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var episodes []incident.Incident
+			var counter uint64
+			var id string
+			for range tc.end {
+				world.Tick()
+				state := world.Snapshot()
+				episodes, counter = reconcile(t, episodes, state, counter)
+				if state.Tick < 48 {
+					continue
+				}
+				index := slices.IndexFunc(episodes, func(i incident.Incident) bool {
+					return i.RobotID == "R4" && i.Type == incident.SensorFailure
+				})
+				if index < 0 || episodes[index].Status != incident.Open || id != "" && episodes[index].ID != id {
+					t.Fatalf("tick %d lost or resolved the original incident: %+v", state.Tick, episodes)
+				}
+				id = episodes[index].ID
+			}
+			state := world.Snapshot()
+			r4 := state.Robots[3]
+			job := slices.IndexFunc(state.Jobs, func(j sim.JobState) bool { return j.ID == "J4" })
+			if state.Maintenance == nil || !slices.ContainsFunc(state.Maintenance.History, func(a sim.MaintenanceAttempt) bool {
+				return a.RobotID == "R4" && a.JobID == "J4" && a.Outcome == tc.outcome
+			}) || r4.X != 9 || r4.Y != 9 || r4.Battery != 64 || r4.ActiveFault != sim.FaultSensorFailure ||
+				state.Aisles[1].OccupiedBy != "R4" || job < 0 || state.Jobs[job].CargoRobotID != "R4" ||
+				state.Jobs[job].Status != sim.JobInProgress {
+				t.Fatalf("terminal attempt changed the interrupted delivery: robot %+v, maintenance %+v", r4, state.Maintenance)
+			}
+		})
+	}
+}
+
 func TestResolvedHistoryAndAbsentRobots(t *testing.T) {
 	previous := []incident.Incident{
 		{ID: "I10", RobotID: "R2", Type: incident.LowBattery, Status: incident.Open, Severity: incident.High},

@@ -167,6 +167,10 @@ func (s *Service) submit(ctx context.Context, p proposal.Proposal, expectedObser
 // Decide combines the lifecycle decision and execution under one mutex and one
 // DB transaction. Lifecycle.Decide itself remains approval-only and unchanged.
 func (s *Service) Decide(ctx context.Context, id string, decision proposal.Decision, operator proposal.OperatorIdentity) (Result, error) {
+	return s.decideProposal(ctx, id, decision, operator, nil)
+}
+
+func (s *Service) decideProposal(ctx context.Context, id string, decision proposal.Decision, operator proposal.OperatorIdentity, validate func(*db.Tx) (error, error)) (Result, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	defer s.poisonOnPanic()
@@ -175,7 +179,7 @@ func (s *Service) Decide(ctx context.Context, id string, decision proposal.Decis
 	var denied error
 	err := s.transact(ctx, func(tx *db.Tx) error {
 		var err error
-		result, denied, err = s.decide(tx, id, decision, operator)
+		result, denied, err = s.decide(tx, id, decision, operator, validate)
 		return err
 	})
 	if err != nil {

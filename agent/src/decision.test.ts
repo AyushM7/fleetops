@@ -127,3 +127,20 @@ describe("grounded abstention", () => {
     expect(() => validateRecoveryDecision(recoveryDecisionFixture(state, "compare_tradeoffs", "R4"), state, "compare_tradeoffs")).toThrow("grounding");
   });
 });
+
+it("reports redacted schema and candidate field diagnostics without copying model-controlled strings", () => {
+  const state = recoveryDecisionState("tradeoff"), output = recoveryDecisionFixture(state, "minimize_pickup_steps", "R3");
+  const privateText = "sensitive-offline-test-value";
+  const malformed = { ...output, considered: output.considered.map((e, i) => i === 0
+    ? { ...e, recipient: { ...e.recipient, battery: privateText } } : e) };
+  expect(() => validateRecoveryDecision(malformed, state, "minimize_pickup_steps")).toThrowError(expect.objectContaining({
+    diagnostic: expect.objectContaining({ fieldPath: "considered[0].recipient.battery", stage: "schema", actual: "string (redacted)" })
+  }));
+  expect(() => validateRecoveryDecision({ ...output, [privateText]: privateText }, state, "minimize_pickup_steps")).toThrowError(expect.objectContaining({
+    diagnostic: expect.objectContaining({ fieldPath: "$", actual: "object (redacted)" })
+  }));
+  output.considered[0].recipient.battery++;
+  expect(() => validateRecoveryDecision(output, state, "minimize_pickup_steps")).toThrowError(expect.objectContaining({
+    diagnostic: expect.objectContaining({ fieldPath: "considered[0].recipient.battery", stage: "candidate", toolEvidenceReference: "readRobots" })
+  }));
+});

@@ -10,7 +10,7 @@ import { mutationSchema, observationIdSchema } from "./contracts.js";
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 export const agentRunHandleSchema = z.object({ id: identifier, runtimeId: identifier, observationId: observationIdSchema });
 export type AgentRunHandle = z.infer<typeof agentRunHandleSchema>;
-export interface AgentRunMetadata { version: "agent-run-v1"; contract: "recovery-decision-v2"; objective: string;
+export interface AgentRunMetadata { version: "agent-run-v1"; contract: "recovery-decision-v2" | "recovery-decision-v3"; objective: string;
   reportedSource: "live-model" | "mocked" | "deterministic" | "recorded"; requestedModel: string }
 export interface AgentRunCompletion {
   steps: { kind: "request" | "tool"; tool: string }[];
@@ -37,7 +37,7 @@ export function completionRecord(status: AgentRunCompletion["status"], decision:
       comparisons: decision.comparisons } : null };
 }
 export async function finishDecisionRun(api: FleetAPI, handle: AgentRunHandle, snapshot: FleetState, completion: AgentRunCompletion,
-  action: RecoveryDecisionResult["recommendedAction"], allowSubmit: boolean) {
+  action: RecoveryDecisionResult["recommendedAction"], allowSubmit: boolean, signal?: AbortSignal) {
   let attempted = false;
   let persistence: "recorded" | "unknown" = "unknown";
   async function persist(expiresAt?: string) {
@@ -49,12 +49,17 @@ export async function finishDecisionRun(api: FleetAPI, handle: AgentRunHandle, s
     persistence = "recorded"; return receipt;
   }
   const submission = await submitReviewedAction({ ...api, submitReassignment: async input => {
+    if (signal?.aborted) throw new Error("Proposal cancelled before submission.");
     completion.submissionCheck = "current";
     const receipt = await persist(input.expiresAt);
     if (!receipt.proposalResult) throw new Error("Proposal receipt unavailable.");
     return receipt.proposalResult;
   } }, snapshot, action, { allowSubmit });
   if (!attempted) {
+    if (signal?.aborted && action && allowSubmit) {
+      submission.proposal = { status: "not_requested" };
+      submission.submissionCheck = "unavailable";
+    }
     completion.submissionCheck = submission.submissionCheck;
     try { await persist(); } catch { /* A lost acknowledgement can follow COMMIT. No automatic retry. */ }
   }

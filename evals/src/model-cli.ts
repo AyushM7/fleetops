@@ -39,16 +39,20 @@ export async function modelCLI(args: string[]): Promise<void> {
   let cost: ReturnType<typeof verifyLiveCost> | undefined;
   if (config.mode === "live-model") {
     const file = value("--cost-review");
+    const ceiling = value("--budget-usd");
     cost = verifyLiveCost(config, requests, file ? readFileSync(file, "utf8") : undefined,
-      value("--approve-cost-sha256"), Number(value("--budget-usd")), process.env);
-    process.stderr.write(`Reviewed estimated maximum: USD ${cost.estimatedMaximumUSD}; ceiling USD ${cost.budgetUSD}; ${requests} requests, no retries.\n`);
+      value("--approve-cost-sha256"), ceiling === undefined ? null : Number(ceiling), process.env);
+    const budget = cost.budgetUSD === null ? "" : ` Operator ceiling: USD ${cost.budgetUSD}.`;
+    process.stderr.write(`Reviewed estimated maximum: USD ${cost.estimatedMaximumUSD}.${budget} ${requests} requests, no retries.\n`);
   }
   if (args.includes("--plan")) {
     process.stdout.write(`${JSON.stringify({ configuration: config, ...selection, requests, cost: cost ?? { estimatedMaximumUSD: 0, note: "Local double; no provider requests." } }, null, 2)}\n`);
     return;
   }
   const generate = config.mode === "live-model" ? (input: Parameters<typeof generateEvaluationResponse>[0], variant: "assisted" | "reduced-hint" = "assisted") =>
-    generateEvaluationResponse(input, config.provider === "openai" ? { providerId: "openai", modelId: config.model, url: "https://api.openai.com/v1", api: "responses" } : `${config.provider}/${config.model}` as `${string}/${string}`,
+    generateEvaluationResponse(input, config.provider === "openai" ? {
+      providerId: "openai", modelId: config.model, url: "https://api.openai.com/v1", api: "responses", apiKey: process.env.OPENAI_API_KEY?.trim(),
+    } : `${config.provider}/${config.model}` as `${string}/${string}`,
       { maxOutputTokens: config.maxOutputTokens, temperature: config.temperature, promptVariant: variant }) : undefined;
   const report = await runModelEvaluation(config, cases, generate);
   process.stdout.write(`${JSON.stringify({ ...report, ...selection, cost: cost ?? { estimatedMaximumUSD: 0, note: "Local double only." } }, null, 2)}\n`);

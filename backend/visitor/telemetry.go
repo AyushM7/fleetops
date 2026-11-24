@@ -140,11 +140,10 @@ func (g *visitorGateway) warehouseEvents(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *visitorSession) serveWarehouseEvents(w http.ResponseWriter, r *http.Request) {
-	if !s.mu.TryLock() {
-		http.Error(w, "visitor busy; refresh status", http.StatusTooManyRequests)
+	if !s.tryRequest(w) {
 		return
 	}
-	deadline := s.deadline
+	deadline := s.expiresAt()
 	if s.closed || !time.Now().Before(deadline) {
 		s.mu.Unlock()
 		http.Error(w, "visitor session expired", http.StatusUnauthorized)

@@ -1,4 +1,4 @@
-import { runRecoveryDecision, type RecoveryDecisionResult } from "../../agent/src/decision-agent.js";
+import { runRecoveryDecision, runRecoveryDecisionV3, type RecoveryDecisionResult, type RecoveryDecisionV3Result } from "../../agent/src/decision-agent.js";
 import { completionRecord, type AgentRunCompletion } from "../../agent/src/agent-run.js";
 import type { FleetAPI } from "../../agent/src/graphql.js";
 import type { FleetState } from "../../agent/src/contracts.js";
@@ -21,6 +21,7 @@ export interface Trial {
   cost: { estimatedMaximumUSD: number; actualBilledUSD: null; method: string; providerHTTPRequests: number } | null;
   modelCalls: { localAdapterFailures: number | null; providerHTTPAttempts: number | null; failedHTTPResponses: number | null; uncertainHTTPResults: number | null };
   tools: { successfulExecutions: number; countedExecutions: number; evidenceComplete: boolean } | null;
+  recoveryEvidence?: Pick<RecoveryDecisionV3Result, "version" | "allowedObjectives" | "intent" | "aiAnalysis" | "investigation">;
 }
 export function syntheticAPI(state: FleetState, behavior?: "unknown" | "stale"): FleetAPI {
   let reads = 0, finishes = 0;
@@ -30,7 +31,7 @@ export function syntheticAPI(state: FleetState, behavior?: "unknown" | "stale"):
     submitCharging: async () => { throw new Error("No command authority"); }, submitReassignment: async () => { throw new Error("No command authority"); } };
 }
 export async function trial(scenario: Scenario, policy: Policy, api: FleetAPI, options: {
-  go?: boolean; live?: boolean; allowSubmit?: boolean; model?: Parameters<typeof runRecoveryDecision>[1]["model"]; requestedModel?: string; probe?: Probe; signal?: AbortSignal;
+  go?: boolean; live?: boolean; recoveryV3?: boolean; allowSubmit?: boolean; model?: Parameters<typeof runRecoveryDecision>[1]["model"]; requestedModel?: string; probe?: Probe; signal?: AbortSignal;
 } = {}): Promise<Trial> {
   const started = performance.now(); let state: FleetState | null = null;
   const result: Trial = { scenarioId: scenario.id, policy, objective: scenario.objective, source: policy !== "v2-investigation" ? "deterministic" : options.live ? "live-model" : "mocked",
@@ -48,16 +49,21 @@ export async function trial(scenario: Scenario, policy: Policy, api: FleetAPI, o
     if (options.signal?.aborted) throw new Error("Paused/cancelled evaluation cannot generate.");
     if (options.model && (typeof options.model === "string" || !("doGenerate" in options.model))) throw new Error("Provider configurations require the reviewed CLI resolver.");
     if (options.model && !options.live && (!("provider" in options.model) || !String(options.model.provider).startsWith("offline-"))) throw new Error("Offline evaluation requires an explicitly local adapter.");
-    if (options.live && (!options.go || !options.model || process.env.CI || process.env.VITEST || process.env.NODE_ENV==="test" || !("provider" in options.model) || !String(options.model.provider).startsWith("openai"))) throw new Error("Unreviewed live trial blocked.");
+    if (policy === "v2-investigation" && options.live && (!options.go || !options.model || process.env.CI || process.env.VITEST || process.env.NODE_ENV==="test" || !("provider" in options.model) || !String(options.model.provider).startsWith("openai"))) throw new Error("Unreviewed live trial blocked.");
     state = await api.readFleet(); result.initialObservationId = state.observationId ?? null;
     result.incidentFacts = structuredClone(state.activeIncidents);
     result.initialStateHash = sha256(JSON.stringify({ ...state, observationId: undefined })); result.candidateFacts = structuredClone(state.reassignmentCandidates);
     if (policy === "v2-investigation") {
-      const scripted = options.model ? null : scriptedModel(options.probe ?? scenario.probe);
+      const scripted = options.model ? null : scriptedModel(options.probe ?? scenario.probe, options.recoveryV3);
       const model = options.model ?? scripted!.model;
       let pinned = true;
-      const run = await runRecoveryDecision({ ...wrapped, readFleet: async () => { if (pinned) { pinned = false; return state!; } return api.readFleet(); } }, { enabled: true, model, source: result.source,
+      const decide = options.recoveryV3 ? runRecoveryDecisionV3 : runRecoveryDecision;
+      const run = await decide({ ...wrapped, readFleet: async () => { if (pinned) { pinned = false; return state!; } return api.readFleet(); } }, { enabled: true, model, source: result.source,
         objective: scenario.objective, allowSubmit: options.allowSubmit === true, signal: options.signal });
+      if (run.version === "recovery-decision-v3") {
+        const { version, allowedObjectives, intent, aiAnalysis, investigation } = run;
+        result.recoveryEvidence = { version, allowedObjectives, intent, aiAnalysis, investigation };
+      }
       // The first pinned read may be reused; subsequent freshness checks must still read Go.
       result.completion = completionRecord(run.aiAnalysis.status, run.aiAnalysis.decision, run.investigation, performance.now() - started);
       result.completion.submissionCheck = run.submissionCheck;
@@ -99,11 +105,12 @@ export async function trial(scenario: Scenario, policy: Policy, api: FleetAPI, o
   result.latencyMs = Math.round(performance.now() - started);
   return result;
 }
-export function aggregate(rows: Trial[]) {
+export function aggregate(rows: Trial[], scenarios = dataset.scenarios) {
+  const criteria = new Map(scenarios.map(scenario => [scenario.id, scenario]));
   return policies.map(policy => {
     const all = rows.filter(r => r.policy === policy), selected = all.filter(r => r.selected), toolRuns = all.filter(r => r.completion);
-    const expectedAbstentions = all.filter(r => r.abstention!==null || ["no-recipients", "healthy", "poisoned"].includes(r.scenarioId));
-    const qualityRows = all.filter(r => dataset.scenarios.find(s => s.id === r.scenarioId)?.quality !== "not-applicable");
+    const expectedAbstentions = all.filter(r => r.abstention !== null || ["no_candidates", "no_supported_incident", "runtime_poisoned"].includes(criteria.get(r.scenarioId)?.expected ?? ""));
+    const qualityRows = all.filter(r => { const scenario = criteria.get(r.scenarioId); return scenario && scenario.quality !== "not-applicable"; });
     const latencies = all.flatMap(r => r.latencyMs === null ? [] : [r.latencyMs]);
     return { policy, attemptedTrials: all.length, admittedSelections: { numerator: selected.filter(r => r.quality.admitted).length, denominator: selected.length },
       groundingAccepted: { numerator: all.filter(r => r.groundingAccepted).length, denominator: policy === "v2-investigation" ? all.length : 0 },

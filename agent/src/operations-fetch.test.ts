@@ -40,7 +40,8 @@ it("sends one real Mastra Responses request through the guard with a mocked Open
   vi.stubGlobal("fetch", singleOperationsFetch(transport as typeof fetch, "fixture-transport"));
   const permit = vi.fn();
   const result = await makeOpenAIOperationsDecision('{"tick":1}', permit, AbortSignal.timeout(2_000));
-  expect(result).toEqual({ decision, usage: { model: operationsModelId, inputTokens: 41, outputTokens: 20 } });
+  expect(result).toMatchObject({ decision, usage: { model: operationsModelId, inputTokens: 41, outputTokens: 20, cachedInputTokens: 0 } });
+  expect(result.usage?.cacheWriteInputTokens).toBeUndefined();
   expect(permit).toHaveBeenCalledTimes(1);
   expect(transport).toHaveBeenCalledTimes(1);
 });

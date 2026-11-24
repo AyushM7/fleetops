@@ -2,15 +2,17 @@
 
 The Operations Manager uses one PostgreSQL ledger in the `fleetops_operations`
 schema. Hosts serving the same public FleetOps visitors must point at the same
-database. The ledger charges every request to its UTC admission date, rejects
-requests in the last 20 seconds before midnight, and starts a fresh allowance
-on the next UTC date. Visitor-schema cleanup has no effect on this ledger.
+database. The ledger records each request on its UTC admission date and rejects
+requests in the last 20 seconds before midnight. Visitor-schema cleanup has no
+effect on this ledger.
 
-The host commits the reservation before launching the worker. A conditional
-PostgreSQL update enforces the $5.00 daily limit across processes and sessions.
-Provider-reported token usage can release the difference once. A timeout,
-worker crash, missing usage, or ambiguous database outcome leaves the full
-reservation in place. Known pricing or usage anomalies freeze the admission day.
+The host commits an accounting reservation before launching the worker.
+There is no application spending ceiling. Provider-reported token usage
+settles the reservation once and releases the unused estimate. A timeout,
+worker crash, missing usage, or ambiguous database outcome leaves the
+reservation unsettled at its full estimate. Known pricing or usage anomalies
+freeze admissions for the affected UTC day. Startup migrates the legacy daily
+constraint and preserves existing ledger rows and freeze flags.
 
 The only reviewed model is GPT-6 Luna via OpenAI Responses, using Standard
 text pricing with zero tools, zero retries, and at most 768 output tokens
@@ -33,9 +35,15 @@ upper bound that includes the long-context and regional premiums.
 - `OPENAI_API_KEY` belongs only in the server environment. Use a dedicated
   OpenAI project and key for this runtime.
 
-At those rates, one request reserves $0.289384. Reconciliation multiplies
-the reported token counts by the same conservative rates. That figure is
-ledger accounting rather than a provider invoice. Review provider pricing
+At those rates, one request reserves $0.289384. Settlement estimates Standard
+text charges using the reported token counts and releases the unused amount.
+Short-context rates per million tokens are $0.10 uncached input, $0.01
+cached input, $0.125 default-duration cache writes, and $0.50 output.
+Above 272,000 input tokens, input rates double and the output rate is 1.5
+times the short-context rate. Cache counts are stored when the worker reports
+them. Tokens without a reported cache class use the uncached rate for the estimate. New ledger rows
+record the pricing basis beside reported cache counts, and prior settled
+amounts remain as recorded. The estimate is local accounting. Review provider pricing
 before enabling calls and after pricing changes. Configure project-level
 limits and monitoring as an additional safeguard where available. The
 application ledger does not cover requests made outside this application,
@@ -48,20 +56,33 @@ of the key.
 Set `FLEETOPS_OPERATIONS_ENABLED=1` in the Go visitor server environment to
 opt in. The default is deterministic dispatch. Missing credentials, pricing,
 worker or ledger configuration leave that mode in place. Only a playing
-warehouse-v2 scenario schedules model cycles. Each visitor can start at
-most one cycle every 30 seconds, with two workers per server process.
-Only the offered jobs and robots get a dispatch window, which ends on the
-worker result, pause, stop or expiry and lasts no more than 20 simulator
-ticks. Movement, charging and collision avoidance keep running throughout.
-Go may reject an otherwise valid proposal when these live conditions change.
+warehouse-v2 scenario schedules model cycles. Transport reviews have a
+30-second cooldown and the server allows two workers per process. During
+that cooldown, a newly eligible maintenance occurrence can open a
+maintenance-only review. The same occurrence cannot open another
+maintenance-only review in that runtime. Every review uses the same
+worker timeout, usage accounting and admission ledger.
+
+The authenticated dispatch window ends on the worker result, pause, stop,
+or expiry and lasts no more than 20 simulator ticks. Movement, charging
+and collision avoidance keep running. Go rechecks live robot and fault
+identity, job ownership, service-cell feasibility, energy and attempt
+history before admitting maintenance. A cancelled or rejected decision
+consumes no repair attempt and deterministic scheduling can resume.
 
 Each observation is recorded against its runtime in
 `fleetops_operations.activity`. The host records a grounded proposal before
 it enters the Go command boundary, which supplies its own durable receipt.
-The activity reports terminal results, including abstention, denied budget,
+The activity reports terminal results, including abstention, ledger admission denial,
 stale proposals and uncertain execution. `recorded: false` means that the
 activity projection could not be confirmed in the shared audit store.
 A confirmed Go receipt remains authoritative about command execution.
+For maintenance, the receipt confirms admission. Follow the matching
+Go simulator attempt for repair progress and verification, and the
+original job record for delivery. Go permits one admitted attempt per
+fault occurrence. Unreachable service sites, critical battery, and
+exhausted attempts may require external assistance. See the
+[Phase 4 verification procedure](v2-phase4-acceptance.md#reproducible-demonstration).
 
 V2 status and SSE frames expose up to 12 recent activities per runtime.
 An `operations` SSE event advances the same generation-scoped sequence as
@@ -75,5 +96,37 @@ Public enablement requires a deployment that also supplies Node and the built
 Operations worker, a dedicated provider credential, and the shared PostgreSQL
 ledger. Keep deterministic mode as the default. Removing the opt-in from the
 server environment and restarting disables automatic AI dispatch. Visitor
-limits can slow abuse, while public traffic can still exhaust the shared
-daily allowance.
+limits control request frequency. Provider-side project controls govern
+spending.
+
+## V3 incident worker
+
+The default remains deterministic. The optional Operations image is built with
+`docker build --target operations -t fleetops-v2-operations:local .`. It includes
+the normal server, the compiled Mastra worker and the React build.
+
+Use the normal visitor server configuration for the database, private evidence
+directory and public origin. In an independently approved live environment, set
+`FLEETOPS_OPERATIONS_ENABLED=1`, `FLEETOPS_OPERATIONS_PROTOCOL=v3`, the two existing
+upper-bound token prices, and positive integer caps
+`FLEETOPS_OPERATIONS_DAILY_REQUESTS` and `FLEETOPS_OPERATIONS_DAILY_MICRO_USD`.
+Supply the provider credential to Go through the server environment. The
+Operations image already sets the worker path. A native installation uses the
+absolute path to the compiled `agent/dist/operations-worker.js`.
+
+Go starts one proposer-scoped run per active incident episode and sends the worker
+a detached snapshot. The simulator continues ticking. Each worker provider
+request travels over bounded stdio to Go. The worker receives no provider key.
+Go reserves the configured worst case in the shared ledger before forwarding a
+request to the fixed Responses endpoint. A review allows at most six sends and
+30 seconds with zero retries. The daily caps use the shared database day, include
+outstanding reservations, and serialize across visitor runtimes. Confirmed usage
+is linked by provider response ID and settled using configured upper rates.
+Uncertain sends retain their full reservation. Invalid or out-of-budget results
+produce an audit outcome without a proposal.
+
+Go can admit a recent completion across harmless revisions only when the
+verified evidence still matches. Any admitted proposal waits for a separate
+operator, and Go rechecks the evidence under the approval transaction before
+running its existing feasibility preflight. The worker has read tools and no
+command or approval capability.

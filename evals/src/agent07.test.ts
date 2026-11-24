@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { mkdtempSync, writeFileSync, unlinkSync, rmdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { baseline, dataset, quality, syntheticState } from "./agent07-dataset.js";
+import { agent07Dataset, baseline, dataset, quality, syntheticState } from "./agent07-dataset.js";
 import { offlineEvaluation, aggregate, replayProjection, syntheticAPI, trial } from "./agent07-runner.js";
 import { scriptedModel, type Probe } from "./agent07-scripted.js";
 import { bounds, permitLive, planHash, RequestReserve, sha256, type Config, type PriceReview } from "./agent07-cost.js";
@@ -18,6 +18,19 @@ it("declares independent versioned objectives, eligibility controls and fault sc
   expect(new Set(dataset.scenarios.map(s => s.id)).size).toBe(12);
   expect(dataset.scenarios.filter(s => s.comparable)).toHaveLength(8);
 });
+it("binds the Phase 4 matrix to distinct Go observations and explicit V3 authority", () => {
+  const { manifest, hash } = agent07Dataset(true);
+  expect(manifest.scenarios.filter(s => !s.sample)).toHaveLength(25);
+  expect(manifest.scenarios.filter(s => s.sample)).toHaveLength(3);
+  expect(new Set(manifest.scenarios.map(s => s.variant)).size).toBe(28);
+  expect(hash).not.toBe(agent07Dataset().hash);
+  const flags = ["--phase4-v3-matrix", "--go", "--recovery-v3"];
+  expect(() => parseArgs(flags)).toThrow("explicit Go-backed V3 scenarios");
+  expect(() => parseArgs([...flags, "--scenario", "lab-stale-valid-intent"])).toThrow("isolated approval harness");
+  const config = parseArgs([...flags, "--scenario", "lab-stale-valid-intent", "--test-harness-approvals"]);
+  expect(config).toMatchObject({ go: true, recoveryV3: true, phase4V3: true, testHarnessApprovals: true });
+  expect(bounds(config)).toMatchObject({ providerRequests: 0, automaticRetries: 0 });
+});
 it("evaluates independent baselines on controlled candidate order, minima, headroom and ties", () => {
   const s = syntheticState(scenario("non-first-pickup"));
   expect(baseline(s, "first-eligible")?.toRobotId).toBe("R3"); expect(baseline(s, "minimum-pickup")?.toRobotId).toBe("R4");
@@ -30,11 +43,24 @@ it("does not invent a unique optimum or scalar regret for compare_tradeoffs", ()
   const s = { ...scenario("tradeoff-pickup"), expected: "admitted", quality: "pareto-only" as const }, state = syntheticState(s);
   for (const c of state.reassignmentCandidates) expect(quality(s, state, c)).toMatchObject({ admitted: true, objectiveMet: true, regret: null, dominated: false });
 });
+it("binds V3 to an isolated paired plan and retains separately labeled model and host evidence", async () => {
+  const flags = ["--offline", "--go", "--scenario", "tradeoff-pickup"];
+  const before = parseArgs(flags), after = parseArgs([...flags, "--recovery-v3"]);
+  expect(planHash(after, bounds(after), "dataset", "source")).not.toBe(planHash(before, bounds(before), "dataset", "source"));
+  expect(() => parseArgs(["--offline", "--recovery-v3", "--scenario", "tradeoff-pickup"])).toThrow("isolated Go harness");
+  const s = scenario("tradeoff-pickup");
+  const result = await trial(s, "v2-investigation", syntheticAPI(syntheticState(s)), { recoveryV3: true });
+  expect(result).toMatchObject({ source: "mocked", observationProvenance: "synthetic-tool-contract-only", status: "accepted",
+    expectationMet: true, submissionAttempts: 0, selected: { toRobotId: "R3" },
+    recoveryEvidence: { version: "recovery-decision-v3", intent: { objective: "minimize_pickup_steps" },
+      aiAnalysis: { decision: { observationId: expect.any(String), limitations: expect.arrayContaining(["independent_approval_required"]) } } } });
+  expect(result.recoveryEvidence?.intent).not.toHaveProperty("limitations");
+});
 it("runs real Mastra tools without answer hints or expected labels entering model context", async () => {
   const s = scenario("non-first-pickup"), state = syntheticState(s), script = scriptedModel();
   const row = await trial(s, "v2-investigation", syntheticAPI(state), { model: script.model });
   expect(row).toMatchObject({ status: "accepted", selected: { toRobotId: "R4" }, quality: { regret: 0 }, submissionAttempts: 0 });
-  expect(row.completion).toMatchObject({ modelRequests: 4, toolExecutions: 6, reportedUsage: { totalTokens: 8 } });
+  expect(row.completion).toMatchObject({ modelRequests: 3, toolExecutions: 6, reportedUsage: { totalTokens: 6 } });
   const first = JSON.stringify(script.requests[0].prompt); expect(first).not.toMatch(/expected|quality|supportedAction|recommendedAction|non-first-pickup|R4|scriptedResponse/);
   expect(row.completion!.steps.filter(s => s.kind === "tool").map(s => s.tool)).toEqual(["readIncident", "listRecoveryCandidates", "readIncident", "listRecoveryCandidates", "readRobots", "readJobs"]);
   expect(JSON.stringify(row)).not.toMatch(/tool-result|Private provider|ignore all/i);
@@ -58,7 +84,7 @@ it.each(["false-evidence", "invalid-tool", "model-failure", "malformed", "budget
   const row = await trial(s, "v2-investigation", syntheticAPI(state), { probe, allowSubmit: true });
   expect(row.groundingAccepted).toBe(false); expect(row.selected).toBeNull(); expect(row.submissionAttempts).toBe(0);
   expect(row.proposal?.status).not.toBe("pending_approval"); expect(row.completion!.modelRequests).toBeLessThanOrEqual(6); expect(row.completion!.toolExecutions).toBeLessThanOrEqual(8);
-  expect(row.completion!.modelRequests).toBe(["false-evidence","malformed","untrusted-output"].includes(probe)?4:1);
+  expect(row.completion!.modelRequests).toBe(["false-evidence","malformed","untrusted-output"].includes(probe)?3:1);
   expect(row.modelCalls.localAdapterFailures).toBe(probe==="model-failure"?1:0);
   expect(aggregate([row]).find(r => r.policy === "v2-investigation")!.attemptedTrials).toBe(1);
   if (probe === "missing-usage") expect(row.completion!.reportedUsage).toEqual({ status: "unavailable", inputTokens: null, outputTokens: null, totalTokens: null });
@@ -78,6 +104,17 @@ it("retains uncertain baseline submissions without retrying or manufacturing app
   const row=await trial(s,"first-eligible",api,{allowSubmit:true});
   expect(row).toMatchObject({status:"generation-failed",failure:"submission_unknown",proposal:{status:"unknown"},submissionAttempts:1}); expect(submit).toHaveBeenCalledOnce();
 });
+it.each([["first-eligible", "non-first-pickup", "R3"], ["minimum-pickup", "non-first-pickup", "R4"], ["maximum-headroom", "tradeoff-headroom", "R4"]] as const)(
+  "runs the %s baseline without a provider model inside a live Go plan", async (policy, id, recipient) => {
+    const s = scenario(id), state = syntheticState(s);
+    const api = syntheticAPI(state), read = vi.spyOn(api, "readFleet"), start = vi.spyOn(api, "startAgentRun");
+    const row = await trial(s, policy, api, { live: true, go: true });
+    expect(row).toMatchObject({ source: "deterministic", status: "deterministic", failure: null,
+      selected: { toRobotId: recipient }, initialObservationId: state.observationId, submissionAttempts: 0, requestedModel: null });
+    expect(read).toHaveBeenCalledOnce();
+    expect(start).not.toHaveBeenCalled();
+  },
+);
 it("rejects provider configurations and mislabeled mock/live inputs before any model request", async () => {
   const s=scenario("non-first-pickup"), api=syntheticAPI(syntheticState(s));
   expect((await trial(s,"v2-investigation",api,{model:"openai/unreviewed"})).status).toBe("generation-failed");
@@ -105,6 +142,8 @@ it("reports real paired units, censored controls and policy comparisons without 
   const report=outcomeSummary(rows), effects=report.comparisons[0].effects!;
   expect(effects.find(e=>e.against==="first-eligible")).toMatchObject({completionTicksSaved:5,completedDeliveryDelta:0,finalStoredBatteryPercentagePointDelta:5});
   expect(effects.find(e=>e.against==="no-intervention")).toMatchObject({completionTicksSaved:null,completedDeliveryDelta:1,blockedRobotSampleDelta:-200});
+  const failedBaseline = { ...rows[1], decision: { ...decision, status: "generation-failed", failure: "pipeline_unavailable" } };
+  expect(outcomeSummary([rows[0], failedBaseline, rows[2]]).comparisons[0]).toMatchObject({ comparable: false, effects: null });
   rows[1].initialSimulatorStateSHA256="different"; expect(outcomeSummary(rows).comparisons[0]).toMatchObject({comparable:false,effects:null});
 });
 const now = Date.parse("2026-10-18T12:00:00Z");
@@ -130,15 +169,41 @@ it("rejects absent, stale, mismatched, unsupported-fee and over-budget reviews",
     const bad = JSON.stringify(changed); expect(() => bounds({ ...config, approveCostSHA256: sha256(bad) }, bad, now)).toThrow();
   }
 });
+it("records a reviewed model alias and estimates usage without a dollar ceiling", () => {
+  const { config, review } = reviewed();
+  const raw = JSON.stringify({ ...review, immutableModelAcknowledged: false });
+  expect(bounds({ ...config, budgetUSD: null, approveCostSHA256: sha256(raw) }, raw, now))
+    .toMatchObject({ immutableModelAcknowledged: false, maximumModelRequests: 12, estimatedMaximumUSD: 0.0264 });
+});
 it("keeps failed/unknown reservations consumed, blocking transport retries and altered requests", async () => {
-  const { config } = reviewed(), reserve = new RequestReserve(1, 0.1, 0.1, Date.now()+10000), network = vi.fn().mockRejectedValue(new Error("uncertain"));
+  const { config } = reviewed(), reserve = new RequestReserve(1, 0.1, Date.now()+10000), network = vi.fn().mockRejectedValue(new Error("uncertain"));
   const transport = liveTransport(config, "http://127.0.0.1:1/graphql", reserve, network, new AbortController().signal, 1000);
   const init = { method: "POST", body: JSON.stringify({ model: config.model, max_output_tokens: 100, store: false, service_tier: "default" }) };
   transport.permit(); await expect(transport.fetch("https://api.openai.com/v1/responses", init)).rejects.toThrow();
   await expect(transport.fetch("https://api.openai.com/v1/responses", init)).rejects.toThrow(); expect(network).toHaveBeenCalledTimes(1); expect(reserve.calls).toBe(1);
   expect(() => transport.permit()).toThrow(); expect(() => reserve.take()).toThrow();
-  const pristine = liveTransport(config, "http://127.0.0.1:1/graphql", new RequestReserve(1, 1, 1, Date.now()+10000), network, new AbortController().signal, 1000);
+  const pristine = liveTransport(config, "http://127.0.0.1:1/graphql", new RequestReserve(1, 1, Date.now()+10000), network, new AbortController().signal, 1000);
   pristine.permit(); await expect(pristine.fetch("https://api.openai.com/v1/responses", { ...init, body: JSON.stringify({ model: "other", max_output_tokens: 100 }) })).rejects.toThrow(); expect(network).toHaveBeenCalledTimes(1);
+});
+
+it("keeps a reservation when a provider body fails after successful response headers", async () => {
+  const { config } = reviewed();
+  const reserve = new RequestReserve(1, 0.1, Date.now() + 10_000);
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) { controller.enqueue(new TextEncoder().encode("partial response")); },
+    pull(controller) { controller.error(new Error("connection closed after headers")); },
+  });
+  const network = vi.fn(async () => new Response(body, { status: 200 }));
+  const transport = liveTransport(config, "http://127.0.0.1:1/graphql", reserve, network, new AbortController().signal, 1000);
+  transport.permit();
+  const response = await transport.fetch("https://api.openai.com/v1/responses", {
+    method: "POST", body: JSON.stringify({ model: config.model, max_output_tokens: 100, store: false, service_tier: "default" }),
+  });
+  expect(response.status).toBe(200);
+  await expect(response.text()).rejects.toThrow("after headers");
+  expect(reserve.reservedUSD).toBe(0.1);
+  expect(() => reserve.take()).toThrow();
+  expect(network).toHaveBeenCalledOnce();
 });
 it("defaults to offline, plans without credentials/network, and rejects ambiguous or excessive CLI requests", async () => {
   expect(parseArgs([])).toMatchObject({ live: false, model: null, provider: null, trials: 1 });
@@ -166,11 +231,11 @@ it("produces a reviewed LIVE --plan in CI with no provider key, database, model 
 it("blocks unsupported tools, oversized context and altered output limits before any provider request", async () => {
   const {config}=reviewed(), network=vi.fn().mockResolvedValue(new Response("{}")), body={model:config.model,max_output_tokens:100,store:false,service_tier:"default"};
   for(const altered of [{...body,max_output_tokens:101},{...body,tools:[{type:"web_search_preview"}]},{...body,input:"x".repeat(1000)}]) {
-    const transport=liveTransport(config,"http://127.0.0.1:1/graphql",new RequestReserve(1,1,1,Date.now()+1000),network,new AbortController().signal,1000);
+    const transport=liveTransport(config,"http://127.0.0.1:1/graphql",new RequestReserve(1,1,Date.now()+1000),network,new AbortController().signal,1000);
     transport.permit(); await expect(transport.fetch("https://api.openai.com/v1/responses",{method:"POST",body:JSON.stringify(altered)})).rejects.toThrow();
   }
   expect(network).not.toHaveBeenCalled();
-  const transport=liveTransport(config,"http://127.0.0.1:1/graphql",new RequestReserve(1,1,1,Date.now()+1000),network,new AbortController().signal,1000);
+  const transport=liveTransport(config,"http://127.0.0.1:1/graphql",new RequestReserve(1,1,Date.now()+1000),network,new AbortController().signal,1000);
   transport.permit(); await transport.fetch("https://api.openai.com/v1/responses",{method:"POST",body:JSON.stringify(body)});
   expect(transport.measurements).toEqual({providerHTTPAttempts:1,failedHTTPResponses:0,uncertainHTTPResults:0}); expect(network).toHaveBeenCalledOnce();
 });

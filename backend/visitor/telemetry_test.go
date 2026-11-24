@@ -254,7 +254,7 @@ func TestWarehouseEventStreamIntegration(t *testing.T) {
 	}
 	session := g.manager.lookup(b.Value)
 	session.mu.Lock()
-	session.deadline = time.Now().Add(-time.Second)
+	session.deadline.Store(new(time.Now().Add(-time.Second)))
 	session.mu.Unlock()
 	for otherReader.Scan() {
 		if strings.HasPrefix(otherReader.Text(), "id: ") {
@@ -325,7 +325,7 @@ func TestWarehouseStreamBackpressureAndExpiryIntegration(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	session.deadline = time.Now().Add(-time.Second)
+	session.deadline.Store(new(time.Now().Add(-time.Second)))
 	session.mu.Unlock()
 	for {
 		g.manager.mu.Lock()

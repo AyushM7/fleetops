@@ -35,7 +35,16 @@ func NewVisitor(id string, pool *db.Pool) (*Service, error) {
 
 // NewVisitorWarehouse constructs a seeded V2 simulator owned by one visitor.
 func NewVisitorWarehouse(seed int64, pool *db.Pool) (*Service, error) {
-	return New(sim.WarehouseV2Config(), seed, pool, time.Now, visitorOperator)
+	return NewVisitorWarehouseWithChargeTarget(seed, pool, 0)
+}
+
+// NewVisitorWarehouseWithChargeTarget uses the layout default when target is zero.
+func NewVisitorWarehouseWithChargeTarget(seed int64, pool *db.Pool, target int) (*Service, error) {
+	cfg := sim.WarehouseV2Config()
+	if target != 0 {
+		cfg.ChargeRelease = target
+	}
+	return New(cfg, seed, pool, time.Now, visitorOperator)
 }
 
 func visitorOperator(ctx context.Context, id proposal.OperatorIdentity) bool {

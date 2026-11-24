@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"math"
 	"net/url"
 	"os"
 	"sync"
@@ -69,14 +70,47 @@ func runtimeFixture(t *testing.T) string {
 func TestReservationUsesWorstReviewedPricing(t *testing.T) {
 	p := pricing{minInputRate, minOutputRate}
 	if !p.valid() || p.cost(maxInputTokens, maxOutputTokens) != 289384 || p.cost(1, 0) != 1 ||
+		!(pricing{6_000_000, 7_000_000}).valid() ||
+		(pricing{math.MaxInt64, minOutputRate}).valid() || (pricing{minInputRate, math.MaxInt64}).valid() ||
 		(pricing{1, 1}).valid() || (pricing{}).valid() {
 		t.Fatal("invalid or non-conservative model price bound")
+	}
+}
+
+func TestStandardSettlementPricesReportedTokenClasses(t *testing.T) {
+	cached, written := int64(1663), int64(2)
+	for _, tc := range []struct {
+		usage usage
+		want  int64
+		valid bool
+	}{
+		{usage{Input: 1666, Output: 29, Cached: &cached}, 32, true},
+		{usage{Input: 100, Output: 100}, 60, true},
+		{usage{Input: 272001, Output: 100}, 54476, true},
+		{usage{Input: 1664, Output: 29, Cached: &cached, CacheWrite: &written}, 0, false},
+		{usage{Input: 1, CacheWrite: &written}, 0, false},
+	} {
+		if got, ok := tc.usage.estimatedStandardCost(); got != tc.want || ok != tc.valid {
+			t.Errorf("estimatedStandardCost(%+v) = %d,%t, want %d,%t", tc.usage, got, ok, tc.want, tc.valid)
+		}
 	}
 }
 
 func TestDailyLedgerIsAtomicAcrossVisitorsIntegration(t *testing.T) {
 	ctx := context.Background()
 	dbPool := testDatabase(t)
+	if _, err := dbPool.Exec(ctx, "CREATE SCHEMA fleetops_operations"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dbPool.Exec(ctx, `CREATE TABLE fleetops_operations.days (
+		utc_day date PRIMARY KEY, micro_usd bigint NOT NULL CHECK (micro_usd BETWEEN 0 AND 5000000),
+		frozen boolean NOT NULL DEFAULT false)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dbPool.Exec(ctx, `INSERT INTO fleetops_operations.days (utc_day,micro_usd,frozen)
+		VALUES ((clock_timestamp() AT TIME ZONE 'UTC')::date-1,5000000,true)`); err != nil {
+		t.Fatal(err)
+	}
 	p := pricing{minInputRate, minOutputRate}
 	first, err := openLedger(ctx, dbPool, p)
 	if err != nil {
@@ -86,9 +120,14 @@ func TestDailyLedgerIsAtomicAcrossVisitorsIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := dbPool.Exec(ctx, `INSERT INTO fleetops_operations.days (utc_day,micro_usd,frozen)
-		VALUES ((clock_timestamp() AT TIME ZONE 'UTC')::date-1,5000000,true)`); err != nil {
-		t.Fatal(err)
+	var priorTotal int64
+	var priorFrozen bool
+	if err := dbPool.QueryRow(ctx, `SELECT micro_usd,frozen FROM fleetops_operations.days
+		WHERE utc_day=(clock_timestamp() AT TIME ZONE 'UTC')::date-1`).Scan(&priorTotal, &priorFrozen); err != nil || priorTotal != 5_000_000 || !priorFrozen {
+		t.Fatalf("migration changed historical ledger totals: %d %t %v", priorTotal, priorFrozen, err)
+	}
+	if _, err := dbPool.Exec(ctx, `UPDATE fleetops_operations.days SET micro_usd=-1`); err == nil {
+		t.Fatal("migration allowed a negative ledger total")
 	}
 	runtime := []string{runtimeFixture(t), runtimeFixture(t)}
 	granted := make(chan reservation, 32)
@@ -96,33 +135,47 @@ func TestDailyLedgerIsAtomicAcrossVisitorsIntegration(t *testing.T) {
 	for i := range 32 {
 		tasks.Go(func() {
 			r, err := []*ledger{first, second}[i%2].reserve(ctx, runtime[i%2])
-			switch {
-			case err == nil:
-				granted <- r
-			case !errors.Is(err, ErrBudget):
+			if err != nil {
 				t.Error(err)
+				return
 			}
+			granted <- r
 		})
 	}
 	tasks.Wait()
 	close(granted)
-	want := int(dailyMicroUSD / p.cost(maxInputTokens, maxOutputTokens))
+	const want = 32
 	if len(granted) != want {
-		t.Fatalf("shared budget granted %d reservations, want %d", len(granted), want)
+		t.Fatalf("shared ledger granted %d reservations, want %d", len(granted), want)
 	}
 	r := <-granted
 	if _, err := first.settle(ctx, r, nil); !errors.Is(err, ErrUsage) {
 		t.Fatalf("unknown bill should remain reserved: %v", err)
 	}
-	if _, err := first.reserve(ctx, runtime[0]); !errors.Is(err, ErrBudget) {
-		t.Fatalf("uncertain request released budget: %v", err)
+	var total int64
+	if err := dbPool.QueryRow(ctx, `SELECT micro_usd FROM fleetops_operations.days
+		WHERE utc_day=(clock_timestamp() AT TIME ZONE 'UTC')::date`).Scan(&total); err != nil || total != want*r.maximum {
+		t.Fatalf("shared ledger lost a reservation: %d, want %d, error %v", total, want*r.maximum, err)
 	}
-	report := &usage{Model: modelID, Input: 100, Output: 100}
-	if cost, err := first.settle(ctx, r, report); err != nil || cost != 110 {
+	cached, written := int64(80), int64(10)
+	report := &usage{Model: modelID, Input: 100, Output: 100, Cached: &cached, CacheWrite: &written}
+	const settledCost = 54
+	if cost, err := first.settle(ctx, r, report); err != nil || cost != settledCost {
 		t.Fatalf("verified usage settlement: %d %v", cost, err)
+	}
+	var storedCached, storedWrite int64
+	var basis string
+	if err := dbPool.QueryRow(ctx, `SELECT cached_input_tokens,cache_write_input_tokens,pricing_basis
+		FROM fleetops_operations.requests WHERE id=$1`, r.id).Scan(&storedCached, &storedWrite, &basis); err != nil ||
+		storedCached != cached || storedWrite != written || basis != standardPricingBasis {
+		t.Fatalf("settlement did not preserve cache usage and rate basis: %d %d %q %v", storedCached, storedWrite, basis, err)
 	}
 	if _, err := second.settle(ctx, r, report); !errors.Is(err, ErrUsage) {
 		t.Fatalf("duplicate settlement was credited: %v", err)
+	}
+	if err := dbPool.QueryRow(ctx, `SELECT micro_usd FROM fleetops_operations.days
+		WHERE utc_day=(clock_timestamp() AT TIME ZONE 'UTC')::date`).Scan(&total); err != nil || total != (want-1)*r.maximum+settledCost {
+		t.Fatalf("shared ledger settlement total: %d, error %v", total, err)
 	}
 	next, err := second.reserve(ctx, runtime[1])
 	if err != nil {
@@ -135,6 +188,9 @@ func TestDailyLedgerIsAtomicAcrossVisitorsIntegration(t *testing.T) {
 	if err := dbPool.QueryRow(ctx, `SELECT frozen FROM fleetops_operations.days
 		WHERE utc_day=(clock_timestamp() AT TIME ZONE 'UTC')::date`).Scan(&frozen); err != nil || !frozen {
 		t.Fatalf("unexpected provider usage did not freeze the current UTC day: %v", err)
+	}
+	if _, err := second.reserve(ctx, runtime[1]); !errors.Is(err, ErrBudget) {
+		t.Fatalf("frozen ledger admitted another request: %v", err)
 	}
 }
 

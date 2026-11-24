@@ -5,6 +5,8 @@ import { z } from "zod";
 import { resolveEvaluationModel } from "./evaluation-investigation-model.js";
 
 import { operationsModelId, operationsOutputLimit } from "./operations-fetch.js";
+import { runRecoveryDecisionV3 } from "./decision-agent.js";
+import type { FleetAPI } from "./graphql.js";
 
 const jobId = z.string().regex(/^J[1-9][0-9]{0,18}$/);
 const transportId = z.string().regex(/^R([1-9]|10)$/);
@@ -47,7 +49,7 @@ const instructions = [
 export type OperationsModelResult = {
   decision?: z.infer<typeof decisionSchema>["decision"];
   failure?: "invalid_output" | "model_unavailable" | "billing_anomaly";
-  usage?: { model: string; inputTokens: number; outputTokens: number };
+  usage?: { model: string; inputTokens: number; outputTokens: number; cachedInputTokens?: number; cacheWriteInputTokens?: number };
 };
 
 export async function makeOperationsDecision(observation: string, model: MastraModelConfig,
@@ -78,10 +80,16 @@ export async function makeOperationsDecision(observation: string, model: MastraM
       },
     });
     if (expectedModel && knownUnexpectedBilling) return { failure: "billing_anomaly" };
-    const { inputTokens, outputTokens, totalTokens } = response.totalUsage;
+    const { inputTokens, outputTokens, totalTokens, cachedInputTokens, cacheCreationInputTokens } = response.totalUsage;
+    if ([cachedInputTokens, cacheCreationInputTokens].some(count => count !== undefined &&
+      (!Number.isSafeInteger(count) || count < 0)) || (cachedInputTokens ?? 0) + (cacheCreationInputTokens ?? 0) > (inputTokens ?? 0)) {
+      return { failure: "billing_anomaly" };
+    }
     const usage = reportedModel === operationsModelId && inputTokens !== undefined && outputTokens !== undefined &&
       Number.isSafeInteger(inputTokens) && inputTokens > 0 && Number.isSafeInteger(outputTokens) &&
-      outputTokens >= 0 && inputTokens + outputTokens === totalTokens ? { model: reportedModel, inputTokens, outputTokens } : undefined;
+      outputTokens >= 0 && inputTokens + outputTokens === totalTokens ? {
+        model: reportedModel, inputTokens, outputTokens, cachedInputTokens, cacheWriteInputTokens: cacheCreationInputTokens,
+      } : undefined;
     const parsed = decisionSchema.safeParse(response.object);
     return parsed.success && response.finishReason === "stop" ? { decision: parsed.data.decision, usage } : { failure: "invalid_output", usage };
   } catch {
@@ -99,4 +107,9 @@ export async function makeOpenAIOperationsDecision(observation: string, permit: 
   } catch {
     return { failure: "model_unavailable" };
   }
+}
+
+export function reviewOperationsRecovery(api: FleetAPI, event: { observationId: string },
+  options: Omit<Parameters<typeof runRecoveryDecisionV3>[1], "allowSubmit" | "expectedObservationId">) {
+  return runRecoveryDecisionV3(api, { ...options, expectedObservationId: event.observationId, allowSubmit: false });
 }

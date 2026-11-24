@@ -317,3 +317,40 @@ func TestPUB02AutoplayTickBudget(t *testing.T) {
 		t.Fatal("tick after budget exhausted", err)
 	}
 }
+
+func TestWarehouseChargeTargetFromEnv(t *testing.T) {
+	t.Setenv("FLEETOPS_MODE", "local")
+	t.Setenv("FLEETOPS_PUBLIC_ORIGIN", "http://127.0.0.1:8080")
+	t.Setenv("FLEETOPS_TRUSTED_PROXIES", "")
+	t.Setenv("FLEETOPS_ASSETS_DIR", testAssets(t))
+	t.Setenv("FLEETOPS_EVIDENCE_DIR", t.TempDir())
+	t.Setenv("FLEETOPS_DATABASE_URL", "postgres://localhost/fleetops_test")
+	t.Setenv("FLEETOPS_WAREHOUSE_CHARGE_TARGET", "85")
+	cfg, err := ConfigFromEnv()
+	if err != nil || cfg.WarehouseChargeTarget != 85 {
+		t.Fatalf("target 85: got %d, %v", cfg.WarehouseChargeTarget, err)
+	}
+	for _, invalid := range []string{"", "0", "20", "84", "86", "100", "101", "100%", "-1"} {
+		t.Setenv("FLEETOPS_WAREHOUSE_CHARGE_TARGET", invalid)
+		if _, err := ConfigFromEnv(); err == nil {
+			t.Fatalf("invalid target %q accepted", invalid)
+		}
+	}
+}
+
+func TestPublicWarehouseStartupIsExplicit(t *testing.T) {
+	t.Setenv("FLEETOPS_MODE", "production")
+	t.Setenv("FLEETOPS_PUBLIC_ORIGIN", "https://fleetops.example.test")
+	t.Setenv("FLEETOPS_TRUSTED_PROXIES", "")
+	t.Setenv("FLEETOPS_ASSETS_DIR", testAssets(t))
+	t.Setenv("FLEETOPS_EVIDENCE_DIR", t.TempDir())
+	t.Setenv("FLEETOPS_DATABASE_URL", "postgres://localhost/fleetops_test")
+	t.Setenv("FLEETOPS_LOCAL_START_WAREHOUSE_V2", "1")
+	for _, enabled := range []string{"", "1"} {
+		t.Setenv("FLEETOPS_START_WAREHOUSE_V2", enabled)
+		config, err := ConfigFromEnv()
+		if err != nil || config.StartInWarehouseV2 != (enabled == "1") {
+			t.Fatalf("production warehouse start %q: got %t, %v", enabled, config.StartInWarehouseV2, err)
+		}
+	}
+}
