@@ -139,6 +139,80 @@ func TestWarehouseV2SwapsCrossingChargerReservations(t *testing.T) {
 	}
 }
 
+func TestWarehouseV2BlockedChargerLetsFundedBlockerDockFirst(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		battery int
+	}{{"funded", 5}, {"underfunded", 4}} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := WarehouseV2Config()
+			cfg.InitialJobs, cfg.AutoDispatch = 0, false
+			s := newTestSim(t, cfg, 2)
+			front, rear := s.faultRobot("R3"), s.faultRobot("R10")
+			front.X, front.Y, front.Battery = 18, 4, tc.battery
+			rear.X, rear.Y, rear.Battery = 18, 5, 6
+			dock := &s.state.Stations[3]
+			s.beginChargeTrip(rear, dock, []Point{{18, 4}, {18, 3}, {18, 2}, {18, 1}, {18, 0}})
+			rear.WaitTicks, rear.Blocked = cfg.RecoverAfter, true
+
+			s.Tick()
+			assertInvariants(t, s, cfg)
+			if tc.battery == 4 {
+				if dock.ReservedBy != "R10" || front.Y != 4 || front.Battery != 4 {
+					t.Fatalf("underfunded blocker took the dock: front=%+v dock=%+v", front, dock)
+				}
+				return
+			}
+			if dock.ReservedBy != "R3" || front.Y != 3 || front.Battery != 4 || rear.Status != RobotIdle || rear.Battery != 6 {
+				t.Fatalf("funded blocker did not take the first physical step: front=%+v rear=%+v dock=%+v", front, rear, dock)
+			}
+			firstDock := ""
+			for range 80 {
+				s.Tick()
+				assertInvariants(t, s, cfg)
+				if dock.OccupiedBy != "" && firstDock == "" {
+					firstDock = dock.OccupiedBy
+				}
+				if dock.OccupiedBy == "R10" && rear.Battery > 0 {
+					if firstDock != "R3" {
+						t.Fatalf("first to dock was %q, want R3", firstDock)
+					}
+					return
+				}
+			}
+			t.Fatalf("R10 never docked after R3: first=%q rear=%+v dock=%+v", firstDock, rear, dock)
+		})
+	}
+}
+
+func TestWarehouseV2OpposingChargeTripsCanReleaseOneReservation(t *testing.T) {
+	cfg := WarehouseV2Config()
+	cfg.InitialJobs, cfg.AutoDispatch = 0, false
+	s := newTestSim(t, cfg, 2)
+	west, east := s.faultRobot("R2"), s.faultRobot("R3")
+	west.X, west.Y, west.Battery = 4, 0, 3
+	east.X, east.Y, east.Battery = 5, 0, 5
+	c1, c2 := &s.state.Stations[0], &s.state.Stations[1]
+	s.beginChargeTrip(west, c2, []Point{{5, 0}, {6, 0}})
+	s.beginChargeTrip(east, c1, []Point{{4, 0}, {3, 0}, {2, 0}, {1, 0}})
+	west.WaitTicks, west.Blocked = cfg.RecoverAfter, true
+	east.WaitTicks, east.Blocked = cfg.RecoverAfter, true
+
+	s.Tick()
+	assertInvariants(t, s, cfg)
+	if c1.ReservedBy != "" || c2.OccupiedBy != "R3" || east.Battery != 4 || west.Battery != 3 || west.Status != RobotIdle {
+		t.Fatalf("opposing dock trips did not yield safely: west=%+v east=%+v C1=%+v C2=%+v", west, east, c1, c2)
+	}
+	for range 80 {
+		s.Tick()
+		assertInvariants(t, s, cfg)
+		if c2.OccupiedBy == "R2" && west.Battery > 0 {
+			return
+		}
+	}
+	t.Fatalf("R2 never docked after R3: west=%+v C2=%+v", west, c2)
+}
+
 func TestWarehouseV2DispatchBudgetsMissionAndChargingExit(t *testing.T) {
 	cfg := WarehouseV2Config()
 	cfg.InitialJobs = 0
@@ -164,4 +238,38 @@ func TestWarehouseV2DispatchBudgetsMissionAndChargingExit(t *testing.T) {
 			t.Fatalf("battery %d, required %d: assignment = %v", battery, budget, assigned)
 		}
 	}
+}
+
+func TestPhase4DispatchesFundedJobFromReleasedDock(t *testing.T) {
+	cfg := WarehouseV2Config()
+	cfg.InitialJobs, cfg.NewJobEvery, cfg.MovingDrain, cfg.ChargeGain = 0, 1000, 2, 1
+	cfg.MaxJobs = 1
+	s := newTestSim(t, cfg, 42)
+	for i := 1; i < len(s.state.Robots)-1; i++ {
+		s.state.Robots[i].Status = RobotOffline
+	}
+	dock := &s.state.Stations[0]
+	robot := &s.state.Robots[0]
+	robot.Status, robot.Battery, robot.X, robot.Y = RobotCharging, cfg.ChargeRelease-1, dock.X, dock.Y
+	dock.OccupiedBy = robot.ID
+	s.state.Jobs = []JobState{{ID: "J24", From: Point{1, 2}, To: Point{19, 0}, Status: JobPending}}
+	s.Tick()
+	if s.state.Jobs[0].Status != JobPending || dock.OccupiedBy != robot.ID {
+		t.Fatal("dispatch preceded full charge or physical undocking")
+	}
+	s.Tick()
+	if job := s.state.Jobs[0]; job.AssignedRobot != robot.ID || job.Status != JobAssigned || dock.OccupiedBy != "" {
+		t.Fatalf("released dock did not serve the funded pending job: %+v, %+v, %+v", job, robot, dock)
+	}
+	for range 65 {
+		before := s.Snapshot()
+		s.Tick()
+		after := s.Snapshot()
+		assertInvariants(t, s, cfg)
+		assertV2TrafficStep(t, before, after)
+		if s.state.CompletedJobs == 1 {
+			return
+		}
+	}
+	t.Fatal("the dispatched job did not complete")
 }

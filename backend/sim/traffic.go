@@ -83,6 +83,27 @@ func (s *Sim) crossingBlocker(mover RobotState, route []Point) int {
 }
 
 func (s *Sim) exitClaim(mover RobotState, target Point) int {
+	for i, robot := range s.state.Robots {
+		turnout := s.recovery[robot.ID].turnout
+		if turnout == nil || !turnout.reserveMouthForPeer || turnout.mouth != target || s.state.Tick >= turnout.expires {
+			continue
+		}
+		if mover.ID == turnout.peer {
+			return -1
+		}
+		return i
+	}
+	for i, robot := range s.state.Robots {
+		turnout := s.recovery[robot.ID].turnout
+		if robot.Status == RobotMoving && turnout != nil && slices.ContainsFunc(turnout.route, func(point Point) bool {
+			return point == target || point.X == target.X && s.cfg.onAisle(point) && s.cfg.onAisle(target)
+		}) {
+			if mover.ID == robot.ID {
+				return -1
+			}
+			return i
+		}
+	}
 	owner := -1
 	for i, robot := range s.state.Robots {
 		if robot.Status != RobotMoving {

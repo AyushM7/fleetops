@@ -114,7 +114,7 @@ func (s *Sim) OperationsAssignments(jobs []JobState) []AssignmentOption {
 }
 
 func (s *Sim) previewAssignment(job JobState, robot RobotState, distance scheduler.Distance, params scheduler.Params) (AssignmentOption, error) {
-	if job.Status != JobPending || job.AssignedRobot != "" || !s.canAcceptJob(robot) ||
+	if job.Status != JobPending || job.Deferred || job.AssignedRobot != "" || !s.canAcceptJob(robot) ||
 		s.reservedStation(robot.ID) != nil || s.unresponsiveTicks[robot.ID] > 0 {
 		return AssignmentOption{}, ErrAssignmentConflict
 	}

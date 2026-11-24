@@ -53,6 +53,7 @@ func TestAssignJobBatchIsAtomicIntegration(t *testing.T) {
 	}{
 		{"unknown job", func(s *Sim) { s.state.Jobs[1].ID = "J3" }, ErrAssignmentConflict},
 		{"job already assigned", func(s *Sim) { s.state.Jobs[1].Status = JobAssigned }, ErrAssignmentConflict},
+		{"job deferred", func(s *Sim) { s.state.Jobs[1].Deferred = true }, ErrAssignmentConflict},
 		{"charger reserved", func(s *Sim) { s.state.Stations[0].ReservedBy = "R3" }, ErrAssignmentConflict},
 		{"faulted at pickup", func(s *Sim) {
 			r := &s.state.Robots[3]

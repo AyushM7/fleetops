@@ -52,8 +52,11 @@ func (s *Sim) rebalanceCharging() {
 			continue
 		}
 		left := s.faultRobot(a.ReservedBy)
-		if left == nil || left.Status != RobotMoving {
+		if left == nil || left.Status != RobotMoving || s.recovery[left.ID].turnout != nil {
 			continue
+		}
+		if s.letChargingBlockerPass(left, a) {
+			return
 		}
 		for j := i + 1; j < len(s.state.Stations); j++ {
 			b := &s.state.Stations[j]
@@ -61,7 +64,8 @@ func (s *Sim) rebalanceCharging() {
 				continue
 			}
 			right := s.faultRobot(b.ReservedBy)
-			if right == nil || right.Status != RobotMoving || max(left.WaitTicks, right.WaitTicks) < s.cfg.RecoverAfter {
+			if right == nil || right.Status != RobotMoving || s.recovery[right.ID].turnout != nil ||
+				max(left.WaitTicks, right.WaitTicks) < s.cfg.RecoverAfter {
 				continue
 			}
 			leftRoute, leftOK := s.chargingRoute(*left, *b)
@@ -78,6 +82,55 @@ func (s *Sim) rebalanceCharging() {
 			return
 		}
 	}
+}
+
+func (s *Sim) letChargingBlockerPass(owner *RobotState, station *StationState) bool {
+	nav := s.navigation[owner.ID]
+	if owner.Role != RoleTransport || owner.JobID != "" || owner.ActiveFault != "" || !s.needsCharge(*owner) || owner.WaitTicks < s.cfg.RecoverAfter ||
+		station.OccupiedBy != "" || nav.target != (Point{station.X, station.Y}) || len(nav.route) == 0 {
+		return false
+	}
+	index := s.robotIndexAt(nav.route[0])
+	if index < 0 {
+		return false
+	}
+	blocker := &s.state.Robots[index]
+	if blocker.Role != RoleTransport || blocker.JobID != "" || blocker.ActiveFault != "" || !s.needsCharge(*blocker) {
+		return false
+	}
+	var released *StationState
+	if blocker.Status == RobotMoving {
+		peerRoute := s.navigation[blocker.ID].route
+		released = s.reservedStation(blocker.ID)
+		if released == nil || s.recovery[blocker.ID].turnout != nil || len(peerRoute) == 0 || peerRoute[0] != (Point{owner.X, owner.Y}) {
+			return false
+		}
+		// Keep the ordinary two-way swap when both robots can still use it.
+		if _, canSwap := s.chargingRoute(*owner, *released); canSwap {
+			return false
+		}
+		if _, canContinue := s.chargingRoute(*blocker, *released); canContinue {
+			return false
+		}
+	} else if blocker.Status != RobotIdle {
+		return false
+	}
+	route, feasible := s.chargingRoute(*blocker, *station)
+	if !feasible {
+		return false
+	}
+	if _, reachable := s.chargingRoute(*owner, *station); reachable {
+		return false
+	}
+	// The blocker can clear the lane by docking while the original owner waits in standby.
+	owner.Status = RobotIdle
+	s.clearNavigation(owner)
+	if released != nil {
+		released.ReservedBy = ""
+		s.clearNavigation(blocker)
+	}
+	s.beginChargeTrip(blocker, station, route)
+	return true
 }
 
 func (s *Sim) needsCharge(robot RobotState) bool {
@@ -179,6 +232,28 @@ func (s *Sim) beginCharging(robot *RobotState, station *StationState) {
 	s.clearNavigation(robot)
 }
 
+func (s *Sim) chargeTripShouldYield(robot RobotState) bool {
+	route := s.navigation[robot.ID].route
+	if s.traffic == nil || len(route) < 2 || robot.Battery-(len(route)+2)*s.cfg.MovingDrain >= 1 {
+		return false
+	}
+	position := Point{robot.X, robot.Y}
+	for _, peer := range s.state.Robots {
+		if peer.Status != RobotMoving || peer.JobID == "" {
+			continue
+		}
+		nav := s.navigation[peer.ID]
+		entry := slices.Index(nav.route, route[0])
+		opposed := entry == 0 && (Point{peer.X, peer.Y}) == route[1] || entry > 0 && nav.route[entry-1] == route[1]
+		// Hold outside an opposing route only when neither trip can fund a two-step detour.
+		if opposed && !slices.Contains(nav.route, position) &&
+			nav.target == s.recoveryTarget(peer) && !s.routeAffordable(peer, nav.target, len(nav.route)+2) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Sim) stepChargeTrip(robot *RobotState) {
 	if !s.cfg.AutoCharge {
 		return
@@ -194,6 +269,10 @@ func (s *Sim) stepChargeTrip(robot *RobotState) {
 	}
 	if robot.Battery == 0 {
 		s.depleteBattery(robot)
+		return
+	}
+	if s.chargeTripShouldYield(*robot) {
+		s.waitForNavigation(robot, target)
 		return
 	}
 	if !s.advanceNavigation(robot, target) {
@@ -217,4 +296,17 @@ func (s *Sim) finishNavigation(robot *RobotState) {
 			}
 		}
 	}
+}
+
+func (s *Sim) restoreDockPower(robot *RobotState) {
+	if !s.cfg.AutoCharge || robot.ActiveFault != FaultCriticalBattery || robot.Status != RobotFaulted || robot.JobID != "" {
+		return
+	}
+	station := s.occupiedStation(robot.ID)
+	if station == nil || (Point{robot.X, robot.Y}) != (Point{station.X, station.Y}) {
+		return
+	}
+	// The occupied dock supplies external power while the robot stays still.
+	s.beginCharging(robot, station)
+	robot.ActiveFault = ""
 }

@@ -183,3 +183,25 @@ func TestSnapshotJSONDeterminism(t *testing.T) {
 		t.Fatalf("snapshot jobs must retain numeric order through J20: %s", data)
 	}
 }
+
+func TestDeferredJobRetainsRankAndReturnsAfterEnergyChanges(t *testing.T) {
+	cfg := WarehouseV2Config()
+	cfg.InitialJobs, cfg.MaxJobs = 0, 1
+	s := newTestSim(t, cfg, 42)
+	s.state.Jobs = []JobState{{ID: "J1", From: Point{0, 0}, To: Point{19, 11}, Type: JobPriority, CreatedTick: 1, DeadlineTick: 45, Status: JobPending}}
+	s.jobSequence = 1
+	original := s.state.Jobs[0]
+	s.cfg.MovingDrain = 100
+	s.addJob()
+	if len(s.state.Jobs) != 2 || !s.state.Jobs[0].Deferred || s.state.Jobs[1].ID != "J2" {
+		t.Fatal(s.state.Jobs)
+	}
+	if active, _ := countJobs(s.state.Jobs); active != 1 {
+		t.Fatal(active)
+	}
+	s.state.Jobs[1].Status = JobDone
+	s.cfg.MovingDrain = 1
+	if active := s.reconsiderDeferredJobs(0); active != 1 || s.state.Jobs[0] != original {
+		t.Fatal(active, s.state.Jobs)
+	}
+}

@@ -192,3 +192,39 @@ func TestRunWriterFailure(t *testing.T) {
 		}
 	}
 }
+
+func TestRunWarehouseChargeTarget(t *testing.T) {
+	const ticks = 1000
+	var defaultOutput, fullOutput, stderr bytes.Buffer
+	args := []string{"-layout", "warehouse-v2", "-ticks", fmt.Sprint(ticks)}
+	if code := run(args, &defaultOutput, &stderr); code != 0 {
+		t.Fatalf("default target: %d %s", code, &stderr)
+	}
+	if code := run(append(args, "-charge-target", "100"), &fullOutput, &stderr); code != 0 {
+		t.Fatalf("100%% target: %d %s", code, &stderr)
+	}
+	cfg := sim.WarehouseV2Config()
+	cfg.ChargeRelease = 100
+	expected, err := sim.New(cfg, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range ticks {
+		expected.Tick()
+	}
+	want, err := json.MarshalIndent(expected.Snapshot(), "", "  ")
+	if err != nil || !bytes.Equal(fullOutput.Bytes(), append(want, '\n')) || bytes.Equal(defaultOutput.Bytes(), fullOutput.Bytes()) {
+		t.Fatal("charge target did not produce the requested warehouse snapshot")
+	}
+	for _, invalid := range [][]string{
+		{"-layout", "warehouse-v2", "-charge-target", "0"},
+		{"-layout", "warehouse-v2", "-charge-target", "101"},
+		{"-layout", "warehouse-v2", "-charge-target", fmt.Sprint(cfg.ChargeBelow)},
+		{"-layout", "warehouse", "-charge-target", "100"},
+	} {
+		var stdout, stderr bytes.Buffer
+		if code := run(invalid, &stdout, &stderr); code == 0 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "charge") && !strings.Contains(stderr.String(), "Charge") {
+			t.Fatalf("invalid target %q: exit %d, stderr %q", invalid, code, &stderr)
+		}
+	}
+}

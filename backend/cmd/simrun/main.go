@@ -23,6 +23,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	ticks := flags.Int("ticks", 200, "number of ticks (0–100000)")
 	layout := flags.String("layout", "default", "layout (default|warehouse|warehouse-v2)")
 	repairTicks := flags.Int("repair-ticks", 0, "repair duration in ticks (0 disables V2 maintenance, omit for layout default)")
+	chargeTarget := flags.Int("charge-target", 0, "warehouse-v2 charging target percent (omit for layout default)")
 	var breakdowns []sim.ScheduledBreakdown
 	flags.Func("breakdown", "schedule a V2 breakdown as TICK:ROBOT:TYPE (repeat in tick order)", func(value string) error {
 		fields := strings.Split(value, ":")
@@ -59,11 +60,22 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	cfg.ScheduledBreakdowns = breakdowns
+	var chargeTargetSet bool
 	flags.Visit(func(f *flag.Flag) {
-		if f.Name == "repair-ticks" {
+		switch f.Name {
+		case "repair-ticks":
 			cfg.MaintenanceRepairTicks = *repairTicks
+		case "charge-target":
+			chargeTargetSet = true
 		}
 	})
+	if chargeTargetSet {
+		if *layout != "warehouse-v2" {
+			fmt.Fprintln(stderr, "simrun: charge-target requires warehouse-v2")
+			return 2
+		}
+		cfg.ChargeRelease = *chargeTarget
+	}
 	s, err := sim.New(cfg, *seed)
 	if err != nil {
 		fmt.Fprintf(stderr, "simrun: create simulator: %v\n", err)

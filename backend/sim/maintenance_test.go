@@ -462,32 +462,48 @@ func TestMaintenanceWaitsForTrafficWithinTheSameAttempt(t *testing.T) {
 	}
 }
 
-func TestMaintenanceVerificationDoesNotCompleteIfM1BreaksOnThatTick(t *testing.T) {
-	cfg := WarehouseV2Config()
-	cfg.ScheduledBreakdowns = []ScheduledBreakdown{
-		{Tick: 48, RobotID: "R4", Type: FaultSensorFailure},
-		{Tick: 108, RobotID: MaintenanceRobotID, Type: FaultMotorFailure},
-	}
-	s := newTestSim(t, cfg, 42)
-	for range 107 {
-		s.Tick()
-	}
-	if work := s.maintenance; work.Phase != MaintenanceVerifying || work.Active == nil ||
-		work.Active.RepairTicks != cfg.MaintenanceRepairTicks {
-		t.Fatalf("expected M1 to be verifying just before its breakdown: %+v", work)
-	}
-	for range 15 {
-		s.Tick()
-		assertInvariants(t, s, cfg)
-	}
-	state := s.Snapshot()
-	history := state.Maintenance.History
-	r4, m1, job := state.Robots[3], state.Robots[10], jobByID(t, state, "J4")
-	if len(history) != 1 || history[0].Outcome != MaintenanceFailed || history[0].FinishedTick != 108 ||
-		state.Maintenance.Active != nil || state.Maintenance.Phase != MaintenanceUnavailable ||
-		m1.ActiveFault != FaultMotorFailure || r4.ActiveFault != FaultSensorFailure ||
-		(Point{r4.X, r4.Y}) != (Point{9, 9}) || job.Status != JobInProgress || job.CargoRobotID != "R4" {
-		t.Fatalf("failed M1 cleared R4 or changed its cargo: %+v, %+v, %+v, %+v", state.Maintenance, m1, r4, job)
+func TestMaintenanceFailureDuringTravelOrVerification(t *testing.T) {
+	for _, tc := range []struct {
+		phase                    MaintenancePhase
+		failureTick, repairTicks int
+	}{
+		{MaintenanceTraveling, 72, 0},
+		{MaintenanceVerifying, 108, 3},
+	} {
+		t.Run(string(tc.phase), func(t *testing.T) {
+			cfg := WarehouseV2Config()
+			cfg.ScheduledBreakdowns = []ScheduledBreakdown{
+				{Tick: 48, RobotID: "R4", Type: FaultSensorFailure},
+				{Tick: tc.failureTick, RobotID: MaintenanceRobotID, Type: FaultMotorFailure},
+			}
+			s := newTestSim(t, cfg, 42)
+			for range tc.failureTick - 1 {
+				s.Tick()
+			}
+			if work := s.maintenance; work.Phase != tc.phase || work.Active == nil || work.Active.RepairTicks != tc.repairTicks {
+				t.Fatalf("unexpected attempt just before the M1 breakdown: %+v", work)
+			}
+			s.Tick()
+			stopped := *s.faultRobot(MaintenanceRobotID)
+			for range 15 {
+				s.Tick()
+				assertInvariants(t, s, cfg)
+				if *s.faultRobot(MaintenanceRobotID) != stopped {
+					t.Fatalf("tick %d changed immobilized M1: %+v", s.state.Tick, s.faultRobot(MaintenanceRobotID))
+				}
+			}
+			state := s.Snapshot()
+			history := state.Maintenance.History
+			r4, job := state.Robots[3], jobByID(t, state, "J4")
+			if len(history) != 1 || history[0].Outcome != MaintenanceFailed || history[0].FinishedTick != tc.failureTick ||
+				history[0].RepairTicks != tc.repairTicks || history[0].JobID != "J4" ||
+				state.Maintenance.Active != nil || state.Maintenance.Phase != MaintenanceUnavailable ||
+				stopped.ActiveFault != FaultMotorFailure || r4.ActiveFault != FaultSensorFailure ||
+				(Point{r4.X, r4.Y}) != (Point{9, 9}) || state.Aisles[1].OccupiedBy != "R4" ||
+				r4.Battery != 64 || job.Status != JobInProgress || job.CargoRobotID != "R4" {
+				t.Fatalf("M1 breakdown changed the interrupted delivery: %+v, %+v, %+v, %+v", state.Maintenance, stopped, r4, job)
+			}
+		})
 	}
 }
 
@@ -539,5 +555,68 @@ func TestMaintenanceLeavesFaultOpenWhenDeliveryRecoveryCannotBeVerified(t *testi
 	if job, robot := state.Jobs[0], state.Robots[0]; job.Status != JobInProgress || job.CargoRobotID != "R1" ||
 		robot.ActiveFault != FaultSensorFailure || robot.X != 9 || robot.Y != 9 || robot.Battery != 2 {
 		t.Fatalf("unverified recovery mutated cargo ownership or robot: %+v, %+v", job, robot)
+	}
+}
+
+func TestCriticalBatteryRecoveryRequiresPhysicalDockContact(t *testing.T) {
+	for _, tc := range []struct {
+		name                  string
+		connected, autoCharge bool
+	}{
+		{"live occupied dock", true, true},
+		{"beside dock", false, true},
+		{"charging disabled", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := maintenanceTestConfig()
+			cfg.AutoCharge, cfg.Recovery = tc.autoCharge, tc.autoCharge
+			cfg.InitialJobs, cfg.AutoDispatch = 0, false
+			s := newTestSim(t, cfg, 42)
+			r := s.faultRobot("R1")
+			dock := &s.state.Stations[3]
+			r.X, r.Y = dock.X, dock.Y
+			if tc.connected {
+				s.beginCharging(r, dock)
+			} else {
+				r.Y++
+			}
+			before := Point{r.X, r.Y}
+			requireInjection(t, s.injectBreakdown(r.ID, FaultCriticalBattery))
+			if r.Status != RobotFaulted || r.Battery != 0 {
+				t.Fatal("injection must remain visible before a charging tick")
+			}
+			s.Tick()
+			r = s.faultRobot("R1")
+			if (Point{r.X, r.Y}) != before {
+				t.Fatal("dock recovery moved a stopped robot")
+			}
+			if !tc.connected || !tc.autoCharge {
+				if r.Battery != 0 || r.ActiveFault != FaultCriticalBattery {
+					t.Fatal("robot acquired power without an active dock")
+				}
+				return
+			}
+			if r.Battery != 0 || r.Status != RobotCharging || r.ActiveFault != "" || dock.OccupiedBy != r.ID {
+				t.Fatalf("expected normal dock charge and retained occupancy: %+v", *r)
+			}
+			s.Tick()
+			if r.Battery != cfg.ChargeGain || (Point{r.X, r.Y}) != before {
+				t.Fatal("charging gain must wait until after contact confirmation")
+			}
+			for range cfg.ChargeRelease + cfg.Width {
+				s.Tick()
+				assertInvariants(t, s, cfg)
+				r = s.faultRobot("R1")
+				if (Point{r.X, r.Y}) != before {
+					if dock.OccupiedBy != "" {
+						t.Fatal("vacated charger was not released")
+					}
+					break
+				}
+			}
+			if (Point{r.X, r.Y}) == before || len(s.state.Faults) != 1 {
+				t.Fatal("expected physical undocking and a preserved incident")
+			}
+		})
 	}
 }

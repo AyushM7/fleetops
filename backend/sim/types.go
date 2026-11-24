@@ -107,6 +107,7 @@ type RobotState struct {
 }
 
 type JobState struct {
+	Deferred      bool      `json:"deferred,omitempty"`
 	ID            string    `json:"id"`
 	From          Point     `json:"from"`
 	To            Point     `json:"to"`

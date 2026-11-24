@@ -14,6 +14,7 @@ func (s *Sim) clearNavigation(robot *RobotState) {
 	delete(s.navigation, robot.ID)
 	if recovery, ok := s.recovery[robot.ID]; ok {
 		recovery.hold, recovery.resume = 0, false
+		recovery.turnout = nil
 		s.recovery[robot.ID] = recovery
 	}
 }
