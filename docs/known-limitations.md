@@ -35,3 +35,10 @@ Simulator commands and database commits cannot be atomically rolled back togethe
 - Saved model evidence lacks an exact historical run timestamp/source revision, immutable model version and provider usage receipt. Exact API cost is unconfirmed; configured estimates are not charges. Saved reports must be labelled recorded evidence rather than live results.
 
 See the [inventory verification record](demo-inventory.md#10-tests-ci-and-inspection-verification) and [Phase 5 provenance](phase5-evaluation-report.md#cost-and-evidence-provenance). No paid calls are required to inspect or replay saved evidence.
+
+## V2 Phase 4 maintenance
+
+- A fault occurrence allows one admitted repair attempt. Temporary route obstruction can be handled within its bounded travel window. An exhausted attempt stays terminal even if the route opens later. An unreachable site, depleted target, or faulted M1 can leave the original robot and cargo immobilized until external assistance.
+- The seed-2 healthy head-on cycle now clears through a bounded, energy-checked reserved route to a side refuge. If no refuge is free or funded, the simulator keeps its occupancy and battery checks and can still report a blocked route. This verification covers the recorded seeds and does not establish general traffic liveness under every fault schedule.
+- Native Windows visitor archival still fails closed when it cannot flush the archive directory or verify private-directory permissions. It retains the schema for reconciliation. The accepted simulator goldens keep their original bytes and now use LF checkouts on Windows and Linux.
+- Deterministic simulator and Chromium evidence covers the maintenance lifecycle and UI. The historical V2 decision audit records 19 accepted cases, four grounding rejections and one pipeline block. Recovery V3 is opt-in through the normal Operations Manager, with separate operator approval and PostgreSQL request accounting. Production deployment, live billing reconciliation and broader browser testing remain outside the recorded verification. [V2 Phase 4 acceptance report](v2-phase4-acceptance.md)

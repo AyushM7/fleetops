@@ -51,6 +51,8 @@ services:
       GOMEMLIMIT: 384MiB
       GOMAXPROCS: "2"
       FLEETOPS_MODE: production
+      FLEETOPS_START_WAREHOUSE_V2: "1"
+      FLEETOPS_WAREHOUSE_CHARGE_TARGET: "85"
       FLEETOPS_PUBLIC_ORIGIN: https://${FLEETOPS_HOST:?set approved DNS hostname}
       FLEETOPS_TRUSTED_PROXIES: 172.30.83.2/32,127.0.0.1/32
       FLEETOPS_DATABASE_URL: postgres://fleetops_owner:${FLEETOPS_DB_PASSWORD:?}@postgres:5432/fleetops?sslmode=disable
