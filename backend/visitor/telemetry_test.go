@@ -11,7 +11,82 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/AyushM7/fleetops/backend/sim"
 )
+
+func TestWarehouseBreakdownTelemetry(t *testing.T) {
+	cfg := sim.WarehouseV2Config()
+	cfg.ScheduledBreakdowns = []sim.ScheduledBreakdown{{Tick: 1, RobotID: "R1", Type: sim.FaultMotorFailure}}
+	world, err := sim.New(cfg, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := &demoRun{scenarioID: warehouseScenario, warehouse: world.Snapshot}
+	c := &demoController{run: run, ready: true}
+	c.ensureWarehouseSnapshot()
+	for range 2 {
+		world.Tick()
+		c.publishWarehouse("tick")
+	}
+	for i, event := range run.events.frames {
+		var frame warehouseFrame
+		if err := json.Unmarshal(event.data, &frame); err != nil {
+			t.Fatal(err)
+		}
+		r := frame.Snapshot.Robots[0]
+		if i == 0 {
+			if r.ActiveFault != "" || len(frame.Snapshot.Faults) != 0 {
+				t.Fatal("pre-fault frame reported a breakdown")
+			}
+			continue
+		}
+		if r.ID != "R1" || r.Status != sim.RobotFaulted || r.ActiveFault != sim.FaultMotorFailure ||
+			len(frame.Snapshot.Faults) != 1 || frame.Snapshot.Faults[0].Tick != 1 {
+			t.Fatalf("frame %d dropped or rewrote fault telemetry: robot=%+v history=%+v", i, r, frame.Snapshot.Faults)
+		}
+	}
+}
+
+func TestWarehouseMaintenanceTelemetryUsesObservedSimulatorProgress(t *testing.T) {
+	cfg := sim.WarehouseV2Config()
+	cfg.ScheduledBreakdowns = []sim.ScheduledBreakdown{{Tick: 48, RobotID: "R4", Type: sim.FaultSensorFailure}}
+	world, err := sim.New(cfg, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := &demoRun{scenarioID: warehouseScenario, warehouse: world.Snapshot}
+	c := &demoController{run: run, ready: true}
+	observed := make(map[sim.MaintenancePhase]bool)
+	for range 150 {
+		world.Tick()
+		state := world.Snapshot()
+		if state.Maintenance == nil || observed[state.Maintenance.Phase] {
+			continue
+		}
+		c.publishWarehouse("tick")
+		var frame warehouseFrame
+		if err := json.Unmarshal(run.events.frames[len(run.events.frames)-1].data, &frame); err != nil {
+			t.Fatal(err)
+		}
+		maintenance := frame.Snapshot.Maintenance
+		if maintenance == nil || maintenance.Phase != state.Maintenance.Phase || frame.Tick != state.Tick {
+			t.Fatalf("telemetry lost observed maintenance: %+v", frame)
+		}
+		observed[maintenance.Phase] = true
+		if maintenance.Phase == sim.MaintenanceRepairing && (maintenance.Active == nil ||
+			frame.Snapshot.Robots[10].Status != sim.RobotServicing || frame.Snapshot.Robots[3].ActiveFault == "") {
+			t.Fatalf("repair frame reported recovery prematurely: %+v", maintenance)
+		}
+		if maintenance.Phase == sim.MaintenanceReturning && (len(maintenance.History) != 1 ||
+			maintenance.History[0].Outcome != sim.MaintenanceCompleted || frame.Snapshot.Robots[3].ActiveFault != "") {
+			t.Fatalf("returning frame lost actual repair outcome: %+v", maintenance)
+		}
+	}
+	if !observed[sim.MaintenanceRepairing] || !observed[sim.MaintenanceReturning] {
+		t.Fatalf("missing maintenance phases in telemetry: %+v", observed)
+	}
+}
 
 type blockedWarehouseWriter struct {
 	*httptest.ResponseRecorder
@@ -62,6 +137,9 @@ func TestWarehouseEventReplayAndSnapshotReconciliation(t *testing.T) {
 		}
 		if frame.RuntimeID != run.runtimeID || frame.Generation != run.generation || frame.EventID != latest || frame.Tick != frame.Snapshot.Tick || frame.Tick != int(latest-1) || len(frame.Snapshot.Robots) != 11 {
 			t.Fatalf("inconsistent event metadata: %+v", frame)
+		}
+		if maintenance := frame.Snapshot.Robots[10]; maintenance.ID != "M1" || !maintenance.Maintenance || maintenance.JobID != "" {
+			t.Fatalf("snapshot event lost M1's canonical identity: %+v", maintenance)
 		}
 	}
 	batch, changed := c.warehouseEventBatch(run, latest-2)
@@ -176,7 +254,7 @@ func TestWarehouseEventStreamIntegration(t *testing.T) {
 	}
 	session := g.manager.lookup(b.Value)
 	session.mu.Lock()
-	session.deadline = time.Now().Add(-time.Second)
+	session.deadline.Store(new(time.Now().Add(-time.Second)))
 	session.mu.Unlock()
 	for otherReader.Scan() {
 		if strings.HasPrefix(otherReader.Text(), "id: ") {
@@ -247,7 +325,7 @@ func TestWarehouseStreamBackpressureAndExpiryIntegration(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	session.deadline = time.Now().Add(-time.Second)
+	session.deadline.Store(new(time.Now().Add(-time.Second)))
 	session.mu.Unlock()
 	for {
 		g.manager.mu.Lock()

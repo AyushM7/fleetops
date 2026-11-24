@@ -122,8 +122,9 @@ otherwise provider defaults apply. Other sampling parameters are not overridden.
 
 There is no bundled current pricing table or real price estimate. Live mode
 fails closed without a separately reviewed JSON file supplied through
-`--cost-review PATH`, its exact SHA256 through `--approve-cost-sha256 HASH`, and
-an explicit positive `--budget-usd NUMBER`. The review must contain:
+`--cost-review PATH` and its exact SHA256 through `--approve-cost-sha256 HASH`.
+There is no default dollar ceiling. An operator can supply an explicit
+`--budget-usd NUMBER` for a particular run. The review must contain:
 
 | Field | Review requirement |
 | --- | --- |
@@ -146,7 +147,8 @@ pricing, model aliases or billing behavior; expiry is an additional check.
 Before any generation, the runner checks
 `N = scenarios * trials <= maxRequests` and prints the reviewed upper estimate
 `N * (maxBillableInputTokens * inputRate + maxOutputTokens * outputRate) / 1e6`.
-It refuses execution if the estimate exceeds the budget. The full provider input
+If the operator supplies a dollar ceiling, the runner compares the estimate
+against it before executing. The full provider input
 ceiling deliberately overestimates input rather than guessing tokenization.
 `--max-output-tokens` defaults to 2400; `--max-requests` defaults to 12. All limits
 must be positive safe integers. A failed call still consumes its scheduled trial;

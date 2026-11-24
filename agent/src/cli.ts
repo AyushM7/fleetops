@@ -7,7 +7,10 @@ async function main(): Promise<void> {
   const config = readConfig(process.env, process.argv.slice(2));
   const api = createFleetClient(config.endpoint, config.token);
   if (config.live) console.error(`Live model mode sends fleet data to the configured provider and may incur charges (${config.decisionObjective ? "up to six requests, eight read tools, 30 seconds, 6000 output tokens per request, 12000 aggregate output tokens and 44000 aggregate total tokens" : "one model step, up to 2400 output tokens"}).`);
-  const result = config.decisionObjective
+  const result = config.recoveryReviewObservationId
+    ? await (await import("./operations-manager.js")).reviewOperationsRecovery(api, { observationId: config.recoveryReviewObservationId },
+      { enabled: true, model: config.model!, objective: config.decisionObjective! })
+    : config.decisionObjective
     ? await runRecoveryDecision(api, { enabled: true, model: config.model!, objective: config.decisionObjective, allowSubmit: config.allowSubmit })
     : config.live
     ? await runLive(api, { enabled: true, model: config.model!, allowSubmit: config.allowSubmit, demo: config.demo })

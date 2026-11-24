@@ -131,6 +131,7 @@ func TestSeverityChangesKeepEpisodeIdentity(t *testing.T) {
 
 func TestNumericOrderingAndIndependentConditions(t *testing.T) {
 	state := sim.State{Robots: []sim.RobotState{
+		{ID: "M1", Status: sim.RobotOffline, Battery: 100, Role: sim.RoleMaintenance},
 		{ID: "R10", Status: sim.RobotOffline, Battery: 14, JobID: "J10", Blocked: true, WaitTicks: 41},
 		{ID: "R2", Status: sim.RobotOffline, Battery: 29, JobID: "J2", Blocked: true, WaitTicks: 40},
 		{ID: "R1", Status: sim.RobotOffline, Battery: 100},
@@ -144,8 +145,9 @@ func TestNumericOrderingAndIndependentConditions(t *testing.T) {
 		{ID: "I5", RobotID: "R10", Type: incident.LowBattery, Status: incident.Open, Severity: incident.High},
 		{ID: "I6", RobotID: "R10", Type: incident.RobotUnresponsive, Status: incident.Open, Severity: incident.High},
 		{ID: "I7", RobotID: "R10", Type: incident.TrafficBlocked, Status: incident.Open, Severity: incident.High},
+		{ID: "I8", RobotID: "M1", Type: incident.RobotUnresponsive, Status: incident.Open, Severity: incident.High},
 	}
-	if !reflect.DeepEqual(got, want) || counter != 7 {
+	if !reflect.DeepEqual(got, want) || counter != 8 {
 		t.Fatalf("ordered incidents = %+v, counter = %d", got, counter)
 	}
 	for range 20 {
@@ -155,6 +157,106 @@ func TestNumericOrderingAndIndependentConditions(t *testing.T) {
 			t.Fatal("input robot order changed IDs or output")
 		}
 	}
+}
+
+func TestMaintenanceIncidentHistoryKeepsRecordedRobotIDs(t *testing.T) {
+	legacy := incident.Incident{ID: "I1", RobotID: "R11", Type: incident.RobotUnresponsive, Status: incident.Open, Severity: incident.High}
+	state := sim.State{Robots: []sim.RobotState{{ID: "M1", Status: sim.RobotOffline, Role: sim.RoleMaintenance}}}
+	got, counter := reconcile(t, []incident.Incident{legacy}, state, 1)
+	legacy.Status = incident.Resolved
+	current := incident.Incident{ID: "I2", RobotID: "M1", Type: incident.RobotUnresponsive, Status: incident.Open, Severity: incident.High}
+	if counter != 2 || !reflect.DeepEqual(got, []incident.Incident{legacy, current}) {
+		t.Fatalf("maintenance history = %+v, counter = %d", got, counter)
+	}
+	again, next := reconcile(t, got, state, counter)
+	if next != counter || !reflect.DeepEqual(again, got) {
+		t.Fatalf("repeat reconciliation altered history: %+v, counter = %d", again, next)
+	}
+}
+
+func TestReconcileWarehouseV2BreakdownsAcrossOfflineTransition(t *testing.T) {
+	cfg := sim.WarehouseV2Config()
+	cfg.InitialJobs = 0
+	cfg.ScheduledBreakdowns = []sim.ScheduledBreakdown{
+		{RobotID: "R3", Type: sim.FaultRobotUnresponsive},
+		{RobotID: "R2", Type: sim.FaultSensorFailure},
+		{RobotID: "R1", Type: sim.FaultMotorFailure},
+		{RobotID: "M1", Type: sim.FaultCriticalBattery},
+	}
+	world, err := sim.New(cfg, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := world.Snapshot()
+	want := []incident.Incident{
+		{ID: "I1", RobotID: "R1", Type: incident.MotorFailure, Status: incident.Open, Severity: incident.High},
+		{ID: "I2", RobotID: "R2", Type: incident.SensorFailure, Status: incident.Open, Severity: incident.High},
+		{ID: "I3", RobotID: "R3", Type: incident.RobotUnresponsive, Status: incident.Open, Severity: incident.High},
+		{ID: "I4", RobotID: "M1", Type: incident.CriticalBattery, Status: incident.Open, Severity: incident.High},
+	}
+	got, counter := reconcile(t, nil, snapshot, 0)
+	if !reflect.DeepEqual(got, want) || counter != 4 || snapshot.Robots[2].Status != sim.RobotFaulted {
+		t.Fatalf("initial episodes = %+v, counter=%d, R3=%+v", got, counter, snapshot.Robots[2])
+	}
+	for i := 0; i < cfg.UnresponsiveDelay+2; i++ {
+		world.Tick()
+		state := world.Snapshot()
+		got, counter = reconcile(t, got, state, counter)
+		if !reflect.DeepEqual(got, want) || counter != 4 || !reflect.DeepEqual(state.Faults, snapshot.Faults) {
+			t.Fatalf("tick=%d episodes=%+v faults=%+v counter=%d", state.Tick, got, state.Faults, counter)
+		}
+	}
+	if state := world.Snapshot(); state.Robots[2].Status != sim.RobotOffline {
+		t.Fatal(state.Robots[2])
+	}
+
+	historyOnly := snapshot
+	historyOnly.Robots = nil
+	if got, next := reconcile(t, nil, historyOnly, 0); len(got) != 0 || next != 0 {
+		t.Fatalf("immutable occurrence history generated an active incident: %+v", got)
+	}
+}
+
+func TestWarehouseMaintenanceResolvesTheOriginalEpisodeAfterVerification(t *testing.T) {
+	cfg := sim.WarehouseV2Config()
+	cfg.ScheduledBreakdowns = []sim.ScheduledBreakdown{{Tick: 48, RobotID: "R4", Type: sim.FaultSensorFailure}}
+	world, err := sim.New(cfg, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var episodes []incident.Incident
+	var counter uint64
+	var episodeID string
+	for range 200 {
+		world.Tick()
+		state := world.Snapshot()
+		episodes, counter = reconcile(t, episodes, state, counter)
+		if state.Tick < 48 {
+			continue
+		}
+		index := slices.IndexFunc(episodes, func(i incident.Incident) bool {
+			return i.RobotID == "R4" && i.Type == incident.SensorFailure
+		})
+		if index < 0 {
+			t.Fatal("lost the R4 episode")
+		}
+		current := episodes[index]
+		if episodeID == "" {
+			episodeID = current.ID
+		}
+		if current.ID != episodeID || len(state.Faults) != 1 || state.Faults[0].Tick != 48 {
+			t.Fatalf("episode or source occurrence changed: %+v, %+v", current, state.Faults)
+		}
+		if current.Status == incident.Resolved {
+			if state.Maintenance == nil || len(state.Maintenance.History) != 1 ||
+				state.Maintenance.History[0].Outcome != sim.MaintenanceCompleted ||
+				state.Maintenance.History[0].FinishedTick != state.Tick || state.Robots[3].ActiveFault != "" {
+				t.Fatalf("episode resolved without verified recovery: %+v", state.Maintenance)
+			}
+			return
+		}
+	}
+	t.Fatal("verified repair did not resolve the active incident")
 }
 
 func TestFaultHistoryDoesNotInventActiveConditions(t *testing.T) {
@@ -177,6 +279,57 @@ func TestFaultHistoryDoesNotInventActiveConditions(t *testing.T) {
 	got, _ = reconcile(t, got, state, counter)
 	if got[0].Status != incident.Resolved {
 		t.Fatal("historical fault kept a cleared condition open")
+	}
+}
+
+func TestWarehouseTerminalAttemptsKeepInterruptedIncidentOpen(t *testing.T) {
+	for _, tc := range []struct {
+		outcome sim.MaintenanceOutcome
+		other   sim.ScheduledBreakdown
+		end     int
+	}{
+		{sim.MaintenanceFailed, sim.ScheduledBreakdown{Tick: 106, RobotID: "M1", Type: sim.FaultMotorFailure}, 139},
+		{sim.MaintenanceUnresolved, sim.ScheduledBreakdown{Tick: 48, RobotID: "R1", Type: sim.FaultMotorFailure}, 240},
+	} {
+		t.Run(string(tc.outcome), func(t *testing.T) {
+			cfg := sim.WarehouseV2Config()
+			cfg.ScheduledBreakdowns = []sim.ScheduledBreakdown{{Tick: 48, RobotID: "R4", Type: sim.FaultSensorFailure}, tc.other}
+			if tc.other.Tick == 48 {
+				cfg.ScheduledBreakdowns[0], cfg.ScheduledBreakdowns[1] = cfg.ScheduledBreakdowns[1], cfg.ScheduledBreakdowns[0]
+			}
+			world, err := sim.New(cfg, 42)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var episodes []incident.Incident
+			var counter uint64
+			var id string
+			for range tc.end {
+				world.Tick()
+				state := world.Snapshot()
+				episodes, counter = reconcile(t, episodes, state, counter)
+				if state.Tick < 48 {
+					continue
+				}
+				index := slices.IndexFunc(episodes, func(i incident.Incident) bool {
+					return i.RobotID == "R4" && i.Type == incident.SensorFailure
+				})
+				if index < 0 || episodes[index].Status != incident.Open || id != "" && episodes[index].ID != id {
+					t.Fatalf("tick %d lost or resolved the original incident: %+v", state.Tick, episodes)
+				}
+				id = episodes[index].ID
+			}
+			state := world.Snapshot()
+			r4 := state.Robots[3]
+			job := slices.IndexFunc(state.Jobs, func(j sim.JobState) bool { return j.ID == "J4" })
+			if state.Maintenance == nil || !slices.ContainsFunc(state.Maintenance.History, func(a sim.MaintenanceAttempt) bool {
+				return a.RobotID == "R4" && a.JobID == "J4" && a.Outcome == tc.outcome
+			}) || r4.X != 9 || r4.Y != 9 || r4.Battery != 64 || r4.ActiveFault != sim.FaultSensorFailure ||
+				state.Aisles[1].OccupiedBy != "R4" || job < 0 || state.Jobs[job].CargoRobotID != "R4" ||
+				state.Jobs[job].Status != sim.JobInProgress {
+				t.Fatalf("terminal attempt changed the interrupted delivery: robot %+v, maintenance %+v", r4, state.Maintenance)
+			}
+		})
 	}
 }
 
@@ -204,6 +357,7 @@ func TestInvalidInputsAndCounterExhaustion(t *testing.T) {
 		{name: "duplicate robots", state: sim.State{Robots: []sim.RobotState{{ID: "R1"}, {ID: "R1"}}}, want: incident.ErrInvalidSnapshot},
 		{name: "non-numeric robot", state: sim.State{Robots: []sim.RobotState{{ID: "robot"}}}, want: incident.ErrInvalidSnapshot},
 		{name: "noncanonical robot", state: sim.State{Robots: []sim.RobotState{{ID: "R01"}}}, want: incident.ErrInvalidSnapshot},
+		{name: "unknown maintenance ID", state: sim.State{Robots: []sim.RobotState{{ID: "M2"}}}, want: incident.ErrInvalidSnapshot},
 		{name: "duplicate incident IDs", previous: []incident.Incident{valid, valid}, counter: 1, want: incident.ErrInvalidHistory},
 		{name: "duplicate open keys", previous: []incident.Incident{valid, {ID: "I2", RobotID: "R1", Type: incident.LowBattery, Status: incident.Open, Severity: incident.High}}, counter: 2, want: incident.ErrInvalidHistory},
 		{name: "unknown history type", previous: []incident.Incident{{ID: "I1", RobotID: "R1", Type: "aisle_conflict", Status: incident.Open, Severity: incident.High}}, counter: 1, want: incident.ErrInvalidHistory},

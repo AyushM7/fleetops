@@ -20,11 +20,12 @@ const (
 type RobotStatus string
 
 const (
-	RobotIdle     RobotStatus = "idle"
-	RobotMoving   RobotStatus = "moving"
-	RobotCharging RobotStatus = "charging"
-	RobotFaulted  RobotStatus = "faulted"
-	RobotOffline  RobotStatus = "offline"
+	RobotIdle      RobotStatus = "idle"
+	RobotMoving    RobotStatus = "moving"
+	RobotCharging  RobotStatus = "charging"
+	RobotFaulted   RobotStatus = "faulted"
+	RobotOffline   RobotStatus = "offline"
+	RobotServicing RobotStatus = "servicing"
 )
 
 type RobotRole string
@@ -50,6 +51,9 @@ const (
 	ActivityParked            RobotActivity = "PARKED"
 	ActivityFaulted           RobotActivity = "FAULTED"
 	ActivityOutOfService      RobotActivity = "OUT_OF_SERVICE"
+	ActivityGoingToRepair     RobotActivity = "GOING_TO_REPAIR"
+	ActivityAtRepairSite      RobotActivity = "AT_REPAIR_SITE"
+	ActivityRepairing         RobotActivity = "REPAIRING"
 )
 
 type JobStatus string
@@ -82,6 +86,9 @@ const (
 	FaultLowBattery        FaultType = "low_battery"
 	FaultRobotUnresponsive FaultType = "robot_unresponsive"
 	FaultAisleConflict     FaultType = "aisle_conflict"
+	FaultMotorFailure      FaultType = "motor_failure"
+	FaultSensorFailure     FaultType = "sensor_failure"
+	FaultCriticalBattery   FaultType = "critical_battery"
 )
 
 type RobotState struct {
@@ -96,9 +103,11 @@ type RobotState struct {
 	Maintenance bool          `json:"maintenance,omitempty"`
 	Role        RobotRole     `json:"role,omitempty"`
 	Activity    RobotActivity `json:"activity,omitempty"`
+	ActiveFault FaultType     `json:"activeFault,omitempty"`
 }
 
 type JobState struct {
+	Deferred      bool      `json:"deferred,omitempty"`
 	ID            string    `json:"id"`
 	From          Point     `json:"from"`
 	To            Point     `json:"to"`
@@ -143,6 +152,7 @@ type TrafficDeadlock struct {
 }
 
 type State struct {
+	Maintenance      *MaintenanceState `json:"maintenance,omitempty"`
 	TrafficDeadlocks []TrafficDeadlock `json:"trafficDeadlocks,omitempty"`
 	CompletedJobs    int               `json:"completedJobs,omitempty"`
 	Tick             int               `json:"tick"`

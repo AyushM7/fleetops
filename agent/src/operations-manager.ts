@@ -5,9 +5,12 @@ import { z } from "zod";
 import { resolveEvaluationModel } from "./evaluation-investigation-model.js";
 
 import { operationsModelId, operationsOutputLimit } from "./operations-fetch.js";
+import { runRecoveryDecisionV3 } from "./decision-agent.js";
+import type { FleetAPI } from "./graphql.js";
 
 const jobId = z.string().regex(/^J[1-9][0-9]{0,18}$/);
 const transportId = z.string().regex(/^R([1-9]|10)$/);
+const faultId = z.string().regex(/^F[1-9][0-9]{0,18}$/);
 const decisionSchema = z.object({
   decision: z.discriminatedUnion("kind", [
     z.strictObject({
@@ -22,17 +25,23 @@ const decisionSchema = z.object({
       kind: z.literal("reassign"),
       reassignment: z.strictObject({ jobId, fromRobotId: transportId, toRobotId: transportId }),
     }),
+    z.strictObject({
+      kind: z.literal("maintenance"),
+      maintenance: z.strictObject({ robotId: transportId, faultId }),
+    }),
   ]),
 }).strict();
 
 const instructions = [
-  "You manage transport jobs in the FleetOps warehouse simulation.",
+  "You coordinate transport jobs and M1 maintenance dispatch in the FleetOps warehouse simulation.",
   "A Go observation supplies robot roles, battery, job custody, charging reservations, aisle occupancy and deadlocks.",
   "The assignments and reassignments lists are snapshot-scoped Go route and energy previews, never reservations.",
   "Use only pairs listed in those previews. A batch needs distinct jobs and distinct robots.",
   "Favor feasible urgent PRIORITY deadlines while giving overdue and older NORMAL work a chance.",
   "Prefer short routes, spare battery after delivery and charging, and fewer traffic conflicts.",
   "Reassign only an explicitly listed uncollected job when it improves progress. Never interrupt carrying cargo.",
+  "To dispatch M1, copy exactly one robotId and faultId pair from maintenanceOptions. A breakdown without an option is ineligible.",
+  "Weigh offered repairs using cargo custody, route cost, energy reserve and traffic. Dispatch begins an attempt; only Go verifies repair and recovery.",
   "If the case is unclear or none of the commands would help, abstain using one of the allowed reasons.",
   "Return only the structured decision.",
 ].join(" ");
@@ -40,7 +49,7 @@ const instructions = [
 export type OperationsModelResult = {
   decision?: z.infer<typeof decisionSchema>["decision"];
   failure?: "invalid_output" | "model_unavailable" | "billing_anomaly";
-  usage?: { model: string; inputTokens: number; outputTokens: number };
+  usage?: { model: string; inputTokens: number; outputTokens: number; cachedInputTokens?: number; cacheWriteInputTokens?: number };
 };
 
 export async function makeOperationsDecision(observation: string, model: MastraModelConfig,
@@ -71,10 +80,16 @@ export async function makeOperationsDecision(observation: string, model: MastraM
       },
     });
     if (expectedModel && knownUnexpectedBilling) return { failure: "billing_anomaly" };
-    const { inputTokens, outputTokens, totalTokens } = response.totalUsage;
+    const { inputTokens, outputTokens, totalTokens, cachedInputTokens, cacheCreationInputTokens } = response.totalUsage;
+    if ([cachedInputTokens, cacheCreationInputTokens].some(count => count !== undefined &&
+      (!Number.isSafeInteger(count) || count < 0)) || (cachedInputTokens ?? 0) + (cacheCreationInputTokens ?? 0) > (inputTokens ?? 0)) {
+      return { failure: "billing_anomaly" };
+    }
     const usage = reportedModel === operationsModelId && inputTokens !== undefined && outputTokens !== undefined &&
       Number.isSafeInteger(inputTokens) && inputTokens > 0 && Number.isSafeInteger(outputTokens) &&
-      outputTokens >= 0 && inputTokens + outputTokens === totalTokens ? { model: reportedModel, inputTokens, outputTokens } : undefined;
+      outputTokens >= 0 && inputTokens + outputTokens === totalTokens ? {
+        model: reportedModel, inputTokens, outputTokens, cachedInputTokens, cacheWriteInputTokens: cacheCreationInputTokens,
+      } : undefined;
     const parsed = decisionSchema.safeParse(response.object);
     return parsed.success && response.finishReason === "stop" ? { decision: parsed.data.decision, usage } : { failure: "invalid_output", usage };
   } catch {
@@ -92,4 +107,9 @@ export async function makeOpenAIOperationsDecision(observation: string, permit: 
   } catch {
     return { failure: "model_unavailable" };
   }
+}
+
+export function reviewOperationsRecovery(api: FleetAPI, event: { observationId: string },
+  options: Omit<Parameters<typeof runRecoveryDecisionV3>[1], "allowSubmit" | "expectedObservationId">) {
+  return runRecoveryDecisionV3(api, { ...options, expectedObservationId: event.observationId, allowSubmit: false });
 }

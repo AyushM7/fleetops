@@ -116,6 +116,8 @@ func TestRunInvalidArguments(t *testing.T) {
 		{[]string{"-seed=-9223372036854775809"}, "invalid value"},
 		{[]string{"-ticks=-1"}, "ticks must be between"},
 		{[]string{"-ticks=100001"}, "ticks must be between"},
+		{[]string{"-breakdown=1:R1"}, "breakdown must be TICK:ROBOT:TYPE"},
+		{[]string{"-breakdown=x:R1:motor_failure"}, "breakdown tick must be an integer"},
 		{[]string{"extra"}, "unexpected positional"},
 		{[]string{"--", "extra"}, "unexpected positional"},
 	} {
@@ -125,6 +127,23 @@ func TestRunInvalidArguments(t *testing.T) {
 				t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout.String(), stderr.String())
 			}
 		})
+	}
+}
+
+func TestRunScheduledBreakdownsReplay(t *testing.T) {
+	args := []string{"-layout=warehouse-v2", "-seed=42", "-ticks=7", "-repair-ticks=0", "-breakdown=1:R1:motor_failure", "-breakdown=4:R2:robot_unresponsive"}
+	var first, replay, stderr bytes.Buffer
+	if run(args, &first, &stderr) != 0 || run(args, &replay, &stderr) != 0 || !bytes.Equal(first.Bytes(), replay.Bytes()) {
+		t.Fatalf("breakdown replay differed: %s", stderr.String())
+	}
+	var state sim.State
+	if err := json.Unmarshal(first.Bytes(), &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.Maintenance != nil || len(state.Faults) != 2 || state.Faults[0].Tick != 1 || state.Faults[1].Tick != 4 ||
+		state.Robots[0].ActiveFault != sim.FaultMotorFailure || state.Robots[0].Status != sim.RobotFaulted ||
+		state.Robots[1].ActiveFault != sim.FaultRobotUnresponsive || state.Robots[1].Status != sim.RobotOffline {
+		t.Fatalf("unexpected scheduled breakdowns: robots=%+v faults=%+v", state.Robots[:2], state.Faults)
 	}
 }
 
@@ -170,6 +189,42 @@ func TestRunWriterFailure(t *testing.T) {
 		var stderr bytes.Buffer
 		if code := run([]string{"-ticks=0"}, tc.writer, &stderr); code != 1 || !strings.Contains(stderr.String(), tc.message) {
 			t.Fatalf("exit %d, stderr %q", code, stderr.String())
+		}
+	}
+}
+
+func TestRunWarehouseChargeTarget(t *testing.T) {
+	const ticks = 1000
+	var defaultOutput, fullOutput, stderr bytes.Buffer
+	args := []string{"-layout", "warehouse-v2", "-ticks", fmt.Sprint(ticks)}
+	if code := run(args, &defaultOutput, &stderr); code != 0 {
+		t.Fatalf("default target: %d %s", code, &stderr)
+	}
+	if code := run(append(args, "-charge-target", "100"), &fullOutput, &stderr); code != 0 {
+		t.Fatalf("100%% target: %d %s", code, &stderr)
+	}
+	cfg := sim.WarehouseV2Config()
+	cfg.ChargeRelease = 100
+	expected, err := sim.New(cfg, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range ticks {
+		expected.Tick()
+	}
+	want, err := json.MarshalIndent(expected.Snapshot(), "", "  ")
+	if err != nil || !bytes.Equal(fullOutput.Bytes(), append(want, '\n')) || bytes.Equal(defaultOutput.Bytes(), fullOutput.Bytes()) {
+		t.Fatal("charge target did not produce the requested warehouse snapshot")
+	}
+	for _, invalid := range [][]string{
+		{"-layout", "warehouse-v2", "-charge-target", "0"},
+		{"-layout", "warehouse-v2", "-charge-target", "101"},
+		{"-layout", "warehouse-v2", "-charge-target", fmt.Sprint(cfg.ChargeBelow)},
+		{"-layout", "warehouse", "-charge-target", "100"},
+	} {
+		var stdout, stderr bytes.Buffer
+		if code := run(invalid, &stdout, &stderr); code == 0 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "charge") && !strings.Contains(stderr.String(), "Charge") {
+			t.Fatalf("invalid target %q: exit %d, stderr %q", invalid, code, &stderr)
 		}
 	}
 }

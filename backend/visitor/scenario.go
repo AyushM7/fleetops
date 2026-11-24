@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/AyushM7/fleetops/backend/auth"
@@ -27,6 +29,8 @@ type demoFactory struct {
 	evidenceDir, proposerSubject string
 	operations                   operationsDecider
 	recordOperations             operationsRecorder
+	recovery                     recoveryInvestigator
+	warehouseChargeTarget        int
 }
 
 type demoScenario struct {
@@ -57,7 +61,7 @@ func (f demoFactory) createScenario(ctx context.Context, id string) (*demoRun, e
 			return nil, err
 		}
 		// Keep the replay seed exact in browser JSON numbers.
-		service, err = fleet.NewVisitorWarehouse(int64(binary.LittleEndian.Uint64(seed[:])&((1<<53)-1)), f.pool)
+		service, err = fleet.NewVisitorWarehouseWithChargeTarget(int64(binary.LittleEndian.Uint64(seed[:])&((1<<53)-1)), f.pool, f.warehouseChargeTarget)
 	} else {
 		service, err = fleet.NewVisitor(id, f.pool)
 	}
@@ -102,7 +106,11 @@ func (f demoFactory) createScenario(ctx context.Context, id string) (*demoRun, e
 			ProposalID: s.proposalID, ProposalSource: source, Observation: observation}}
 	if id == warehouseScenario {
 		run.warehouse = service.Snapshot
-		if f.operations != nil {
+		run.recovery = s.decideWarehouseRecovery
+		run.recoveryHistory = s.warehouseRecoveryHistory
+		if f.recovery != nil {
+			run.operations = &runtimeOperations{service: service, recovery: &recoveryOperations{scenario: s, investigate: f.recovery, source: "live-model", reviewed: make(map[string]bool)}}
+		} else if f.operations != nil {
 			run.operations, _ = newRuntimeOperations(service, f.operations)
 			if run.operations != nil {
 				run.operations.record = f.recordOperations
@@ -184,4 +192,109 @@ func (w *responseBuffer) Write(raw []byte) (int, error) {
 	}
 	w.body = append(w.body, raw...)
 	return len(raw), nil
+}
+
+var errWarehouseRecoveryUnavailable = errors.New("warehouse recovery proposal unavailable")
+
+func warehouseRecoveryCommand(path string) (string, proposal.Decision, bool) {
+	tail, ok := strings.CutPrefix(path, "/demo/recovery/")
+	if !ok {
+		return "", "", false
+	}
+	id, action, ok := strings.Cut(tail, "/")
+	if !ok || len(id) != 33 || id[0] != 'A' || id != "A"+strings.ToLower(id[1:]) {
+		return "", "", false
+	}
+	if _, err := hex.DecodeString(id[1:]); err != nil {
+		return "", "", false
+	}
+	switch action {
+	case "approve":
+		return id, proposal.Approve, true
+	case "reject":
+		return id, proposal.Reject, true
+	default:
+		return "", "", false
+	}
+}
+
+func (s *demoScenario) decideWarehouseRecovery(ctx context.Context, header, runID string, decision proposal.Decision) (fleet.Result, error) {
+	operatorCtx, principal, err := s.recoveryOperator(ctx, header)
+	if err != nil {
+		return fleet.Result{}, err
+	}
+	runs, err := s.service.ReadAgentRuns(operatorCtx, runID, 1)
+	if err != nil {
+		return fleet.Result{}, err
+	}
+	if len(runs) != 1 || runs[0].Metadata.Contract != "recovery-decision-v3" ||
+		!runs[0].DecisionVerified || runs[0].ProposalID == nil {
+		return fleet.Result{}, errWarehouseRecoveryUnavailable
+	}
+	return s.service.DecideRecoveryProposal(operatorCtx, *runs[0].ProposalID, runID, decision, proposal.OperatorIdentity{Subject: principal.Subject})
+}
+
+func (s *demoScenario) recoveryOperator(ctx context.Context, header string) (context.Context, auth.Principal, error) {
+	token, present := strings.CutPrefix(header, "Bearer ")
+	if !present {
+		return nil, auth.Principal{}, fleet.ErrUnauthorized
+	}
+	operatorCtx, err := s.factory.auth.Authenticate(ctx, token)
+	if err != nil {
+		return nil, auth.Principal{}, fleet.ErrUnauthorized
+	}
+	principal, ok := auth.FromContext(operatorCtx)
+	if !ok || principal.Role != auth.Operator {
+		return nil, auth.Principal{}, fleet.ErrUnauthorized
+	}
+	return operatorCtx, principal, nil
+}
+
+type warehouseRecoveryItem struct {
+	RunID     string                `json:"runId"`
+	State     string                `json:"state"`
+	Execution string                `json:"execution"`
+	Selection fleet.AgentKey        `json:"selection"`
+	Basis     string                `json:"basis"`
+	Metrics   map[string]int        `json:"metrics"`
+	Incidents []fleet.AgentIncident `json:"incidents"`
+}
+
+func (s *demoScenario) warehouseRecoveryHistory(ctx context.Context, header string) ([]warehouseRecoveryItem, error) {
+	operatorCtx, _, err := s.recoveryOperator(ctx, header)
+	if err != nil {
+		return nil, err
+	}
+	runs, err := s.service.ReadAgentRuns(operatorCtx, "", 20)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]warehouseRecoveryItem, 0, len(runs))
+	for _, run := range runs {
+		if run.Metadata.Contract != "recovery-decision-v3" || !run.DecisionVerified ||
+			run.Proposal == nil || run.Completion == nil || run.Completion.Decision == nil || run.Completion.Decision.Selected == nil {
+			continue
+		}
+		selection := *run.Completion.Decision.Selected
+		item := warehouseRecoveryItem{
+			RunID: run.ID, State: string(run.Proposal.Proposal.State), Execution: string(run.Proposal.Execution),
+			Selection: selection, Basis: run.Completion.Decision.Basis, Incidents: []fleet.AgentIncident{},
+		}
+		if run.Proposal.Proposal.State == proposal.Pending && !time.Now().Before(run.Proposal.Proposal.ExpiresAt) {
+			item.State = string(proposal.Expired)
+		}
+		for _, candidate := range run.Facts.Candidates {
+			if candidate.Key == selection {
+				item.Metrics = candidate.Metrics
+				break
+			}
+		}
+		for _, incident := range run.Facts.Incidents {
+			if incident.RobotID == selection.FromRobotID {
+				item.Incidents = append(item.Incidents, incident)
+			}
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }

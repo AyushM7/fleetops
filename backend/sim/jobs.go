@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+
+	"github.com/AyushM7/fleetops/backend/scheduler"
 )
 
 const (
@@ -28,6 +30,7 @@ func (s *Sim) addJob() {
 	count := len(s.state.Jobs)
 	if s.cfg.MaintenanceBay != nil {
 		count, _ = countJobs(s.state.Jobs)
+		count = s.reconsiderDeferredJobs(count)
 	}
 	if count >= s.cfg.MaxJobs {
 		return
@@ -87,7 +90,7 @@ func countJobs(jobs []JobState) (active, completed int) {
 	for _, job := range jobs {
 		if job.Status == JobDone {
 			completed++
-		} else {
+		} else if !job.Deferred {
 			active++
 		}
 	}
@@ -133,4 +136,94 @@ func lowestPendingJob(jobs []JobState) *JobState {
 		}
 	}
 	return lowest
+}
+
+const maxDeferredJobs = 100
+
+// Only a full queue with no assigned or carried work can defer an unserviceable job.
+// Deferred jobs retain their identity, priority and age, and take the next
+// available slot before a new job if their route and charge become feasible.
+func (s *Sim) reconsiderDeferredJobs(active int) int {
+	if !s.cfg.AutoDispatch || !s.cfg.AutoCharge {
+		return active
+	}
+	var deferred int
+	allPending := true
+	for _, job := range s.state.Jobs {
+		if job.Deferred {
+			deferred++
+		}
+		allPending = allPending && job.Status != JobAssigned && job.Status != JobInProgress
+	}
+	if active >= s.cfg.MaxJobs && (!allPending || deferred >= maxDeferredJobs) || active < s.cfg.MaxJobs && deferred == 0 {
+		return active
+	}
+	projection := s.optimisticMission()
+	if active >= s.cfg.MaxJobs {
+		for i := len(s.state.Jobs) - 1; i >= 0; i-- {
+			job := &s.state.Jobs[i]
+			if job.Status == JobPending && !job.Deferred && !projection(*job) {
+				job.Deferred = true
+				active--
+				break
+			}
+		}
+	}
+	for i := range s.state.Jobs {
+		job := &s.state.Jobs[i]
+		if active >= s.cfg.MaxJobs {
+			break
+		}
+		if job.Deferred && projection(*job) {
+			job.Deferred = false
+			active++
+		}
+	}
+	return active
+}
+
+func (s *Sim) optimisticMission() func(JobState) bool {
+	projected := *s
+	projected.state.Robots = slices.DeleteFunc(slices.Clone(s.state.Robots), func(robot RobotState) bool {
+		return robot.Status != RobotFaulted && robot.Status != RobotOffline
+	})
+	distance := projected.travelDistance(false)
+	var origins []scheduler.RobotInfo
+	var docks []scheduler.Cell
+	for _, dock := range s.state.Stations {
+		occupant := s.faultRobot(dock.OccupiedBy)
+		if occupant != nil && (occupant.Status == RobotFaulted || occupant.Status == RobotOffline) {
+			continue
+		}
+		point := scheduler.Cell{X: dock.X, Y: dock.Y}
+		docks = append(docks, point)
+		origins = append(origins, scheduler.RobotInfo{Pos: point, Battery: s.cfg.ChargeRelease})
+	}
+	for _, robot := range s.state.Robots {
+		if robot.Role != RoleMaintenance && robot.Status != RobotFaulted && robot.Status != RobotOffline {
+			origins = append(origins, scheduler.RobotInfo{Pos: scheduler.Cell{X: robot.X, Y: robot.Y}, Battery: robot.Battery})
+		}
+	}
+	return func(job JobState) bool {
+		from, to := scheduler.Cell{X: job.From.X, Y: job.From.Y}, scheduler.Cell{X: job.To.X, Y: job.To.Y}
+		delivery, ok := distance(from, to)
+		if !ok {
+			return false
+		}
+		exit := -1
+		for _, dock := range docks {
+			if steps, ok := distance(to, dock); ok && (exit < 0 || steps < exit) {
+				exit = steps
+			}
+		}
+		if exit < 0 {
+			return false
+		}
+		for _, origin := range origins {
+			if pickup, ok := distance(origin.Pos, from); ok && origin.Battery >= (pickup+delivery+exit)*s.cfg.MovingDrain+s.cfg.ReserveBattery {
+				return true
+			}
+		}
+		return false
+	}
 }

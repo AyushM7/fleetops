@@ -163,7 +163,7 @@ func TestPUB02ExpiredSessionDeniedOnEveryRoute(t *testing.T) {
 	cookie := openVisitor(t, g)
 	s := g.manager.lookup(cookie.Value)
 	s.mu.Lock()
-	s.deadline = time.Now().Add(-time.Second)
+	s.deadline.Store(new(time.Now().Add(-time.Second)))
 	generation := s.controller.run.generation
 	s.mu.Unlock()
 	for _, path := range []string{"/", "/graphql", "/demo/status", "/demo/restart", "/demo/scenario/healthy-operations", "/demo/play", "/demo/pause", "/demo/step", "/demo/speed/0.5", "/demo/speed/1", "/demo/speed/2"} {
@@ -172,7 +172,38 @@ func TestPUB02ExpiredSessionDeniedOnEveryRoute(t *testing.T) {
 			body = ""
 		}
 		if w := visitorRequest(g, cookie, path, generation, body, nil); w.Code != 401 {
-			t.Fatal("expired session route accepted", path, w.Code)
+			t.Fatal("expired session route accepted", path, w.Code, w.Body.String())
 		}
+	}
+}
+
+func TestPUB02BusySessionStillHonorsExpiry(t *testing.T) {
+	for _, path := range []string{"/", "/graphql", "/demo/status", "/demo/events"} {
+		t.Run(path, func(t *testing.T) {
+			t.Parallel()
+			g, _ := visitorUnitGateway(t)
+			cookie := openVisitor(t, g)
+			s := g.manager.lookup(cookie.Value)
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			body := "{}"
+			if path == "/" || path == "/demo/events" {
+				body = ""
+			}
+			check := func(want int) {
+				t.Helper()
+				w := visitorRequest(g, cookie, path, "", body, func(r *http.Request) {
+					if path == "/demo/events" {
+						r.Method = http.MethodGet
+					}
+				})
+				if w.Code != want {
+					t.Errorf("%s: got %d, want %d: %s", path, w.Code, want, w.Body.String())
+				}
+			}
+			check(http.StatusTooManyRequests)
+			s.deadline.Store(new(time.Now().Add(-time.Second)))
+			check(http.StatusUnauthorized)
+		})
 	}
 }

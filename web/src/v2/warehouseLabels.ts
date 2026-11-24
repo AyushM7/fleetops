@@ -5,6 +5,8 @@ export type Camera = Point & { scale: number };
 type Viewport = { width: number; height: number };
 type Box = Point & Viewport;
 export type MapLabel = Box & { font: number };
+export const mapRobotLabel = (robot: Pick<Robot, "id" | "role">): string =>
+  robot.role === "maintenance" ? "M" : robot.id.replace(/^R(?=\d+$)/, "");
 type Pin = { anchor: Point; size: number };
 
 function screenPoint(point: Point, camera: Camera): Point {
@@ -36,9 +38,9 @@ export function placeMapLabels(
 ): Map<string, MapLabel> {
   const { scale } = camera;
   const entities = [
-    ...stations.map(station => ({ ...station, charger: true, glyph: false, width: .8, height: .8, priority: 0 })),
-    ...robots.map(robot => ({ ...robot, charger: false, glyph: !!robotTone(robot),
-      width: robot.role === "maintenance" ? .84 : .76, height: .58,
+    ...stations.map(station => ({ ...station, text: station.id, charger: true, glyph: false, width: .8, height: .8, priority: 0 })),
+    ...robots.map(robot => ({ ...robot, text: mapRobotLabel(robot), charger: false, glyph: !!robotTone(robot),
+      width: robot.role === "maintenance" ? .9 : .84, height: .68,
       priority: robot.id === selectedId ? 0 : robotTone(robot) ? 1 : 2 })),
   ];
   const anchors = entities.map(entity => {
@@ -55,8 +57,8 @@ export function placeMapLabels(
   function place(anchor: typeof anchors[number], centeredOnly: boolean): void {
     const { id, x, y, charger, center } = anchor;
     if (!mapTargetVisible(anchor, camera, viewport)) return;
-    const font = Math.max(11, Math.min(16, scale * (charger ? .34 : .37)));
-    const width = Math.max(charger ? 0 : center.width, id.length * font * .64 + 4);
+    const font = Math.max(11, Math.min(charger ? 16 : 20, scale * (charger ? .34 : .42)));
+    const width = Math.max(charger ? 0 : center.width, anchor.text.length * font * .64 + 4);
     const height = Math.max(charger ? 0 : center.height, font + 3);
     const dx = (center.width + width) / 2 + 2;
     const dy = (center.height + height) / 2 + 2;

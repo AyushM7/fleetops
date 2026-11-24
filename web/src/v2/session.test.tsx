@@ -2,7 +2,7 @@ import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { pollDemoStatus } from "../restart";
 import { openWarehouse, subscribeWarehouse } from "./session";
-import type { WarehouseFrame } from "./telemetry";
+import type { Snapshot, WarehouseFrame } from "./telemetry";
 import { isWarehouseStatus, parseWarehouseFrame, parseWarehouseStatus } from "./telemetry";
 import V2Shell from "./V2Shell";
 
@@ -18,11 +18,11 @@ const layout = {
   })),
 };
 const robots = Array.from({ length: 11 }, (_, i) => ({
-  id: "R" + (i + 1), x: i === 10 ? 9 : i * 2, y: i === 10 ? 0 : 12,
+  id: i === 10 ? "M1" : "R" + (i + 1), x: i === 10 ? 9 : i * 2, y: i === 10 ? 0 : 12,
   status: "idle", activity: "PARKED", role: i === 10 ? "maintenance" : "transport",
   battery: 100, jobId: "", blocked: false, waitTicks: 0,
 }));
-const snapshot = (tick: number) => ({ tick, seed: 7, stations, robots, jobs: [], faults: [], aisles: [] });
+const snapshot = (tick: number) => ({ tick, seed: 7, stations, robots, jobs: [], faults: [] as Snapshot["faults"], aisles: [] });
 const status = (gen = generation, tick = 0) => ({
   generation: gen, scenarioId: "warehouse-v2", ready: true, state: "paused", operationsMode: "deterministic",
   warehouse: snapshot(tick), evidence: { scenarioId: "warehouse-v2", generation: gen, runtimeId, observation: { layout } },
@@ -74,9 +74,36 @@ describe("Warehouse V2 wire contracts", () => {
     if (!parsed.ready) throw new Error("Fixture should be ready");
     expect(parsed.layout.cells).toHaveLength(260);
     expect(parsed.snapshot.robots).toHaveLength(11);
+    expect(parsed.snapshot.robots[10]).toMatchObject({ id: "M1", role: "maintenance" });
     expect(parsed.snapshot.completedJobs).toBeUndefined();
     expect(parsed.operations).toEqual([]);
     expect(parseWarehouseFrame(message("snapshot", wire()), parsed)).toMatchObject({ eventId: 1, mode: "deterministic" });
+  });
+
+  it.each([{ id: "R11" }, { role: "transport" }, { id: "M2" }])("rejects noncanonical maintenance telemetry %j", fields => {
+    const parsed = parseWarehouseStatus(status());
+    if (!parsed.ready) throw new Error("Fixture should be ready");
+    const warehouse = { ...snapshot(0), robots: robots.map(robot => robot.id === "M1" ? { ...robot, ...fields } : robot) };
+    expect(() => parseWarehouseStatus({ ...status(), warehouse })).toThrow();
+    expect(() => parseWarehouseFrame(message("snapshot", { ...wire(), snapshot: warehouse }), parsed)).toThrow();
+  });
+
+  it("carries the active breakdown independently of fault history across offline confirmation", () => {
+    const parsed = parseWarehouseStatus(status());
+    if (!parsed.ready) throw new Error("Fixture should be ready");
+    const faults = [{ id: "F1", type: "robot_unresponsive", robots: ["R1"], tick: 1 }];
+    for (const [tick, state, activity] of [[1, "faulted", "FAULTED"], [4, "offline", "OUT_OF_SERVICE"]] as const) {
+      const frame = wire(tick + 1, tick);
+      const robot = { ...robots[0], status: state, activity, activeFault: "robot_unresponsive" };
+      const payload = { ...frame, snapshot: { ...frame.snapshot, robots: [robot, ...robots.slice(1)], faults } };
+      const telemetry = parseWarehouseFrame(message("tick", payload), parsed).snapshot;
+      expect(telemetry.faults).toEqual(faults);
+      expect(telemetry.robots[0]).toEqual(robot);
+      for (const invalid of [{ ...robot, activeFault: "low_battery" }, { ...robot, status: "moving" }]) {
+        payload.snapshot.robots[0] = invalid;
+        expect(() => parseWarehouseFrame(message("tick", payload), parsed)).toThrow();
+      }
+    }
   });
 
   it("rejects malformed payloads, wrong runtime or generation, and inconsistent event cursors", () => {
@@ -94,6 +121,48 @@ describe("Warehouse V2 wire contracts", () => {
     expect(() => parseWarehouseStatus({ ...status(), warehouse: undefined, snapshot: snapshot(0) })).toThrow();
   });
 
+  it("reads physical maintenance progress and rejects an incomplete success or unsafe service cell", () => {
+    const parsed = parseWarehouseStatus(status());
+    if (!parsed.ready) throw new Error("Fixture should be ready");
+    const frame = wire(5, 12);
+    const m1 = { ...robots[10], x: 0, y: 11, status: "servicing", activity: "REPAIRING" };
+    const attempt = {
+      id: "MA1", robotId: "R1", faultId: "F1", fault: "sensor_failure",
+      targetCell: { x: 0, y: 12 }, serviceCell: { x: 0, y: 11 },
+      startedTick: 5, repairTicks: 1, requiredRepairTicks: 3,
+    };
+    const target = { ...robots[0], status: "faulted", activity: "FAULTED", activeFault: "sensor_failure" };
+    const physical = { ...frame.snapshot, robots: [target, ...robots.slice(1, 10), m1],
+      faults: [{ id: "F1", type: "sensor_failure", robots: ["R1"], tick: 4 }] };
+    const active = { ...frame, snapshot: { ...physical, maintenance: { phase: "repairing", active: attempt } } };
+    expect(parseWarehouseFrame(message("tick", active), parsed).snapshot.maintenance?.active).toEqual(attempt);
+    const returnedRobots = [...robots.slice(0, 10), { ...m1, status: "idle", activity: "AVAILABLE" }];
+    const returning = (repairTicks: number) => ({ ...frame, snapshot: { ...physical, robots: returnedRobots, maintenance: {
+      phase: "returning", history: [{ ...attempt, repairTicks, finishedTick: 12, outcome: "completed" }],
+    } } });
+    expect(parseWarehouseFrame(message("tick", returning(3)), parsed).snapshot.maintenance?.history?.[0].outcome).toBe("completed");
+    expect(() => parseWarehouseFrame(message("tick", returning(1)), parsed)).toThrow();
+    const premature = returning(3);
+    premature.snapshot.robots = [target, ...returnedRobots.slice(1)];
+    expect(() => parseWarehouseFrame(message("tick", premature), parsed)).toThrow();
+    const critical = returning(3);
+    critical.snapshot.faults = [{ ...physical.faults[0], type: "critical_battery" }];
+    critical.snapshot.maintenance.history[0].fault = "critical_battery";
+    expect(() => parseWarehouseFrame(message("tick", critical), parsed)).toThrow();
+    const unsafe = { ...active, snapshot: { ...active.snapshot, maintenance: {
+      phase: "repairing", active: { ...attempt, serviceCell: attempt.targetCell },
+    } } };
+    expect(() => parseWarehouseFrame(message("tick", unsafe), parsed)).toThrow();
+    const wrongPosition = { ...active, snapshot: { ...active.snapshot, robots: [
+      target, ...robots.slice(1, 10), { ...m1, x: 1 },
+    ] } };
+    expect(() => parseWarehouseFrame(message("tick", wrongPosition), parsed)).toThrow();
+    const falseVerification = { ...active, snapshot: { ...active.snapshot, maintenance: { phase: "verifying", active: attempt } } };
+    expect(() => parseWarehouseFrame(message("tick", falseVerification), parsed)).toThrow();
+    const unknownOccurrence = { ...active, snapshot: { ...active.snapshot, faults: [] } };
+    expect(() => parseWarehouseFrame(message("tick", unknownOccurrence), parsed)).toThrow();
+  });
+
   it("validates optional Operations data without treating a proposal as proof of execution", () => {
     const parsed = parseWarehouseStatus(status());
     if (!parsed.ready) throw new Error("Fixture should be ready");
@@ -107,6 +176,14 @@ describe("Warehouse V2 wire contracts", () => {
     expect(() => parseWarehouseFrame(message("operations", {
       ...payload, operationsActivity: [{ ...proposed, usage: { ...proposed.usage, inputTokens: -1 } }],
     }), parsed)).toThrow();
+    const maintenance = {
+      ...proposed, decision: { kind: "maintenance", maintenance: { robotId: "R4", faultId: "F1" } },
+    };
+    expect(parseWarehouseFrame(message("operations", { ...payload, operationsActivity: [maintenance] }), parsed)
+      .operations).toEqual([maintenance]);
+    expect(() => parseWarehouseFrame(message("operations", { ...payload, operationsActivity: [{
+      ...maintenance, decision: { kind: "maintenance", maintenance: { robotId: "M1", faultId: "F1" } },
+    }] }), parsed)).toThrow();
   });
 
   it("posts the fixed launch operation with the expected generation and confirms the replacement", async () => {
@@ -228,7 +305,19 @@ describe("Warehouse V2 stream lifecycle", () => {
     const emit = vi.fn();
     subscriptions.push(subscribeWarehouse(emit, vi.fn()).close);
     await vi.advanceTimersByTimeAsync(0);
-    FakeSource.opened[0].send("snapshot", wire());
+    const old = wire(1, 12);
+    const oldWithMaintenance = { ...old, snapshot: {
+      ...old.snapshot, faults: [{ id: "F1", type: "sensor_failure", robots: ["R1"], tick: 3 }],
+      maintenance: { phase: "available", history: [{
+        id: "MA1", robotId: "R1", faultId: "F1", fault: "sensor_failure", targetCell: { x: 0, y: 12 },
+        serviceCell: { x: 0, y: 11 }, startedTick: 4, finishedTick: 12, repairTicks: 3, requiredRepairTicks: 3,
+        outcome: "completed",
+      }] },
+    } };
+    FakeSource.opened[0].send("snapshot", oldWithMaintenance);
+    expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ frame: expect.objectContaining({
+      snapshot: expect.objectContaining({ maintenance: expect.objectContaining({ history: [expect.objectContaining({ id: "MA1" })] }) }),
+    }) }));
     FakeSource.opened[0].onerror?.();
     await vi.advanceTimersByTimeAsync(2000);
     expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "connecting", frame: null }));
@@ -267,7 +356,8 @@ describe("Warehouse V2 stream lifecycle", () => {
 
   it("renders the V2 pages without the legacy proposal UI or synthetic telemetry", () => {
     const html = renderToString(<V2Shell onLegacy={vi.fn()} />);
-    for (const label of ["Warehouse V2", "Fleet", "Jobs", "Operations AI", "Connecting", 'aria-current="page"']) expect(html).toContain(label);
+    for (const label of ['aria-label="FleetOps"', 'aria-label="FleetOps pages"', 'aria-label="Open demo scenarios"', "Fleet", "Jobs", "Operations AI", "Connecting", 'aria-current="page"']) expect(html).toContain(label);
+    expect(html).not.toMatch(/\bV[123]\b/);
     expect(html).not.toContain("Approval inbox");
     expect(html).not.toContain("Simulation tick");
   });

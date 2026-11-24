@@ -15,24 +15,32 @@ func (s *Sim) assignPending(skip []bool) {
 	if s.state.Tick > hold.until {
 		s.operationsHold, hold = dispatchHold{}, dispatchHold{}
 	}
-	var idle []scheduler.RobotInfo
+	var idle, docked []scheduler.RobotInfo
 	robots := make(map[int]int)
 	for i, robot := range s.state.Robots {
-		if skip[i] || hold.robots[robot.ID] || !s.canAcceptJob(robot) {
+		if skip[i] || hold.robots[robot.ID] {
 			continue
 		}
 		number := idNumber(robot.ID)
+		info := scheduler.RobotInfo{Num: number, Pos: scheduler.Cell{X: robot.X, Y: robot.Y}, Battery: robot.Battery}
+		if s.canAcceptJob(robot) {
+			idle = append(idle, info)
+		} else if s.cfg.MaintenanceBay != nil && s.cfg.AutoCharge && robot.Role != RoleMaintenance &&
+			robot.Status == RobotIdle && robot.JobID == "" && robot.Battery >= s.cfg.ChargeRelease && s.occupiedStation(robot.ID) != nil {
+			docked = append(docked, info)
+		} else {
+			continue
+		}
 		robots[number] = i
-		idle = append(idle, scheduler.RobotInfo{Num: number, Pos: scheduler.Cell{X: robot.X, Y: robot.Y}, Battery: robot.Battery})
 	}
-	if len(idle) == 0 {
+	if len(idle) == 0 && len(docked) == 0 {
 		return
 	}
 	var pending []scheduler.JobInfo
 	distance := s.travelDistance(s.cfg.MaintenanceBay != nil)
 	jobs := make(map[int]int)
 	for i, job := range s.state.Jobs {
-		if job.Status != JobPending || hold.jobs[job.ID] {
+		if job.Status != JobPending || job.Deferred || hold.jobs[job.ID] {
 			continue
 		}
 		number := idNumber(job.ID)
@@ -52,9 +60,18 @@ func (s *Sim) assignPending(skip []bool) {
 		pending = append(pending, info)
 	}
 	assignments := scheduler.Assign(idle, pending, distance, s.assignmentParams())
+	if len(assignments) == 0 && len(docked) != 0 && len(pending) == s.cfg.MaxJobs {
+		// A full queue of pending work cannot make room until a robot can afford a job.
+		assignments = scheduler.Assign(docked, pending, distance, s.assignmentParams())
+	}
 	for _, assignment := range assignments {
 		robot, job := &s.state.Robots[robots[assignment.RobotNum]], &s.state.Jobs[jobs[assignment.JobNum]]
 		s.beginJob(robot, job)
+		if s.occupiedStation(robot.ID) != nil {
+			nav := s.navigation[robot.ID]
+			nav.undocking = true
+			s.navigation[robot.ID] = nav
+		}
 	}
 }
 
@@ -85,7 +102,7 @@ func (s *Sim) dispatchDistance() scheduler.Distance {
 func (s *Sim) travelDistance(liveOccupancy bool) scheduler.Distance {
 	blocked := make(map[Point]bool)
 	for _, robot := range s.state.Robots {
-		if !liveOccupancy && robot.Status != RobotOffline && robot.Status != RobotFaulted && robot.Status != RobotCharging {
+		if !liveOccupancy && robot.Status != RobotOffline && robot.Status != RobotFaulted && robot.Status != RobotCharging && robot.Status != RobotServicing {
 			continue
 		}
 		position := Point{X: robot.X, Y: robot.Y}
@@ -121,6 +138,7 @@ const operationsDispatchTicks = 20
 type dispatchHold struct {
 	until        int
 	robots, jobs map[string]bool
+	maintenance  bool
 }
 
 // SetOperationsDispatchHold only delays the deterministic dispatcher for
@@ -135,4 +153,16 @@ func (s *Sim) SetOperationsDispatchHold(options []AssignmentOption) {
 		hold.robots[option.RobotID], hold.jobs[option.JobID] = true, true
 	}
 	s.operationsHold = hold
+}
+
+// HoldOperationsMaintenance shares the transport window's tick deadline.
+func (s *Sim) HoldOperationsMaintenance() {
+	if s.cfg.MaintenanceRepairTicks > 0 {
+		s.operationsHold.maintenance = true
+		s.operationsHold.until = s.state.Tick + operationsDispatchTicks
+	}
+}
+
+func (s *Sim) operationsMaintenanceHeld() bool {
+	return s.operationsHold.maintenance && s.state.Tick <= s.operationsHold.until
 }

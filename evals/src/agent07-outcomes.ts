@@ -13,7 +13,10 @@ export function outcomeSummary(rows: Branch[]) {
       successfulReassignments: all.reduce((n,r) => n+r.successfulReassignments,0), interventionFailures: all.reduce((n,r) => n+r.interventionFailures,0) }; });
   const comparisons = rows.filter(r => r.policy === "v2-investigation").map(treatment => {
     const same = rows.filter(r => r.scenarioId === treatment.scenarioId && r.trial === treatment.trial), control = same.find(r => r.policy === "no-intervention");
-    const comparable = !!control?.simulatorOutcome && !!treatment.simulatorOutcome && same.every(r => r.initialSimulatorStateSHA256 === treatment.initialSimulatorStateSHA256 && r.simulatorOutcome?.startTick === control.simulatorOutcome!.startTick && r.simulatorOutcome?.endTick === control.simulatorOutcome!.endTick);
+    const comparable = !!control?.simulatorOutcome && !!treatment.simulatorOutcome && same.every(r =>
+      (r.policy === "no-intervention" || r.decision?.failure === null && !["denied", "unknown"].includes(r.goValidation)) &&
+      r.initialSimulatorStateSHA256 === treatment.initialSimulatorStateSHA256 &&
+      r.simulatorOutcome?.startTick === control.simulatorOutcome!.startTick && r.simulatorOutcome?.endTick === control.simulatorOutcome!.endTick);
     const eligible = same.some(r => r.goValidation === "pending_admitted");
     const effects = comparable && eligible ? same.filter(r => r !== treatment && r.simulatorOutcome).map(baseline => ({ against: baseline.policy,
       completedDeliveryDelta: treatment.simulatorOutcome!.completedDeliveries-baseline.simulatorOutcome!.completedDeliveries,

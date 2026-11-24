@@ -148,7 +148,7 @@ function LegacyApp({ onWarehouse }: { onWarehouse: (previous?: ScenarioID) => vo
     </header>
     {demo && token && <ScenarioSelector selected={simulationStatus?.scenarioId} disabled={!generation || !statusKnown || controlling} busy={restarting} onSelect={id => { void restart(id); }} />}
     {demo && token && <button type="button" className="secondary-button" disabled={!generation || !statusKnown || restarting || controlling}
-      onClick={() => { void restart(warehouseScenario); }}>Open Warehouse V2</button>}
+      onClick={() => { void restart(warehouseScenario); }}>Open Warehouse</button>}
     <main id="main-content" tabIndex={-1}>{demo && !token ? <div className="notice notice-error" role="alert">Visitor session ended. Clear this site's cookies to begin a new visit.</div> : !token ? <section className="login-panel"><p className="eyebrow">LIVE WAREHOUSE</p><h1>Your fleet, in view.</h1><p>Connect to the running simulator with your bearer token.</p>
       <form onSubmit={connect}><label htmlFor="viewer-token">Bearer token</label><input id="viewer-token" type="password" autoComplete="off" spellCheck={false} value={draft} onChange={event => setDraft(event.target.value)} placeholder="Paste a viewer or operator token" required /><button className="primary-button" type="submit">Connect to fleet <span aria-hidden="true">→</span></button></form>
       {authError && <p className="auth-error" role="alert">Authentication failed. Check your token and connect again.</p>}

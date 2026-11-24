@@ -1,6 +1,9 @@
 package sim
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestWarehouseV2TransportActivities(t *testing.T) {
 	cfg := WarehouseV2Config()
@@ -33,10 +36,16 @@ func TestWarehouseV2MaintenanceChargeAndOfflineActivities(t *testing.T) {
 	cfg := WarehouseV2Config()
 	cfg.InitialJobs = 0
 	s := newTestSim(t, cfg, 42)
-	requireInjection(t, s.InjectLowBattery("R11"))
+	if err := s.InjectLowBattery("R11"); !errors.Is(err, ErrUnknownRobot) {
+		t.Fatalf("retired robot ID is still live: %v", err)
+	}
+	requireInjection(t, s.InjectLowBattery("M1"))
+	if state := s.Snapshot(); state.Robots[10].Battery != cfg.LowBatteryInjectLevel || state.Faults[0].Robots[0] != "M1" {
+		t.Fatalf("low battery did not target M1: %+v, %+v", state.Robots[10], state.Faults)
+	}
 	s.Tick()
 	if robot := s.Snapshot().Robots[10]; robot.Activity != ActivityGoingToCharge {
-		t.Fatalf("R11 should travel to charge: %+v", robot)
+		t.Fatalf("M1 should travel to charge: %+v", robot)
 	}
 	for range cfg.Width {
 		if s.Snapshot().Robots[10].Activity == ActivityCharging {
@@ -45,15 +54,28 @@ func TestWarehouseV2MaintenanceChargeAndOfflineActivities(t *testing.T) {
 		s.Tick()
 	}
 	if robot := s.Snapshot().Robots[10]; robot.Activity != ActivityCharging {
-		t.Fatalf("R11 should reach its charger: %+v", robot)
+		t.Fatalf("M1 should reach its charger: %+v", robot)
 	}
 
 	s = newTestSim(t, cfg, 42)
-	requireInjection(t, s.InjectUnresponsive("R11"))
-	for range cfg.UnresponsiveDelay {
+	requireInjection(t, s.InjectUnresponsive("M1"))
+	for range cfg.UnresponsiveDelay + 1 {
 		s.Tick()
 	}
-	if robot := s.Snapshot().Robots[10]; robot.Activity != ActivityOutOfService || robot.Role != RoleMaintenance {
-		t.Fatalf("R11 should be out of service: %+v", robot)
+	state := s.Snapshot()
+	if robot := state.Robots[10]; robot.ID != "M1" || robot.Status != RobotOffline || robot.Activity != ActivityOutOfService ||
+		robot.Role != RoleMaintenance || (Point{robot.X, robot.Y}) != *cfg.MaintenanceBay || state.Faults[0].Robots[0] != "M1" {
+		t.Fatalf("M1 should remain out of service in its bay: %+v, %+v", robot, state.Faults)
+	}
+}
+
+func TestWarehouseV2MaintenanceBatteryDepletion(t *testing.T) {
+	cfg := WarehouseV2Config()
+	cfg.InitialJobs, cfg.AutoCharge, cfg.Recovery, cfg.IdleDrainEvery = 0, false, false, 1
+	s := newTestSim(t, cfg, 42)
+	s.faultRobot("M1").Battery = 1
+	s.Tick()
+	if robot := s.Snapshot().Robots[10]; robot.ID != "M1" || robot.Battery != 0 || robot.Status != RobotFaulted || robot.Activity != ActivityFaulted {
+		t.Fatalf("M1 should report the existing battery fault state: %+v", robot)
 	}
 }

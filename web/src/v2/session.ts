@@ -29,19 +29,19 @@ class VisitorExpired extends Error {}
 async function request(path: "/demo/status" | "/demo/scenario/warehouse-v2" | `/demo/${WarehouseAction}`, generation: string, signal: AbortSignal): Promise<unknown> {
   const response = await postVisitor(path, generation, signal);
   if (response.status === 401 || response.status === 403) throw new VisitorExpired();
-  if (!response.ok) throw new Error("Warehouse V2 session request failed.");
+  if (!response.ok) throw new Error("Warehouse session request failed.");
   return response.json();
 }
 
 export async function openWarehouse(generation: string): Promise<void> {
-  if (!/^[a-f0-9]{64}$/.test(generation)) throw new Error("Refresh the visitor session before opening Warehouse V2.");
+  if (!/^[a-f0-9]{64}$/.test(generation)) throw new Error("Refresh the visitor session before opening the warehouse.");
   try {
     const result = parseVisitorIdentity(await request("/demo/scenario/warehouse-v2", generation, AbortSignal.timeout(65000)));
     if (result.ready && result.scenarioId === warehouseScenario && result.generation !== generation) return;
   } catch (error) {
     if (error instanceof VisitorExpired) throw new Error("Visitor session ended. Clear this site's cookies to begin a new visit.");
   }
-  throw new Error("Warehouse V2 switch was not confirmed. Refresh session status before trying again.");
+  throw new Error("The warehouse switch was not confirmed. Refresh session status before trying again.");
 }
 
 export function subscribeWarehouse(emit: (feed: WarehouseFeed) => void, onLegacy: () => void) {

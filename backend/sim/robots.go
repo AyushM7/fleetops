@@ -5,23 +5,43 @@ import (
 	"slices"
 )
 
+const MaintenanceRobotID = "M1"
+
+// CompareRobotIDs orders canonical robot IDs, with maintenance after transport.
+func CompareRobotIDs(a, b string) int {
+	if a == b {
+		return 0
+	}
+	if a == MaintenanceRobotID {
+		return 1
+	}
+	if b == MaintenanceRobotID {
+		return -1
+	}
+	if order := cmp.Compare(len(a), len(b)); order != 0 {
+		return order
+	}
+	return cmp.Compare(a, b)
+}
+
+func compareRobots(a, b RobotState) int { return CompareRobotIDs(a.ID, b.ID) }
+
 func (s *Sim) stepRobots() {
-	slices.SortFunc(s.state.Robots, func(a, b RobotState) int {
-		return cmp.Compare(idNumber(a.ID), idNumber(b.ID))
-	})
+	slices.SortFunc(s.state.Robots, compareRobots)
 	// Pass A finishes for all robots before dispatch or movement begins.
 	skip := make([]bool, len(s.state.Robots))
 	for i := range s.state.Robots {
 		skip[i] = s.prepareRobot(&s.state.Robots[i])
 	}
 	s.assignPending(skip) // Pass B.
-	s.seekCharging(skip)  // Pass C.
+	s.scheduleMaintenance()
+	s.seekCharging(skip) // Pass C.
 	s.seekParking(skip)
 	s.clearIdleAisles(skip) // Pass C2.
 	if s.cfg.MaintenanceBay != nil {
 		s.traffic = newTrafficReservations(s.state.Robots)
 	}
-	moved := make([]bool, len(s.state.Robots))
+	usedMovement := make([]bool, len(s.state.Robots))
 	for _, i := range s.movementOrder() {
 		robot := &s.state.Robots[i]
 		if skip[i] {
@@ -29,14 +49,14 @@ func (s *Sim) stepRobots() {
 		}
 		if robot.Status == RobotMoving {
 			before := Point{X: robot.X, Y: robot.Y}
-			s.stepMoving(robot)
-			moved[i] = before != (Point{X: robot.X, Y: robot.Y})
+			pickedUp := s.stepMoving(robot)
+			usedMovement[i] = pickedUp || before != (Point{X: robot.X, Y: robot.Y})
 		}
 		if robot.Status != RobotMoving {
 			s.finishNavigation(robot)
 		}
 	}
-	events := s.recoverTraffic(moved)
+	events := s.recoverTraffic(usedMovement)
 	if s.traffic != nil {
 		s.releaseVacatedStations()
 		s.state.TrafficDeadlocks = s.state.TrafficDeadlocks[:0]
@@ -57,6 +77,10 @@ func (s *Sim) prepareRobot(robot *RobotState) bool {
 			s.finishNavigation(robot)
 			return true
 		}
+	}
+	if robot.ActiveFault != "" {
+		s.restoreDockPower(robot)
+		return true
 	}
 	if robot.Status != RobotMoving {
 		s.finishNavigation(robot)
@@ -103,7 +127,7 @@ func (s *Sim) stepIdle(robot *RobotState) {
 		robot.Battery = max(0, robot.Battery-1)
 	}
 	if robot.Battery == 0 {
-		robot.Status = RobotFaulted
+		s.depleteBattery(robot)
 		return
 	}
 }
@@ -125,14 +149,21 @@ func (s *Sim) queuedForCharging(robot RobotState) bool {
 	return exit >= 0 && robot.Battery-exit*s.cfg.MovingDrain >= 1
 }
 
-func (s *Sim) stepMoving(robot *RobotState) {
+func (s *Sim) stepMoving(robot *RobotState) (pickedUp bool) {
+	if s.stepPassageYield(robot) {
+		return false
+	}
+	if s.maintenanceTravel(*robot) {
+		s.stepMaintenanceTravel(robot)
+		return false
+	}
 	if robot.JobID == "" {
 		if s.navigation[robot.ID].relocation {
 			s.stepRelocation(robot)
 		} else {
 			s.stepChargeTrip(robot)
 		}
-		return
+		return false
 	}
 	for i := range s.state.Jobs {
 		job := &s.state.Jobs[i]
@@ -140,22 +171,23 @@ func (s *Sim) stepMoving(robot *RobotState) {
 			continue
 		}
 		if job.Status != JobAssigned && job.Status != JobInProgress {
-			return
+			return false
 		}
 		if s.cfg.MaintenanceBay != nil && job.Status == JobAssigned && (Point{robot.X, robot.Y}) == job.From {
 			job.Status = JobInProgress
 			s.prepareNavigation(robot, job.To)
-			return
+			// Pickup must finish at the physical source before a recovery movement.
+			return true
 		}
 		if s.updateArrival(robot, job) {
-			return
+			return false
 		}
 		target := job.From
 		if job.Status == JobInProgress {
 			target = job.To
 		}
 		if !s.advanceNavigation(robot, target) {
-			return
+			return false
 		}
 		previousStatus := job.Status
 		if s.cfg.MaintenanceBay == nil || previousStatus == JobInProgress {
@@ -166,10 +198,11 @@ func (s *Sim) stepMoving(robot *RobotState) {
 			s.prepareNavigation(robot, job.To)
 		}
 		if robot.Battery == 0 {
-			robot.Status = RobotFaulted
+			s.depleteBattery(robot)
 		}
-		return
+		return false
 	}
+	return false
 }
 
 func (s *Sim) robotActivity(robot RobotState) RobotActivity {
@@ -181,7 +214,15 @@ func (s *Sim) robotActivity(robot RobotState) RobotActivity {
 		return ActivityOutOfService
 	case RobotCharging:
 		return ActivityCharging
+	case RobotServicing:
+		if s.maintenance.Phase == MaintenanceAtTarget {
+			return ActivityAtRepairSite
+		}
+		return ActivityRepairing
 	case RobotMoving:
+		if s.maintenanceTravel(robot) {
+			return ActivityGoingToRepair
+		}
 		switch {
 		case s.occupiedStation(robot.ID) != nil:
 			return ActivityUndocking

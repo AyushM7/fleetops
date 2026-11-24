@@ -38,10 +38,10 @@ export function useV2Workspace(): Workspace {
 
 const initialFeed: WarehouseFeed = { phase: "connecting", status: null, frame: null, pending: null, controlWarning: null };
 const connectionLabel = {
-  connecting: "Connecting to Warehouse V2…",
+  connecting: "Connecting to the warehouse…",
   reconnecting: "Reconnecting. Showing only the last confirmed data.",
-  live: "Warehouse V2 connected.",
-  unavailable: "Warehouse V2 is unavailable. Retrying session status…",
+  live: "Warehouse connected.",
+  unavailable: "Warehouse unavailable. Retrying session status…",
   expired: "Visitor session ended. Clear this site's cookies to begin a new visit.",
 };
 
@@ -116,20 +116,20 @@ function SessionView({ returning, returnError, onReturn, onControl }: SessionAct
   return <div className="v2-shell">
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <aside className="v2-rail">
-      <div className="v2-brand-mark" aria-label="FleetOps V2"><Icon name="layout-grid" size={23} /></div>
-      <nav aria-label="Warehouse V2 pages">
+      <div className="v2-brand-mark" aria-label="FleetOps"><Icon name="layout-grid" size={23} /></div>
+      <nav aria-label="FleetOps pages">
         {pages.map(item => <button type="button" key={item} aria-current={item === page ? "page" : undefined}
           onClick={() => navigate(item)}><Icon name={pageIcons[item]} size={19} /><span>{item}</span></button>)}
       </nav>
       <button className="v2-legacy-link" type="button" disabled={returning || !!feed.pending || feed.phase !== "live"}
-        aria-label="Return to V1 demo" onClick={onReturn}>
-        <Icon name="arrow-right" size={15} />{returning ? "Returning…" : "V1 demo"}
+        aria-label="Open demo scenarios" onClick={onReturn}>
+        <Icon name="arrow-right" size={15} />{returning ? "Opening…" : "Scenarios"}
       </button>
     </aside>
     <Toolbar page={page} feed={feed} returning={returning} onControl={onControl} />
     <main ref={main} id="main-content" className="v2-workspace" tabIndex={-1}>
       {returnError && <p className="v2-return-error" role="alert">{returnError}</p>}
-      <Warehouse frame={feed.frame} selection={selection} selectEntity={selectEntity} viewFleet={() => navigate("Fleet")} hidden={page !== "Warehouse"} />
+      <Warehouse frame={feed.frame} selection={selection} selectEntity={selectEntity} viewFleet={() => navigate("Fleet")} hidden={page !== "Warehouse"} live={feed.phase === "live"} />
       {(page === "Fleet" || page === "Jobs") && <EntityDirectory key={page} page={page} feed={feed}
         selection={selection} selectEntity={selectEntity} viewWarehouse={() => navigate("Warehouse")} inspectRelated={inspectRelated} />}
       {page === "Operations AI" && <OperationsAI feed={feed} inspect={inspectRelated} />}
@@ -139,14 +139,15 @@ function SessionView({ returning, returnError, onReturn, onControl }: SessionAct
 
 function WorkspaceView({ feed, ...actions }: { feed: WarehouseFeed } & SessionActions): JSX.Element {
   const [page, navigate] = useState<Page>("Warehouse");
-  const generation = feed.status?.generation ?? feed.frame?.generation;
-  const [selected, setSelected] = useState<{ generation: string | undefined; entity: Selection } | null>(null);
-  const selection = selected && selected.generation === generation && feed.frame && findEntity(feed.frame.snapshot, selected.entity)
+  const scope = feed.status && !feed.status.ready ? undefined
+    : feed.frame && feed.frame.generation + ":" + feed.frame.runtimeId;
+  const [selected, setSelected] = useState<{ scope: string; entity: Selection } | null>(null);
+  const selection = selected && selected.scope === scope && feed.frame && findEntity(feed.frame.snapshot, selected.entity)
     ? selected.entity : null;
   if (selected && !selection) setSelected(null);
   const selectEntity = useCallback((entity: Selection | null) => {
-    setSelected(entity ? { generation, entity } : null);
-  }, [generation]);
+    setSelected(entity && scope ? { scope, entity } : null);
+  }, [scope]);
   return <WorkspaceContext.Provider value={{ page, navigate, selection, selectEntity, feed }}>
     <SessionView {...actions} />
   </WorkspaceContext.Provider>;
@@ -184,7 +185,7 @@ export default function V2Shell({ previous = "blocked-reassignment", onLegacy }:
       onLegacy();
     } catch (error) {
       setReturnError(error instanceof DemoError && error.authentication ? error.message
-        : "V1 switch was not confirmed. Check the session status before trying again.");
+        : "The scenario switch was not confirmed. Check the session status before trying again.");
     } finally {
       returnInFlight.current = false;
       setReturning(false);

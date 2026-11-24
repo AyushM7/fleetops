@@ -2,7 +2,7 @@ import type { AIReasoning, FleetState, MutationResult } from "./contracts.js";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import { readFileSync } from "node:fs";
 import { validateSnapshot } from "./reasoning.js";
-import type { CandidateComparison, CandidateEvidence, DecisionObjective, RecoveryDecision } from "./decision-contracts.js";
+import type { CandidateComparison, CandidateEvidence, CandidateKey, DecisionObjective, RecoveryDecision } from "./decision-contracts.js";
 import { decisionLimitations } from "./decision-contracts.js";
 
 export function fleetFixture(battery = 100): FleetState {
@@ -64,10 +64,12 @@ function decisionComparisons(evidence: CandidateEvidence[], chosen: CandidateEvi
       relation: leftValue < rightValue ? "less" : leftValue > rightValue ? "greater" : "equal" };
   }));
 }
-export function recoveryDecisionFixture(state: FleetState, objective: DecisionObjective, recipient: string | null,
+export function recoveryDecisionFixture(state: FleetState, objective: DecisionObjective, selection: string | CandidateKey | null,
   basis?: Extract<RecoveryDecision["decision"], { kind: "select" }>["basis"]): RecoveryDecision {
-  const considered = decisionEvidence(state), chosen = considered.find(e => e.candidate.toRobotId === recipient);
-  if (recipient !== null && !chosen) throw new Error("Missing decision fixture candidate.");
+  const considered = decisionEvidence(state);
+  const chosen = considered.find(({ candidate }) => typeof selection === "string" ? candidate.toRobotId === selection :
+    selection !== null && candidate.jobId === selection.jobId && candidate.fromRobotId === selection.fromRobotId && candidate.toRobotId === selection.toRobotId);
+  if (selection !== null && !chosen) throw new Error("Missing decision fixture candidate.");
   return { version: "recovery-decision-v2", observationId: state.observationId!, tick: state.tick, objective,
     incidents: state.activeIncidents.map(i => ({ reference: { scope: "snapshot", tick: state.tick, robotId: i.robotId, type: i.type }, severity: i.severity, telemetry: { ...i.telemetry } })),
     considered, comparisons: chosen ? decisionComparisons(considered, chosen) : [],

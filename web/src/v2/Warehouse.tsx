@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { BatteryCharge } from "./BatteryCharge";
+import { WarehouseMaintenance } from "./Maintenance";
 import { Icon } from "./WarehouseIcon";
 import { WarehouseInspector, useInspectorFocus } from "./WarehouseInspector";
 import { WarehouseMap } from "./WarehouseMap";
@@ -59,9 +60,9 @@ function FleetStrip({ robots, selection, pick, viewFleet }: {
   </section>;
 }
 
-export function Warehouse({ frame, selection, selectEntity, viewFleet, hidden }: {
+export function Warehouse({ frame, selection, selectEntity, viewFleet, hidden, live = false }: {
   frame: WarehouseFrame | null; selection: Selection | null; selectEntity: (selection: Selection | null) => void;
-  viewFleet: () => void; hidden: boolean;
+  viewFleet: () => void; hidden: boolean; live?: boolean;
 }) {
   const { surface, pick, close, restoreFocus } = useInspectorFocus(selectEntity, ".v2-map-stage", !hidden);
   const entity = frame ? findEntity(frame.snapshot, selection) : null;
@@ -69,13 +70,15 @@ export function Warehouse({ frame, selection, selectEntity, viewFleet, hidden }:
     : entity?.kind === "robot" ? frame?.snapshot.jobs.find(item => item.id === entity.robot.jobId) : undefined;
 
   return <div className="v2-warehouse" hidden={hidden} ref={surface}>
-    <WarehouseMetrics snapshot={frame?.snapshot} />
     {frame ? <>
       <div className={'v2-map-row' + (entity ? ' has-inspector' : '')}>
-        <WarehouseMap frame={frame} selection={selection} job={job} pick={pick} />
-        <WarehouseInspector entity={hidden ? null : entity} job={job} inspect={selectEntity} close={close} restoreFocus={restoreFocus} />
+        <WarehouseMap frame={frame} selection={selection} job={job} pick={pick} live={live && !hidden} />
+        <WarehouseInspector entity={hidden ? null : entity} snapshot={frame.snapshot} job={job}
+          inspect={selectEntity} close={close} restoreFocus={restoreFocus} />
       </div>
-      <FleetStrip robots={frame.snapshot.robots} selection={selection} pick={pick} viewFleet={viewFleet} />
+      <WarehouseMaintenance snapshot={frame.snapshot} inspect={pick} />
     </> : <section className="v2-panel v2-empty"><h2>Warehouse map</h2><p>Waiting for confirmed warehouse telemetry.</p></section>}
+    <WarehouseMetrics snapshot={frame?.snapshot} />
+    {frame && <FleetStrip robots={frame.snapshot.robots} selection={selection} pick={pick} viewFleet={viewFleet} />}
   </div>;
 }

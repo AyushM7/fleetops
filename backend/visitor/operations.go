@@ -18,10 +18,12 @@ type operationsDecider func(context.Context, string, fleet.OperationsObservation
 type operationsRecorder func(context.Context, string, operations.Activity) error
 
 type runtimeOperations struct {
-	service   *fleet.Service
-	authorize func(context.Context) (context.Context, error)
-	decide    operationsDecider
-	record    operationsRecorder
+	service             *fleet.Service
+	recovery            *recoveryOperations
+	authorize           func(context.Context) (context.Context, error)
+	decide              operationsDecider
+	record              operationsRecorder
+	reviewedMaintenance map[string]bool
 }
 
 func newRuntimeOperations(service *fleet.Service, decide operationsDecider) (*runtimeOperations, error) {
@@ -46,7 +48,7 @@ func newRuntimeOperations(service *fleet.Service, decide operationsDecider) (*ru
 	}
 	return &runtimeOperations{service: service, authorize: func(ctx context.Context) (context.Context, error) {
 		return authenticator.Authenticate(ctx, token)
-	}, decide: decide}, nil
+	}, decide: decide, reviewedMaintenance: make(map[string]bool)}, nil
 }
 
 type operationsCycle struct {
@@ -63,10 +65,17 @@ const operationsCooldown = 30 * time.Second
 func (c *demoController) startOperations(ctx context.Context, now time.Time) {
 	run := c.run
 	manager := run.operations
-	if manager == nil || c.operations != nil || now.Before(c.nextOperations) {
+	if manager == nil || c.operations != nil {
 		return
 	}
-	c.nextOperations = now.Add(3 * time.Second)
+	if manager.recovery != nil {
+		c.startRecovery(ctx, now, manager.recovery)
+		return
+	}
+	cooldown := now.Before(c.nextOperations)
+	if !cooldown {
+		c.nextOperations = now.Add(3 * time.Second)
+	}
 	deadline := time.Now().Add(10 * time.Second)
 	if earlier, ok := ctx.Deadline(); ok && earlier.Before(deadline) {
 		deadline = earlier
@@ -77,8 +86,13 @@ func (c *demoController) startOperations(ctx context.Context, now time.Time) {
 		cancel()
 		return
 	}
-	observation, err := manager.service.ObserveOperations(scoped)
-	if err != nil || len(observation.Assignments)+len(observation.Reassignments) == 0 {
+	var observation fleet.OperationsObservation
+	if cooldown {
+		observation, err = manager.service.ObserveNewMaintenance(scoped, manager.reviewedMaintenance)
+	} else {
+		observation, err = manager.service.ObserveOperations(scoped)
+	}
+	if err != nil || len(observation.Assignments)+len(observation.Reassignments)+len(observation.MaintenanceOptions) == 0 {
 		cancel()
 		return
 	}
@@ -86,8 +100,14 @@ func (c *demoController) startOperations(ctx context.Context, now time.Time) {
 		cancel()
 		return
 	}
+	for _, option := range observation.MaintenanceOptions {
+		manager.reviewedMaintenance[option.FaultID] = true
+	}
 	cycle := &operationsCycle{run: run, ctx: scoped, cancel: cancel, done: make(chan struct{})}
-	c.operations, c.nextOperations = cycle, now.Add(operationsCooldown)
+	c.operations = cycle
+	if !cooldown {
+		c.nextOperations = now.Add(operationsCooldown)
+	}
 	run.operationsMode = "checking_assistance"
 	activity := operations.Activity{ObservationID: observation.ID(), Tick: observation.Tick,
 		ObservedAt: time.Now().UTC(), Stage: "observed", Status: "observed"}
@@ -101,7 +121,9 @@ func (c *demoController) startOperations(ctx context.Context, now time.Time) {
 func (c *demoController) cancelOperations() {
 	if cycle := c.operations; cycle != nil {
 		cycle.cancel()
-		_ = cycle.run.operations.service.SetOperationsWindow(cycle.ctx, nil)
+		if cycle.run.operations.recovery == nil {
+			_ = cycle.run.operations.service.SetOperationsWindow(cycle.ctx, nil)
+		}
 		cycle.run.operationsMode = "deterministic"
 	}
 	if c.run.warehouse != nil {
@@ -163,7 +185,7 @@ func (c *demoController) applyOperations(cycle *operationsCycle, activity *opera
 	defer c.mu.Unlock()
 	run := cycle.run
 	manager := run.operations
-	_ = manager.service.SetOperationsWindow(cycle.ctx, nil)
+	defer func() { _ = manager.service.SetOperationsWindow(cycle.ctx, nil) }()
 	if c.run != run {
 		activity.Status = "cancelled"
 		return

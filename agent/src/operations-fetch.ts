@@ -42,3 +42,9 @@ export function singleOperationsFetch(send: typeof fetch, apiKey: string): typeo
     return new Response(stream, { status: response.status, statusText: response.statusText, headers: response.headers });
   };
 }
+
+export function writeOperationFrame(value: unknown): Promise<void> {
+  return new Promise((resolve, reject) => {
+    process.stdout.write(JSON.stringify(value) + "\n", error => error ? reject(error) : resolve());
+  });
+}

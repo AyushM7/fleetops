@@ -32,13 +32,17 @@ func (r AssignJobBatchRequest) Validate() error {
 	jobs := make(map[string]bool, len(r.Assignments))
 	robots := make(map[string]bool, len(r.Assignments))
 	for _, assignment := range r.Assignments {
-		if !canonicalAssignmentID(assignment.JobID, 'J') || !canonicalAssignmentID(assignment.RobotID, 'R') ||
-			idNumber(assignment.RobotID) > warehouseTransportCount || jobs[assignment.JobID] || robots[assignment.RobotID] {
+		if !canonicalAssignmentID(assignment.JobID, 'J') || !IsV2TransportID(assignment.RobotID) ||
+			jobs[assignment.JobID] || robots[assignment.RobotID] {
 			return ErrInvalidAssignmentBatch
 		}
 		jobs[assignment.JobID], robots[assignment.RobotID] = true, true
 	}
 	return nil
+}
+
+func IsV2TransportID(id string) bool {
+	return canonicalAssignmentID(id, 'R') && idNumber(id) <= warehouseTransportCount
 }
 
 func canonicalAssignmentID(id string, prefix byte) bool {
@@ -110,7 +114,7 @@ func (s *Sim) OperationsAssignments(jobs []JobState) []AssignmentOption {
 }
 
 func (s *Sim) previewAssignment(job JobState, robot RobotState, distance scheduler.Distance, params scheduler.Params) (AssignmentOption, error) {
-	if job.Status != JobPending || job.AssignedRobot != "" || !s.canAcceptJob(robot) ||
+	if job.Status != JobPending || job.Deferred || job.AssignedRobot != "" || !s.canAcceptJob(robot) ||
 		s.reservedStation(robot.ID) != nil || s.unresponsiveTicks[robot.ID] > 0 {
 		return AssignmentOption{}, ErrAssignmentConflict
 	}

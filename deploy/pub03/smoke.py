@@ -83,6 +83,13 @@ class HTTPSDeploymentTests(unittest.TestCase):
         first = self.a.status()
         self.assertNotEqual(first["generation"], baseline["generation"])
         self.assertNotEqual(first["evidence"]["runtimeId"], baseline["evidence"]["runtimeId"])
+        for status in (first, baseline):
+            self.assertEqual(status["scenarioId"], "warehouse-v2")
+            self.assertEqual(len(status["warehouse"]["robots"]), 11)
+            self.assertEqual(len(status["warehouse"]["stations"]), 4)
+            self.assertEqual(status["operationsMode"], "deterministic")
+        self.assertEqual(self.a.request("/demo/scenario/blocked-reassignment", {}, first["generation"])[0], 200)
+        first = self.a.status()
         foreign = {"query": "mutation($id:ID!){approveProposal(id:$id){execution error}}", "variables": {"id": first["evidence"]["proposalId"]}}
         _, raw, _ = self.b.request("/graphql", foreign, baseline["generation"])
         self.assertNotIn(b'"execution":"succeeded"', raw)

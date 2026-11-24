@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ReactNode } from "react";
 import { BatteryCharge } from "./BatteryCharge";
+import { RobotMaintenanceDetails } from "./Maintenance";
 import { Icon } from "./WarehouseIcon";
 import {
   cellLabel, chargerStatus, isPriorityOverdue, jobLabels, jobOutcomeLabels, robotActivityLabel, robotRoleLabel, robotTone,
   type Entity, type RobotTone, type Selection,
 } from "./warehousePresentation";
-import type { Job, Robot, Station } from "./telemetry";
+import type { Job, Robot, Snapshot, Station } from "./telemetry";
 
 export function useInspectorFocus<T>(selectEntity: (selection: T | null) => void, fallback: string, visible: boolean) {
   const surface = useRef<HTMLDivElement>(null);
@@ -59,8 +60,8 @@ function ActivityChip({ tone, children }: { tone?: RobotTone; children: ReactNod
   </span>;
 }
 
-function RobotDetails({ robot, job, inspect, expanded }: {
-  robot: Robot; job?: Job; inspect: (selection: Selection) => void; expanded: boolean;
+function RobotDetails({ robot, job, snapshot, inspect, expanded }: {
+  robot: Robot; job?: Job; snapshot: Snapshot; inspect: (selection: Selection) => void; expanded: boolean;
 }) {
   const status = robot.status.charAt(0).toUpperCase() + robot.status.slice(1);
   return <>
@@ -69,12 +70,15 @@ function RobotDetails({ robot, job, inspect, expanded }: {
       <Detail label="Status">{status}</Detail>
       <Detail label="Activity"><ActivityChip tone={robotTone(robot)}>{robotActivityLabel(robot)}</ActivityChip></Detail>
       <Detail label="Battery"><BatteryCharge percent={robot.battery} /></Detail>
-      {expanded && <Detail label="Position">{cellLabel(robot)}</Detail>}
+      {(expanded || robot.role === "maintenance" || robot.activeFault) && <Detail label="Position">{cellLabel(robot)}</Detail>}
+      {job?.cargoRobotId && <Detail label="Cargo custody">Onboard {job.cargoRobotId} · {job.id}</Detail>}
       {expanded && robot.waitTicks > 0 && <Detail label="Traffic wait">{robot.waitTicks} {robot.waitTicks === 1 ? "tick" : "ticks"}</Detail>}
     </dl>
     <meter className="v2-battery" min={0} max={100} value={robot.battery} aria-label={robot.id + " battery"} />
+    <RobotMaintenanceDetails snapshot={snapshot} robot={robot} inspect={inspect} />
+    {robot.role === "transport" &&
     <section className="v2-inspector-group" aria-label="Current job">
-      <h3>Current job</h3>
+      <h3>{robot.activeFault && job ? "Interrupted job" : "Current job"}</h3>
       {job ? <div className="v2-inspector-card">
         <div className="v2-job-title"><Icon name="package" size={18} /><strong>{job.id}</strong>
           <span className="v2-job-type">{job.type === "PRIORITY" ? "Priority" : "Normal"}</span></div>
@@ -83,7 +87,7 @@ function RobotDetails({ robot, job, inspect, expanded }: {
           View job<Icon name="arrow-right" size={16} />
         </button>
       </div> : <p className="v2-secondary">{robot.jobId ? "Job " + robot.jobId + " is outside the current snapshot." : "No job assigned"}</p>}
-    </section>
+    </section>}
   </>;
 }
 
@@ -96,6 +100,7 @@ function JobDetails({ job, inspect, expanded }: {
     <dl className="v2-inspector-group">
       <Detail label="Status">{jobLabels[job.status]}</Detail>
       <Detail label="Assigned robot">{job.assignedRobot || "Unassigned"}</Detail>
+      {job.cargoRobotId && <Detail label="Cargo custody">Onboard {job.cargoRobotId}</Detail>}
       {job.deadlineTick !== undefined && <Detail label="Deadline">
         <span className={overdue ? "v2-overdue" : undefined}>Tick {job.deadlineTick}{overdue ? " · Overdue" : ""}</span>
       </Detail>}
@@ -176,9 +181,9 @@ export function useInspectorDialog(id: string | undefined, kind: string | undefi
 }
 
 export function WarehouseInspector({
-  entity, job, inspect, close, restoreFocus, onWarehouse, lastConfirmedTick, canInspectAssigned = true,
+  entity, job, snapshot, inspect, close, restoreFocus, onWarehouse, lastConfirmedTick, canInspectAssigned = true,
 }: {
-  entity: Entity | null; job?: Job; inspect: (selection: Selection) => void; close: () => void; restoreFocus: () => void;
+  entity: Entity | null; job?: Job; snapshot?: Snapshot; inspect: (selection: Selection) => void; close: () => void; restoreFocus: () => void;
   onWarehouse?: () => void; lastConfirmedTick?: number; canInspectAssigned?: boolean;
 }) {
   const titleId = useId();
@@ -192,7 +197,7 @@ export function WarehouseInspector({
 
   const { dialog, heading, content } = useInspectorDialog(id, kind, close, restoreFocus);
 
-  const detail = current?.entity;
+  const detail = snapshot ? current?.entity : undefined;
   const title = detail && { robot: "Robot details", job: "Job details", station: "Charger details" }[detail.kind];
   return <dialog ref={dialog} className="v2-panel v2-inspector" inert={!entity} aria-labelledby={detail ? titleId : undefined}
     onCancel={event => { event.preventDefault(); close(); }}>
@@ -205,7 +210,7 @@ export function WarehouseInspector({
       </header>
       <div className="v2-inspector-content" ref={content}>
         {lastConfirmedTick !== undefined && <p className="v2-directory-notice">Last confirmed at tick {lastConfirmedTick}.</p>}
-        {detail.kind === "robot" && <RobotDetails robot={detail.robot} job={current.job} inspect={inspect} expanded={!!onWarehouse} />}
+        {detail.kind === "robot" && snapshot && <RobotDetails robot={detail.robot} job={current?.job} snapshot={snapshot} inspect={inspect} expanded={!!onWarehouse} />}
         {detail.kind === "job" && <JobDetails job={detail.job} inspect={canInspectAssigned ? inspect : undefined} expanded={!!onWarehouse} />}
         {detail.kind === "station" && <StationDetails station={detail.station} inspect={inspect} />}
       </div>

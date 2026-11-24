@@ -1,6 +1,10 @@
 import { singleOperationsFetch } from "./operations-fetch.js";
 
 async function run() {
+  if (process.env.FLEETOPS_OPERATIONS_PROTOCOL === "v3") {
+    await (await import("./operations-recovery-worker.js")).runOperationsRecoveryWorker();
+    return;
+  }
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey || !/^[1-9][0-9]{0,18}$/.test(process.env.FLEETOPS_OPERATIONS_RESERVATION ?? "")) {
     throw new Error("Operations reservation required.");

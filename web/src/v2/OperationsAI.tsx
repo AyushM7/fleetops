@@ -1,9 +1,12 @@
 import { useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { WarehouseFeed } from "./session";
-import { operationsModeLabel, type OperationsActivity, type Snapshot } from "./telemetry";
+import { operationsModeLabel, type MaintenanceAttempt, type OperationsActivity, type Robot, type Snapshot } from "./telemetry";
 import { Icon } from "./WarehouseIcon";
 import { useInspectorDialog, useInspectorFocus } from "./WarehouseInspector";
-import { findEntity, isPriorityOverdue, jobOutcomeLabels, type Selection } from "./warehousePresentation";
+import { MaintenanceAttemptDetails } from "./Maintenance";
+import { RecoveryApprovals } from "./RecoveryApprovals";
+import { acceptedMaintenanceAttempt, breakdownLabels, findEntity, isPriorityOverdue, jobOutcomeLabels,
+  maintenanceForRobot, maintenanceOutcomeLabels, maintenancePhaseLabel, maintenanceReasonLabels, type Selection } from "./warehousePresentation";
 
 type Tone = "moving" | "charging" | "waiting" | "fault" | "assisted";
 type Entry = {
@@ -12,6 +15,8 @@ type Entry = {
   | { source: "decision"; activity: OperationsActivity }
   | { source: "delivery"; job: Snapshot["jobs"][number] }
   | { source: "fault"; fault: Snapshot["faults"][number] }
+  | { source: "breakdown"; robot: Robot }
+  | { source: "maintenance"; attempt: MaintenanceAttempt }
 );
 
 const lifecycle: Record<string, { label: string; tone?: Tone }> = {
@@ -67,11 +72,13 @@ function decisionEntry(activity: OperationsActivity): Entry {
     const { JobID, FromRobotID, ToRobotID } = decision.reassignment;
     references.push({ kind: "job", id: JobID }, { kind: "robot", id: FromRobotID }, { kind: "robot", id: ToRobotID });
   }
+  if (decision?.kind === "maintenance") references.push({ kind: "robot", id: decision.maintenance.robotId });
   const status = Object.hasOwn(lifecycle, activity.status) ? lifecycle[activity.status] : { label: "Unrecognized activity status" };
   const state = activity.status === "applied" && !(activity.go?.execution === "succeeded" && activity.go.auditCommitted)
     ? lifecycle.execution_unconfirmed : status;
   const title = decision?.kind === "assign" ? "Job assignment"
     : decision?.kind === "reassign" ? "Job reassignment"
+    : decision?.kind === "maintenance" ? "Maintenance dispatch"
     : decision?.kind === "abstain" ? "No action recommended" : "Dispatch review";
   return { source: "decision", key: activity.observationId, tick: activity.tick, activity, title, state: state.label, tone: state.tone, references };
 }
@@ -79,7 +86,8 @@ function decisionEntry(activity: OperationsActivity): Entry {
 function warehouseEntries(snapshot: Snapshot): Entry[] {
   const entries: Entry[] = snapshot.faults.map(fault => ({
     source: "fault", key: "fault:" + fault.id, tick: fault.tick, fault,
-    title: Object.hasOwn(faultLabels, fault.type) ? faultLabels[fault.type] : "Warehouse fault recorded", state: "Recorded",
+    title: Object.hasOwn(faultLabels, fault.type) ? faultLabels[fault.type] : Object.hasOwn(breakdownLabels, fault.type)
+      ? breakdownLabels[fault.type as keyof typeof breakdownLabels] + " recorded" : "Warehouse fault recorded", state: "Recorded",
     tone: fault.type === "robot_unresponsive" ? "fault" : "waiting",
     references: fault.robots.map(id => ({ kind: "robot", id })),
   }));
@@ -92,6 +100,33 @@ function warehouseEntries(snapshot: Snapshot): Entry[] {
     });
   }
   return entries.sort((a, b) => b.tick - a.tick).slice(0, 12);
+}
+
+function maintenanceEntries(snapshot: Snapshot): Entry[] {
+  const work = snapshot.maintenance;
+  const entries: Entry[] = [];
+  for (const robot of snapshot.robots) {
+    if (!robot.activeFault) continue;
+    const { breakdown, attempt, reason } = maintenanceForRobot(snapshot, robot);
+    if (attempt && robot.role !== "maintenance") continue;
+    entries.push({
+      source: "breakdown", robot, key: "breakdown:" + (breakdown?.id ?? robot.id),
+      title: breakdownLabels[robot.activeFault] + (breakdown ? " · " + breakdown.id : ""),
+      tick: breakdown?.tick ?? snapshot.tick, state: reason ? maintenanceReasonLabels[reason] : "Active breakdown",
+      tone: "fault", references: [{ kind: "robot", id: robot.id }],
+    });
+  }
+  const history = work?.history?.slice(-8).reverse() ?? [];
+  for (const attempt of work?.active ? [work.active, ...history] : history) {
+    entries.push({
+      source: "maintenance", attempt, key: "maintenance:" + attempt.id, title: attempt.id + " · " + attempt.faultId,
+      tick: attempt.finishedTick ?? attempt.startedTick,
+      state: attempt.outcome ? maintenanceOutcomeLabels[attempt.outcome] : maintenancePhaseLabel(snapshot),
+      tone: attempt.outcome === "completed" ? "charging" : attempt.outcome ? "fault" : "moving",
+      references: [{ kind: "robot", id: attempt.robotId }, ...(attempt.jobId ? [{ kind: "job" as const, id: attempt.jobId }] : [])],
+    });
+  }
+  return entries;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -131,6 +166,12 @@ function Recommendation({ activity, snapshot, inspect }: {
       <Field label="To">{ref("robot", ToRobotID)}</Field>
     </dl>;
   }
+  if (decision?.kind === "maintenance") {
+    return <dl>
+      <Field label="Target">{ref("robot", decision.maintenance.robotId)}</Field>
+      <Field label="Fault occurrence"><code>{decision.maintenance.faultId}</code></Field>
+    </dl>;
+  }
   if (decision?.kind === "abstain") return <p>{Object.hasOwn(abstentionLabels, decision.reason) ? abstentionLabels[decision.reason] : "Reason unavailable"}.</p>;
   return <p>{activity.stage === "observed" ? "Waiting for the review to finish." : "No recommendation was recorded."}</p>;
 }
@@ -154,7 +195,9 @@ function CommandDetails({ activity }: { activity: OperationsActivity }) {
         : activity.goReason === "admission_rejected" ? "Admission rejected" : activity.goReason}</Field>}
       {activity.finishedAt && <Field label="Review finished"><Time value={activity.finishedAt} /></Field>}
     </dl>
-    {receipt?.auditCommitted && receipt.execution === "succeeded" && <p>The receipt confirms the dispatch change. Check Jobs for later delivery outcomes.</p>}
+    {receipt?.auditCommitted && receipt.execution === "succeeded" && <p>{activity.decision?.kind === "maintenance"
+      ? "Go admitted the maintenance dispatch. The simulator records the repair outcome separately."
+      : "The receipt confirms the dispatch change. Check Jobs for later delivery outcomes."}</p>}
   </section>;
 }
 
@@ -179,6 +222,7 @@ function ModelDetails({ activity }: { activity: OperationsActivity }) {
 export function DecisionDetails({ activity, snapshot, inspect }: {
   activity: OperationsActivity; snapshot: Snapshot; inspect: (selection: Selection) => void;
 }) {
+  const attempt = acceptedMaintenanceAttempt(snapshot, activity);
   return <>
     <section className="v2-ops-detail-section">
       <h3>Go observation</h3>
@@ -195,8 +239,30 @@ export function DecisionDetails({ activity, snapshot, inspect }: {
       {activity.proposedAt && <p>Go matched the proposal to its offered options before checking live admission.</p>}
     </section>
     <CommandDetails activity={activity} />
+    {attempt && <section className="v2-ops-detail-section">
+      <h3>Simulator maintenance attempt</h3>
+      <MaintenanceAttemptDetails snapshot={snapshot} attempt={attempt} inspect={inspect} />
+    </section>}
     <ModelDetails activity={activity} />
   </>;
+}
+
+function MaintenanceEventDetails({ entry, snapshot, inspect }: {
+  entry: Extract<Entry, { source: "maintenance" | "breakdown" }>; snapshot: Snapshot; inspect: (selection: Selection) => void;
+}) {
+  if (entry.source === "maintenance") return <section className="v2-ops-detail-section">
+    <h3>Simulator maintenance attempt</h3>
+    <MaintenanceAttemptDetails snapshot={snapshot} attempt={entry.attempt} inspect={inspect} />
+  </section>;
+  const { breakdown, reason } = maintenanceForRobot(snapshot, entry.robot);
+  return <section className="v2-ops-detail-section">
+    <h3>Active breakdown</h3>
+    <dl>
+      {breakdown && <Field label="Fault occurrence"><code>{breakdown.id}</code></Field>}
+      <Field label="Robot"><EntityReference selection={{ kind: "robot", id: entry.robot.id }} snapshot={snapshot} inspect={inspect} /></Field>
+      {reason && <Field label="Blocker">{maintenanceReasonLabels[reason]} <code>{reason}</code></Field>}
+    </dl>
+  </section>;
 }
 
 function WarehouseEventDetails({ entry, snapshot, inspect }: {
@@ -229,7 +295,9 @@ function ActivityGroup({ title, entries, selected, pick, empty, description }: {
     <header><h2 id={id}>{title}</h2><p>{description}</p></header>
     {entries.length ? <ol className="v2-ops-list">
       {entries.map(entry => {
-        const source = entry.source === "decision" ? activitySource(entry.activity) : { label: "Go telemetry" };
+        const source = entry.source === "decision" ? activitySource(entry.activity)
+          : entry.source === "maintenance" ? { label: entry.attempt.aiDirected ? "AI-directed" : "Deterministic Go",
+            tone: entry.attempt.aiDirected ? "assisted" : undefined } : { label: "Go telemetry" };
         const references = entry.references.slice(0, 4).map(ref => ref.id).join(" · ");
         return <li key={entry.key}>
           <button type="button" className="v2-ops-row" aria-pressed={entry.key === selected}
@@ -261,8 +329,9 @@ export function OperationsAI({ feed, inspect }: { feed: WarehouseFeed; inspect: 
   const [selection, setSelection] = useState<(ActivitySelection & { scope: string }) | null>(null);
   const decisions = frame ? frame.operations.map(decisionEntry).reverse() : [];
   const events = frame ? warehouseEntries(frame.snapshot) : [];
+  const repairs = frame ? maintenanceEntries(frame.snapshot) : [];
   const selected = selection && selection.scope === scope
-    ? decisions.find(entry => entry.key === selection.key) ?? events.find(entry => entry.key === selection.key) : undefined;
+    ? [...decisions, ...repairs, ...events].find(entry => entry.key === selection.key) : undefined;
   if (selection && !selected) setSelection(null);
   const select = useCallback((entry: ActivitySelection | null) => setSelection(entry && scope ? { ...entry, scope } : null), [scope]);
   const { surface, pick, close, restoreFocus } = useInspectorFocus(select, "[data-ops-heading]", true);
@@ -292,11 +361,14 @@ export function OperationsAI({ feed, inspect }: { feed: WarehouseFeed; inspect: 
     </p>}
     <div className={"v2-ops-work" + (selected ? " has-inspector" : "")}>
       {frame && snapshot && <div className="v2-ops-history">
+        {scope && <RecoveryApprovals key={scope} generation={frame.generation} snapshot={snapshot} live={feed.phase === "live"} />}
         <ActivityGroup title="Decision activity" description="Operations Manager reviews for this run, newest observation first."
           entries={decisions} selected={selected?.key} pick={pick} empty="No decision activity recorded in this run." />
+        <ActivityGroup title="Maintenance & incidents" description="Active breakdowns and physical attempts reported by Go."
+          entries={repairs} selected={selected?.key} pick={pick} empty="No breakdowns or maintenance attempts in this run." />
         <ActivityGroup title="Warehouse events" description="Faults and deliveries reported by Go, newest tick first."
           entries={events} selected={selected?.key} pick={pick} empty="No faults or deliveries in the current snapshot." />
-        <p className="v2-ops-workflow">Go validates and executes V2 dispatch commands automatically. Scripted proposals in the V1 demo require operator approval.</p>
+        <p className="v2-ops-workflow">Go validates and executes routine dispatch automatically. Proposals require operator approval.</p>
       </div>}
       <dialog ref={dialog} className="v2-panel v2-inspector v2-ops-inspector" inert={!selected} aria-labelledby={titleId}
         onCancel={event => { event.preventDefault(); close(); }}>
@@ -312,6 +384,8 @@ export function OperationsAI({ feed, inspect }: { feed: WarehouseFeed; inspect: 
               {detail.source === "decision" && <span data-tone={activitySource(detail.activity).tone}>{activitySource(detail.activity).label}</span>}
             </div>
             {detail.source === "decision" ? <DecisionDetails activity={detail.activity} snapshot={snapshot} inspect={inspect} />
+              : detail.source === "maintenance" || detail.source === "breakdown"
+                ? <MaintenanceEventDetails entry={detail} snapshot={snapshot} inspect={inspect} />
               : <WarehouseEventDetails entry={detail} snapshot={snapshot} inspect={inspect} />}
           </>}
         </div>

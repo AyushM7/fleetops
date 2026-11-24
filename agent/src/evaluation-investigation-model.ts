@@ -18,9 +18,9 @@ export function capEvaluationModel(model: EvaluationModel, maximumOutputTokens: 
   } });
 }
 // Only the separately gated local evaluation CLI uses this resolver. It never generates.
-export async function resolveEvaluationModel(modelId: string, maximumOutputTokens: number, permit: () => void): Promise<EvaluationModel> {
+export async function resolveEvaluationModel(modelId: string, maximumOutputTokens: number, permit: () => void, apiKey?: string): Promise<EvaluationModel> {
   const agent = new Agent({ id: "agent07-reviewed-resolver", name: "Reviewed evaluation resolver", instructions: "Resolve the exact reviewed model.",
-    model: { providerId: "openai", modelId, url: "https://api.openai.com/v1", api: "responses" }, maxRetries: 0, errorProcessorDefaults: false });
+    model: { providerId: "openai", modelId, url: "https://api.openai.com/v1", api: "responses", ...(apiKey ? { apiKey } : {}) }, maxRetries: 0, errorProcessorDefaults: false });
   agent.__setLogger(noopLogger);
   const resolved = await agent.getModel();
   if (resolved.specificationVersion !== "v2") throw new Error("Unsupported reviewed model protocol.");

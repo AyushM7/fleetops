@@ -1,11 +1,70 @@
 import type { LanguageModel } from "@mastra/core/llm";
+import type { GroundingFailure } from "./recovery-grounding.js";
 
 export const investigationLimits = Object.freeze({ requests: 6, tools: 8, milliseconds: 30_000,
   outputPerRequest: 6000, inputTokens: 32_000, outputTokens: 12_000, totalTokens: 44_000 });
+type BudgetGuard = "model_busy" | "request_limit" | "prompt_size" | "output_allowance" | "reported_usage";
 export type InvestigationTrace = { requests: number; toolCalls: number; inputTokens: number; outputTokens: number; totalTokens: number;
-  usageReports?: number; reportedActualModel?: string; failureCategory?: string;
+  usageReports?: number; reportedActualModel?: string; failureCategory?: string; groundingFailure?: GroundingFailure;
+  budgetFailure?: { guard: BudgetGuard; promptBytes?: number };
   events: { kind: "request" | "tool"; name: string; input?: unknown; output?: unknown }[] };
 type Model = Extract<LanguageModel, { specificationVersion: "v2" }>;
+
+type UsageCounts = { inputTokens: number; outputTokens: number; totalTokens: number };
+
+const count = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+const record = (value: unknown): Record<string, unknown> | undefined =>
+  typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+
+function within(total: number, ...parts: unknown[]): boolean {
+  let remaining = total;
+  for (const part of parts) {
+    if (part === undefined) continue;
+    if (!count(part) || part > remaining) return false;
+    remaining -= part;
+  }
+  return true;
+}
+
+function matchesDetails(value: unknown, total: number, known: Record<string, unknown>): boolean {
+  if (value === undefined || value === null) return true;
+  const details = record(value);
+  return !!details && within(total, ...Object.keys(known).map(key => details[key] ?? undefined)) &&
+    Object.entries(known).every(([key, expected]) => details[key] == null || expected === undefined || details[key] === expected);
+}
+
+export function normalizeInvestigationUsage(value: unknown): UsageCounts | undefined {
+  const usage = record(value);
+  if (!usage) return undefined;
+  const input = record(usage.inputTokens), output = record(usage.outputTokens);
+  const inputTokens = input ? input.total : usage.inputTokens;
+  const outputTokens = output ? output.total : usage.outputTokens;
+  if (!!input !== !!output || !count(inputTokens) || !count(outputTokens)) return undefined;
+  const combined = inputTokens + outputTokens;
+  const raw = record(usage.raw);
+  const rawTotal = raw?.total_tokens;
+  if (usage.raw !== undefined && !raw ||
+      raw?.input_tokens !== undefined && raw.input_tokens !== inputTokens ||
+      raw?.output_tokens !== undefined && raw.output_tokens !== outputTokens ||
+      rawTotal !== undefined && usage.totalTokens !== undefined && rawTotal !== usage.totalTokens) return undefined;
+
+  // The v3 SDK can omit a combined total. Flat v2 usage must report it.
+  const totalTokens = input && usage.totalTokens === undefined
+    ? rawTotal === undefined ? combined : rawTotal
+    : usage.totalTokens;
+  if (!count(totalTokens) || totalTokens < combined) return undefined;
+  if (!within(inputTokens, usage.cachedInputTokens) || !within(totalTokens - inputTokens, usage.reasoningTokens)) return undefined;
+  if (input && output && (!within(inputTokens, input.noCache, input.cacheRead, input.cacheWrite) ||
+      !within(outputTokens, output.text, output.reasoning) ||
+      usage.cachedInputTokens !== undefined && input.cacheRead !== undefined && usage.cachedInputTokens !== input.cacheRead ||
+      usage.reasoningTokens !== undefined && output.reasoning !== undefined && usage.reasoningTokens !== output.reasoning)) return undefined;
+  if (!matchesDetails(raw?.input_tokens_details, inputTokens, {
+    cached_tokens: input?.cacheRead ?? usage.cachedInputTokens, cache_write_tokens: input?.cacheWrite,
+  }) || !matchesDetails(raw?.output_tokens_details, input ? outputTokens : totalTokens - inputTokens, {
+    reasoning_tokens: output?.reasoning ?? usage.reasoningTokens,
+  })) return undefined;
+  return { inputTokens, outputTokens, totalTokens };
+}
 
 export class InvestigationBudget {
   readonly controller = new AbortController();
@@ -26,6 +85,10 @@ export class InvestigationBudget {
   fail(category = "investigation_failed"): Error {
     this.trace.failureCategory ??= category;
     this.failed = true; this.controller.abort(); return new Error("Investigation stopped safely.");
+  }
+  private exhaust(guard: BudgetGuard, promptBytes?: number): Error {
+    this.trace.budgetFailure ??= { guard, ...(promptBytes === undefined ? {} : { promptBytes }) };
+    return this.fail("budget_exhausted");
   }
   check(): void {
     if (performance.now() >= this.expires) throw this.fail("timeout");
@@ -60,11 +123,15 @@ export class InvestigationBudget {
   model(model: Model, inspectTool: (name: string, input: string) => void): Model {
     const request = async (options: Parameters<Model["doGenerate"]>[0]) => {
       this.check();
-      if (this.modelBusy || this.trace.requests >= investigationLimits.requests) throw this.fail("budget_exhausted");
+      if (this.modelBusy) throw this.exhaust("model_busy");
+      if (this.trace.requests >= investigationLimits.requests) throw this.exhaust("request_limit");
       // UTF-8 bytes conservatively bound text token input, including tool and response schemas.
       const bytes = Buffer.byteLength(JSON.stringify({ prompt: options.prompt, tools: options.tools, responseFormat: options.responseFormat }));
-      const remaining = Math.min(investigationLimits.outputTokens - this.trace.outputTokens, investigationLimits.totalTokens - this.trace.totalTokens - bytes);
-      if (remaining <= 0 || bytes > investigationLimits.inputTokens - this.trace.inputTokens) throw this.fail("budget_exhausted");
+      const outputRemaining = investigationLimits.outputTokens - this.trace.outputTokens;
+      const totalRemaining = investigationLimits.totalTokens - this.trace.totalTokens - bytes;
+      if (outputRemaining <= 0) throw this.exhaust("output_allowance");
+      if (totalRemaining <= 0 || bytes > investigationLimits.inputTokens - this.trace.inputTokens) throw this.exhaust("prompt_size", bytes);
+      const remaining = Math.min(outputRemaining, totalRemaining);
       const maxOutputTokens = Math.min(options.maxOutputTokens ?? investigationLimits.outputPerRequest, investigationLimits.outputPerRequest, remaining);
       this.trace.requests++;
       this.modelBusy = true;
@@ -85,13 +152,12 @@ export class InvestigationBudget {
             if (part.type === "finish") {
               if (finished) throw this.fail();
               finished = true;
-              const { inputTokens, outputTokens, totalTokens } = part.usage;
-              if (![inputTokens, outputTokens, totalTokens].every(n => Number.isSafeInteger(n) && n! >= 0) ||
-                  totalTokens! < inputTokens! + outputTokens! || outputTokens! > maxOutputTokens) throw this.fail("invalid_usage");
-              this.trace.inputTokens += inputTokens!; this.trace.outputTokens += outputTokens!;
-              this.trace.totalTokens += totalTokens!; this.trace.usageReports = (this.trace.usageReports ?? 0) + 1;
+              const usage = normalizeInvestigationUsage(part.usage);
+              if (!usage || usage.outputTokens > maxOutputTokens) throw this.fail("invalid_usage");
+              this.trace.inputTokens += usage.inputTokens; this.trace.outputTokens += usage.outputTokens;
+              this.trace.totalTokens += usage.totalTokens; this.trace.usageReports = (this.trace.usageReports ?? 0) + 1;
               if (this.trace.inputTokens > investigationLimits.inputTokens || this.trace.outputTokens > investigationLimits.outputTokens ||
-                  this.trace.totalTokens > investigationLimits.totalTokens) throw this.fail("budget_exhausted");
+                  this.trace.totalTokens > investigationLimits.totalTokens) throw this.exhaust("reported_usage");
             }
             controller.enqueue(part);
           },

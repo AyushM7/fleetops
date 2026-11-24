@@ -2,11 +2,17 @@
 
 package sim
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // NewAgent07TestFixture constructs initial conditions only in explicitly tagged
 // evaluation builds. These edits precede fleet.Service runtime/identity creation.
 func NewAgent07TestFixture(variant string) (*Sim, error) {
+	if strings.HasPrefix(variant, "phase4/") {
+		return newPhase4V3Fixture(variant)
+	}
 	if variant == "healthy" {
 		cfg := DefaultConfig()
 		cfg.InitialJobs, cfg.MaxJobs, cfg.NewJobEvery = 0, 1, 10000

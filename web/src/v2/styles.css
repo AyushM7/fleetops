@@ -151,11 +151,37 @@
   min-inline-size: 0;
   padding: 20px;
   container-type: inline-size;
-  --v2-inspector-space: 332px;
-  --v2-map-height: clamp(386px, calc(100dvh - 298px), 650px);
+  --v2-map-height: clamp(386px, calc(100dvh - 170px), 980px);
 }
 .v2-warehouse { display: grid; gap: 12px; }
 .v2-warehouse[hidden] { display: none; }
+.v2-maintenance-summary { display: grid; gap: 7px; padding: 10px 14px; }
+.v2-maintenance-summary header, .v2-maintenance-summary-line {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 14px;
+}
+.v2-maintenance-summary h2 { display: flex; align-items: center; gap: 7px; font-size: .92rem; }
+.v2-maintenance-summary h2 .v2-icon { color: var(--v2-muted); }
+.v2-maintenance-summary p, .v2-maintenance-details { margin: 0; }
+.v2-maintenance-summary-line { justify-content: flex-start; color: var(--v2-muted); }
+.v2-maintenance-summary-line strong { color: var(--v2-text); }
+.v2-maintenance-incidents, .v2-maintenance-history { list-style: none; padding: 0; margin: 0; }
+.v2-maintenance-incidents { display: flex; flex-wrap: wrap; gap: 6px; }
+.v2-maintenance-incidents li {
+  max-inline-size: 100%; border: 1px solid var(--v2-border); border-radius: 6px;
+  padding: 1px 7px; color: var(--v2-fault); overflow-wrap: anywhere;
+}
+.v2-shell .v2-maintenance-reference {
+  display: inline-flex; align-items: center; gap: 4px; min-block-size: 28px; padding: 0 3px;
+  vertical-align: middle; font-size: inherit; font-weight: 600; color: var(--v2-selection-ink); border-radius: 5px;
+}
+.v2-maintenance-details dd, .v2-maintenance-history li { overflow-wrap: anywhere; min-inline-size: 0; }
+.v2-maintenance-details code { color: var(--v2-muted); font-size: .75rem; margin-inline-start: 3px; }
+.v2-maintenance-history { display: grid; gap: 6px; margin-block-start: 8px; }
+.v2-maintenance-history li { border: 1px solid var(--v2-border); padding: 5px 8px; border-radius: 6px; }
+.v2-maintenance-history li > span { display: block; color: var(--v2-muted); }
+.v2-repair-progress { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; font-size: .78rem; }
+.v2-repair-progress progress { inline-size: 85px; block-size: .55rem; accent-color: var(--v2-moving); }
+.v2-fleet-maintenance { grid-column: span 2; color: var(--tone, var(--v2-muted)); font-size: .78rem; }
 .v2-panel { min-inline-size: 0; background: var(--v2-panel); border: 1px solid var(--v2-border); border-radius: 12px; }
 .v2-empty { padding: 20px; }
 .v2-empty p, .v2-secondary { color: var(--v2-muted); margin-block-start: 8px; }
@@ -220,13 +246,13 @@
 .v2-map-svg {
   position: absolute;
   display: block;
-  inset: 0 auto 0 0;
-  inline-size: 100cqw;
+  inset: 0;
+  inline-size: 100%;
   block-size: 100%;
   color: var(--v2-muted);
   user-select: none;
 }
-.v2-cell { fill: var(--v2-floor); stroke: var(--v2-map-grid); stroke-width: .025; }
+.v2-cell { fill: var(--v2-floor); stroke: var(--v2-map-grid); stroke-width: .028; }
 .v2-cell-aisle { fill: var(--v2-aisle); }
 .v2-wall-fill { fill: var(--v2-wall); }
 .v2-wall-grid-line { stroke: var(--v2-wall-line); stroke-width: .014; }
@@ -245,13 +271,18 @@
 .v2-map-target { cursor: pointer; }
 .v2-shell .v2-map-target:focus-visible { outline: none; }
 .v2-target-ring { fill: transparent; stroke: transparent; stroke-width: .055; pointer-events: none; }
+.v2-maintenance-cell { fill: none; stroke: var(--v2-moving); stroke-width: 1.6px; vector-effect: non-scaling-stroke; pointer-events: none; }
+.v2-maintenance-cell[data-highlight="target"] { stroke: var(--v2-fault); stroke-dasharray: 3 2; }
+.v2-maintenance-cell[data-highlight="recovered"] { stroke: var(--v2-charging); stroke-dasharray: 1 2; }
 .v2-map-target:active .v2-target-ring,
 .v2-map-target[aria-pressed=true] .v2-target-ring { stroke: var(--v2-selection-ink); stroke-width: 2px; vector-effect: non-scaling-stroke; }
 .v2-map-target:focus-visible .v2-target-ring { stroke: var(--v2-focus); stroke-width: 2px; vector-effect: non-scaling-stroke; stroke-dasharray: 3 2; }
 .v2-robot-marker { fill: var(--v2-marker-fill); stroke: var(--v2-marker-edge); stroke-width: .035; }
 .v2-robot-marker.is-maintenance { fill: var(--v2-maintenance-fill); stroke: var(--v2-marker-edge); }
 .v2-map-target[data-tone] .v2-robot-marker { fill: var(--tone-fill); stroke: var(--tone); stroke-width: .046; }
-.v2-map-svg .v2-robot-id { fill: var(--v2-text); }
+.v2-map-svg .v2-robot-id { fill: var(--v2-text); font-weight: 750; }
+.v2-robot-marker, .v2-station-tile { transition: fill 140ms linear, stroke 140ms linear; }
+.v2-card-charge rect { transition: width 140ms linear; }
 .v2-status-glyph { pointer-events: none; }
 .v2-status-glyph circle { fill: var(--tone); }
 .v2-status-glyph path { fill: none; stroke: var(--tone); stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.25px; vector-effect: non-scaling-stroke; }
@@ -458,7 +489,6 @@ section.v2-inspector-group { padding-block-start: 10px; }
 }
 
 @media (max-width: 1179px) {
-  .v2-workspace { --v2-inspector-space: 0px; }
   .v2-map-row.has-inspector { grid-template-columns: minmax(0, 1fr); }
   .v2-inspector {
     position: fixed;
@@ -521,6 +551,7 @@ section.v2-inspector-group { padding-block-start: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .v2-robot-target { translate: none !important; }
   .v2-shell *, .v2-shell *::before { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   .v2-inspector { transform: none; }
   .v2-inspector::backdrop { transition: none; }

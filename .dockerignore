@@ -2,6 +2,8 @@
 !Dockerfile
 !backend
 !backend/**
+!agent
+!agent/**
 !web
 !web/**
 .git
@@ -9,6 +11,12 @@
 .env.*
 **/.env
 **/.env.*
+**/.aws
+**/.ssh
+**/*.pem
+**/*.ppk
+**/*.dump
+**/*.vhdx
 **/node_modules
 **/dist
 **/coverage

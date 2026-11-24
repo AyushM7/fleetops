@@ -50,8 +50,11 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn("REVOKE ALL ON DATABASE fleetops FROM PUBLIC", sql)
         dockerfile = (ROOT.parent.parent / "Dockerfile").read_text()
         self.assertIn("./cmd/healthcheck", dockerfile)
-        self.assertIn("COPY --from=backend /healthcheck /healthcheck", dockerfile)
-        self.assertNotIn("agent/", dockerfile)
+        build_stages, public_stage = dockerfile.split("\nFROM scratch\n", 1)
+        self.assertIn("COPY --from=backend /healthcheck /healthcheck", public_stage)
+        self.assertNotIn("agent/", public_stage)
+        self.assertIn("AS operations\n", build_stages)
+        self.assertIn("FLEETOPS_OPERATIONS_AGENT=/agent/dist/operations-worker.js", build_stages)
 
 
 if __name__ == "__main__":

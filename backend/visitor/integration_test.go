@@ -72,6 +72,11 @@ func (v visitorAPI) status(t *testing.T) demoStatus {
 
 func visitorIntegration(t *testing.T) (*visitorGateway, visitorFactory, visitorAPI, visitorAPI) {
 	t.Helper()
+	return visitorIntegrationWithStartup(t, false)
+}
+
+func visitorIntegrationWithStartup(t *testing.T, startInWarehouseV2 bool) (*visitorGateway, visitorFactory, visitorAPI, visitorAPI) {
+	t.Helper()
 	if os.Getenv("FLEETOPS_TEST_DATABASE_URL") == "" {
 		if os.Getenv("FLEETOPS_REQUIRE_DB") == "1" {
 			t.Fatal("required PostgreSQL unavailable")
@@ -81,7 +86,7 @@ func visitorIntegration(t *testing.T) (*visitorGateway, visitorFactory, visitorA
 	cfg := db.DefaultConfig(os.Getenv("FLEETOPS_TEST_DATABASE_URL"))
 	server := httptest.NewUnstartedServer(nil)
 	config := Config{Mode: "local", Origin: "http://" + server.Listener.Addr().String(), Database: cfg,
-		AssetsDir: integrationAssets(t), EvidenceDir: visitorTestEvidenceDir(t)}
+		AssetsDir: integrationAssets(t), EvidenceDir: visitorTestEvidenceDir(t), StartInWarehouseV2: startInWarehouseV2}
 	app, err := New(context.Background(), config)
 	if err != nil {
 		t.Fatal(err)
@@ -108,6 +113,24 @@ func visitorIntegration(t *testing.T) (*visitorGateway, visitorFactory, visitorA
 		return v
 	}
 	return g, f, newClient(), newClient()
+}
+
+func TestLocalVisitorStartsInWarehouseV2Integration(t *testing.T) {
+	_, _, a, b := visitorIntegrationWithStartup(t, true)
+	read := func(client visitorAPI) demoStatus {
+		var target demoStatus
+		if err := json.Unmarshal(client.must(t, "/demo/status", "", "", "{}"), &target); err != nil {
+			t.Fatal(err)
+		}
+		if !target.Ready || target.ScenarioID != warehouseScenario || target.Evidence == nil || target.Evidence.RuntimeID == "" || target.Warehouse == nil || len(target.Warehouse.Robots) != 11 {
+			t.Fatal("new visitor did not start in Warehouse V2")
+		}
+		return target
+	}
+	status, independent := read(a), read(b)
+	if status.Generation == independent.Generation || status.Evidence.RuntimeID == independent.Evidence.RuntimeID {
+		t.Fatal("new Warehouse V2 sessions shared a runtime")
+	}
 }
 
 func visitorDecision(kind, id string) string {
@@ -222,7 +245,7 @@ func TestPUB02TwoVisitorIntegration(t *testing.T) {
 	}
 	g.manager.mu.Unlock()
 	sessionA.mu.Lock()
-	sessionA.deadline = time.Now().Add(-time.Second)
+	sessionA.deadline.Store(new(time.Now().Add(-time.Second)))
 	sessionA.mu.Unlock()
 	if code, _, _ := a.request("/demo/status", "", "", "{}"); code != 401 {
 		t.Fatal("expired session accepted", code)
@@ -297,7 +320,7 @@ func TestWarehouseSSEAndSchemaCleanupIntegration(t *testing.T) {
 	}
 
 	session.mu.Lock()
-	session.deadline = time.Now().Add(-time.Second)
+	session.deadline.Store(new(time.Now().Add(-time.Second)))
 	session.mu.Unlock()
 	for reader.Scan() {
 	}

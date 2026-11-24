@@ -68,7 +68,7 @@ func (s *Sim) clearIdleAisles(skip []bool) {
 	for i := range order {
 		order[i] = i
 	}
-	slices.SortFunc(order, func(a, b int) int { return idNumber(s.state.Robots[a].ID) - idNumber(s.state.Robots[b].ID) })
+	slices.SortFunc(order, func(a, b int) int { return compareRobots(s.state.Robots[a], s.state.Robots[b]) })
 	for _, i := range order {
 		robot := &s.state.Robots[i]
 		if skip[i] || robot.Status != RobotIdle || robot.JobID != "" {
@@ -265,7 +265,7 @@ func (s *Sim) stepRelocation(robot *RobotState) {
 		robot.Battery = max(0, robot.Battery-s.cfg.MovingDrain)
 	}
 	if robot.Battery == 0 {
-		robot.Status = RobotFaulted
+		s.depleteBattery(robot)
 	} else if (Point{X: robot.X, Y: robot.Y}) == target {
 		robot.Status = RobotIdle
 	}

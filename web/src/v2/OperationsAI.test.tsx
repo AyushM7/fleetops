@@ -41,7 +41,7 @@ describe("Operations AI with telemetry fixtures", () => {
     expect(html.indexOf("Job delivered")).toBeLessThan(html.indexOf("Low battery recorded"));
     expect(html).not.toContain('data-tone="assisted"');
     expect(html).not.toMatch(/>Approve|>Reject</);
-    expect(html).toContain("Go validates and executes V2 dispatch commands automatically. Scripted proposals in the V1 demo require operator approval.");
+    expect(html).toContain("Go validates and executes routine dispatch automatically. Proposals require operator approval.");
   });
 
   it("shows the latest cycle first and distinguishes observed, reserved and decided activity", () => {
@@ -94,6 +94,19 @@ describe("Operations AI with telemetry fixtures", () => {
     const html = details(abstained);
     for (const text of ["No safe option", "No command receipt", "Unconfirmed", "<dt>Token usage</dt><dd>Unavailable</dd>",
       "<dt>Accounted (USD)</dt><dd>Unavailable</dd>"]) expect(html).toContain(text);
+  });
+
+  it("shows maintenance admission as a dispatch with a separate physical outcome", () => {
+    const dispatch: OperationsActivity = {
+      ...proposed, stage: "finished", status: "applied",
+      decision: { kind: "maintenance", maintenance: { robotId: "R1", faultId: "F1" } },
+      go: { auditId: 7, execution: "succeeded", auditCommitted: true },
+    };
+    expect(withActivities(dispatch)).toContain("Maintenance dispatch");
+    const html = details(dispatch);
+    expect(html).toContain('aria-label="Inspect robot R1"');
+    expect(html).toContain("<code>F1</code>");
+    expect(html).toContain("Go admitted the maintenance dispatch. The simulator records the repair outcome separately.");
   });
 
   it("separates a loading or unavailable feed from empty and retained data", () => {

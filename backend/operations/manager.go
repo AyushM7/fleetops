@@ -24,6 +24,7 @@ const (
 
 type Manager struct {
 	ledger   *ledger
+	recovery *recoveryWorker
 	slots    chan struct{}
 	generate func(context.Context, []byte, int64) (modelResult, error)
 }
@@ -65,6 +66,14 @@ func Open(ctx context.Context, pool *db.Pool) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	if os.Getenv("FLEETOPS_OPERATIONS_PROTOCOL") == "v3" {
+		requests, requestErr := strconv.ParseInt(os.Getenv("FLEETOPS_OPERATIONS_DAILY_REQUESTS"), 10, 64)
+		micros, budgetErr := strconv.ParseInt(os.Getenv("FLEETOPS_OPERATIONS_DAILY_MICRO_USD"), 10, 64)
+		if requestErr != nil || budgetErr != nil || requests < 1 || micros < 1 || !ledger.pricing.validFor(recoveryOutput) {
+			return nil, unavailable
+		}
+		return &Manager{ledger: ledger, slots: make(chan struct{}, 2), recovery: &recoveryWorker{node: node, entrypoint: entrypoint, send: recoveryProvider(apiKey), dayRequests: requests, dayMicros: micros}}, nil
+	}
 	return &Manager{ledger: ledger, slots: make(chan struct{}, 2),
 		generate: func(ctx context.Context, observation []byte, reservationID int64) (modelResult, error) {
 			cmd := exec.CommandContext(ctx, node, entrypoint)
@@ -94,6 +103,9 @@ func (out *limitedOutput) Write(p []byte) (int, error) {
 }
 
 func (m *Manager) Decide(ctx context.Context, runtimeID string, observation fleet.OperationsObservation) Outcome {
+	if m.generate == nil {
+		return Outcome{Status: "model_unavailable"}
+	}
 	raw, err := json.Marshal(observation)
 	if err != nil || len(raw) > observationLimit {
 		return Outcome{Status: "observation_unavailable"}

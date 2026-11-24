@@ -11,7 +11,56 @@ import (
 	"github.com/AyushM7/fleetops/backend/proposal"
 	"github.com/AyushM7/fleetops/backend/safety"
 	"github.com/jackc/pgx/v5"
+	"reflect"
+	"time"
 )
+
+// DecideRecoveryProposal requires the persisted V3 evidence to still match Go
+// at the execution boundary. Idle ticks alone do not invalidate the evidence.
+func (s *Service) DecideRecoveryProposal(ctx context.Context, id, runID string, decision proposal.Decision, operator proposal.OperatorIdentity) (Result, error) {
+	return s.decideProposal(ctx, id, decision, operator, func(tx *db.Tx) (error, error) {
+		run, _, _, _, err := s.loadAgentRun(tx, runID)
+		if err != nil {
+			return nil, err
+		}
+		if run == nil || run.RuntimeID != s.runtimeID || run.Metadata.Contract != "recovery-decision-v3" ||
+			!run.DecisionVerified || run.ProposalID == nil || *run.ProposalID != id {
+			return ErrAgentRecord, nil
+		}
+		if !s.stillGroundedRecovery(run) {
+			return ErrObservation, nil
+		}
+		return nil, nil
+	})
+}
+
+func (s *Service) stillGroundedRecovery(run *AgentRun) bool {
+	view, err := s.readStateLocked()
+	if err != nil {
+		return false
+	}
+	facts, err := agentFacts(view, run.Metadata.Contract)
+	if err != nil || facts.Poisoned || facts.Tick < run.Facts.Tick {
+		return false
+	}
+	facts.Tick = run.Facts.Tick
+	if !reflect.DeepEqual(facts, run.Facts) {
+		return false
+	}
+	// A new breakdown on the same robot is a separate review, even if
+	// its current incident label and numerical facts happen to match.
+	for _, fault := range s.commander.Snapshot().Faults {
+		if fault.Tick <= run.Facts.Tick || len(fault.Robots) != 1 {
+			continue
+		}
+		for _, incident := range facts.Incidents {
+			if fault.Robots[0] == incident.RobotID && string(fault.Type) == incident.Type {
+				return false
+			}
+		}
+	}
+	return true
+}
 
 func (s *Service) StartAgentRun(ctx context.Context, observation string, metadata AgentMetadata) (*AgentRun, error) {
 	s.mu.Lock()
@@ -30,7 +79,7 @@ func (s *Service) StartAgentRun(ctx context.Context, observation string, metadat
 	if err != nil {
 		return nil, err
 	}
-	facts, err := agentFacts(view)
+	facts, err := agentFacts(view, metadata.Contract)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +258,13 @@ func (s *Service) completeAgentRun(tx *db.Tx, run *AgentRun, input AgentFinish, 
 		s.at = s.clock().UTC()
 		key := *d.Selected
 		p := proposal.Proposal{ID: proposalID, Action: proposal.ReassignUnstartedJob, Reassignment: safety.ReassignUnstartedJobRequest{JobID: key.JobID, FromRobotID: key.FromRobotID, ToRobotID: key.ToRobotID}, CreatedAt: s.at, ExpiresAt: input.Submit.ExpiresAt.UTC()}
-		candidate, admission, err := s.createProposal(tx, p, []string{input.ObservationID})
+		observation := input.ObservationID
+		elapsed := s.at.Sub(run.StartedAt)
+		if run.Metadata.Contract == "recovery-decision-v3" && observation != s.observationID() &&
+			elapsed >= 0 && elapsed <= 30*time.Second && s.stillGroundedRecovery(run) {
+			observation = s.observationID()
+		}
+		candidate, admission, err := s.createProposal(tx, p, []string{observation})
 		if err != nil {
 			return receipt, created, err
 		}

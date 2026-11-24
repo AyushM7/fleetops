@@ -36,6 +36,11 @@ func agentContext(t *testing.T, subject string, role auth.Role) context.Context 
 }
 func agentRunFixture(t *testing.T) (*Service, *db.Pool, *AgentRun, AgentFinish) {
 	t.Helper()
+	return agentRunFixtureForContract(t, "recovery-decision-v2")
+}
+
+func agentRunFixtureForContract(t *testing.T, contract string) (*Service, *db.Pool, *AgentRun, AgentFinish) {
+	t.Helper()
 	pool := integrationPool(t)
 	simulator, err := sim.NewReassignmentTestFixture()
 	if err != nil {
@@ -49,7 +54,7 @@ func agentRunFixture(t *testing.T) (*Service, *db.Pool, *AgentRun, AgentFinish) 
 		t.Fatal(err)
 	}
 	view, _ := s.ReadState(context.Background())
-	run, err := s.StartAgentRun(agentContext(t, "agent-owner", auth.Proposer), view.ObservationID, AgentMetadata{"agent-run-v1", "recovery-decision-v2", "compare_tradeoffs", "mocked", "offline/test"})
+	run, err := s.StartAgentRun(agentContext(t, "agent-owner", auth.Proposer), view.ObservationID, AgentMetadata{"agent-run-v1", contract, "compare_tradeoffs", "mocked", "offline/test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,5 +287,78 @@ func TestIntegrationAgentRunStaleObservationIsDurableDenial(t *testing.T) {
 	}
 	if _, err := s.StartAgentRun(ctx, run.ObservationID, run.Metadata); !errors.Is(err, ErrObservation) {
 		t.Fatal(err)
+	}
+}
+
+func TestIntegrationRecoveryApprovalRevalidatesCurrentFacts(t *testing.T) {
+	for _, changed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "revision_only", true: "job_owner_changed"}[changed], func(t *testing.T) {
+			s, pool, run, input := agentRunFixtureForContract(t, "recovery-decision-v3")
+			proposer := agentContext(t, "agent-owner", auth.Proposer)
+			receipt, err := s.FinishAgentRun(proposer, run.ID, input)
+			if err != nil || receipt.Result.Proposal.State != proposal.Pending {
+				t.Fatal(receipt, err)
+			}
+			s.tick = func() {}
+			if err := s.Tick(); err != nil {
+				t.Fatal(err)
+			}
+			if changed {
+				key := input.Completion.Decision.Selected
+				if err := s.commander.ReassignUnstartedJob(key.JobID, key.FromRobotID, key.ToRobotID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := s.Snapshot()
+			actor := proposal.OperatorIdentity{Subject: "reviewer"}
+			ctx := agentContext(t, actor.Subject, auth.Operator)
+			id := receipt.Result.Proposal.ID
+			got, err := s.DecideRecoveryProposal(ctx, id, run.ID, proposal.Approve, actor)
+			if changed {
+				if !errors.Is(err, ErrObservation) || got.ExecutionAttempted || !got.AuditCommitted || !reflect.DeepEqual(before, s.Snapshot()) {
+					t.Fatal(got, err)
+				}
+				var denied int
+				if err := pool.QueryRow(ctx, "SELECT count(*) FROM fleet_audit WHERE proposal_id=$1 AND attempt='approve' AND NOT accepted", id).Scan(&denied); err != nil || denied != 1 {
+					t.Fatal(denied, err)
+				}
+			} else if err != nil || got.Execution != Succeeded || !got.AuditCommitted {
+				t.Fatal(got, err)
+			}
+		})
+	}
+}
+
+func TestIntegrationRecoverySubmissionRechecksAdvancedObservation(t *testing.T) {
+	for _, mode := range []string{"same_facts", "owner_changed", "review_expired"} {
+		t.Run(mode, func(t *testing.T) {
+			s, _, run, input := agentRunFixtureForContract(t, "recovery-decision-v3")
+			ctx := agentContext(t, "agent-owner", auth.Proposer)
+			s.tick = func() {}
+			if err := s.Tick(); err != nil {
+				t.Fatal(err)
+			}
+			if mode == "owner_changed" {
+				key := input.Completion.Decision.Selected
+				if err := s.commander.ReassignUnstartedJob(key.JobID, key.FromRobotID, key.ToRobotID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if mode == "review_expired" {
+				s.clock = func() time.Time { return run.StartedAt.Add(31 * time.Second) }
+			}
+			before := s.Snapshot()
+			receipt, err := s.FinishAgentRun(ctx, run.ID, input)
+			if err != nil || !receipt.Recorded || receipt.Result.ExecutionAttempted || !reflect.DeepEqual(before, s.Snapshot()) {
+				t.Fatal(receipt, err)
+			}
+			if mode == "same_facts" {
+				if receipt.Denial != "" || receipt.Result.Proposal.State != proposal.Pending {
+					t.Fatal(receipt)
+				}
+			} else if receipt.Denial != "stale_observation" {
+				t.Fatal(receipt)
+			}
+		})
 	}
 }

@@ -1,12 +1,14 @@
 package fleet
 
-func agentFacts(view StateView) (AgentFacts, error) {
+func agentFacts(view StateView, contract string) (AgentFacts, error) {
 	facts := AgentFacts{Tick: view.Tick, Poisoned: view.Poisoned, Candidates: []AgentCandidate{}, Incidents: []AgentIncident{}}
 	if len(view.ReassignmentCandidates) > 64 || len(view.ActiveIncidents) > 64 {
 		return facts, ErrAgentRecord
 	}
 	for _, i := range view.ActiveIncidents {
-		if !agentID.MatchString(i.RobotID) || !allowed(i.Type, "traffic_blocked", "low_battery", "robot_unresponsive") || !allowed(i.Severity, "medium", "high") {
+		legacy := allowed(i.Type, "traffic_blocked", "low_battery", "robot_unresponsive")
+		physical := contract == "recovery-decision-v3" && allowed(i.Type, "motor_failure", "sensor_failure", "critical_battery")
+		if !agentID.MatchString(i.RobotID) || !(legacy || physical) || !allowed(i.Severity, "medium", "high") {
 			return facts, ErrAgentRecord
 		}
 		facts.Incidents = append(facts.Incidents, AgentIncident{i.RobotID, i.Type, i.Severity})

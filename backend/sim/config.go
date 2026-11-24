@@ -8,35 +8,37 @@ import (
 const warehouseTransportCount = 10
 
 type Config struct {
-	Width                 int
-	Height                int
-	AisleColumns          []int
-	AisleYMin             int
-	AisleYMax             int
-	Walls                 []Point
-	Stations              []Point
-	RobotStarts           []Point // V2 reserves these starts for transport robots.
-	MaintenanceBay        *Point  // Enables V2 and is the sole maintenance start.
-	InitialJobs           int
-	NewJobEvery           int
-	MaxJobs               int // Caps active jobs in V2 and total retained jobs in legacy scenarios.
-	MovingDrain           int
-	IdleDrainEvery        int
-	ChargeGain            int
-	MinAssignBattery      int
-	UnresponsiveDelay     int
-	LowBatteryInjectLevel int
-	AutoDispatch          bool
-	ReplanAfter           int
-	BlockedAfter          int
-	ReserveBattery        int
-	AutoCharge            bool
-	ChargeBelow           int
-	ChargeRelease         int
-	ParkingGraceTicks     int
-	Recovery              bool
-	RecoverAfter          int
-	HoldTicks             int
+	Width                  int
+	Height                 int
+	AisleColumns           []int
+	AisleYMin              int
+	AisleYMax              int
+	Walls                  []Point
+	Stations               []Point
+	RobotStarts            []Point // V2 reserves these starts for transport robots.
+	MaintenanceBay         *Point  // Enables V2 and is the sole maintenance start.
+	ScheduledBreakdowns    []ScheduledBreakdown
+	MaintenanceRepairTicks int // Zero disables automatic maintenance.
+	InitialJobs            int
+	NewJobEvery            int
+	MaxJobs                int // Caps active jobs in V2 and total retained jobs in legacy scenarios.
+	MovingDrain            int
+	IdleDrainEvery         int
+	ChargeGain             int
+	MinAssignBattery       int
+	UnresponsiveDelay      int
+	LowBatteryInjectLevel  int
+	AutoDispatch           bool
+	ReplanAfter            int
+	BlockedAfter           int
+	ReserveBattery         int
+	AutoCharge             bool
+	ChargeBelow            int
+	ChargeRelease          int
+	ParkingGraceTicks      int
+	Recovery               bool
+	RecoverAfter           int
+	HoldTicks              int
 }
 
 func DefaultConfig() Config {
@@ -118,6 +120,7 @@ func (c Config) Clone() Config {
 	c.Walls = slices.Clone(c.Walls)
 	c.Stations = slices.Clone(c.Stations)
 	c.RobotStarts = slices.Clone(c.RobotStarts)
+	c.ScheduledBreakdowns = slices.Clone(c.ScheduledBreakdowns)
 	if c.MaintenanceBay != nil {
 		bay := *c.MaintenanceBay
 		c.MaintenanceBay = &bay
@@ -133,6 +136,12 @@ func (c Config) robotStarts() []Point {
 }
 
 func (c Config) Validate() error {
+	if c.MaintenanceRepairTicks < 0 || c.MaintenanceRepairTicks > 100 || c.MaintenanceBay == nil && c.MaintenanceRepairTicks != 0 {
+		return fmt.Errorf("%w: maintenance repair ticks must be in [0,100] and are V2-only", ErrInvalidConfig)
+	}
+	if err := c.validateBreakdowns(); err != nil {
+		return err
+	}
 	if c.Width < 4 || c.Width > 50 || c.Height < 4 || c.Height > 50 {
 		return fmt.Errorf("%w: width and height must each be in [4,50]", ErrInvalidConfig)
 	}

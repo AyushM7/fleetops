@@ -11,6 +11,7 @@ type robotRecovery struct {
 	resume   bool
 	retreats []int
 	cycle    recoveryCycleProgress
+	turnout  *passageYield
 }
 
 type recoveryCycleProgress struct {
@@ -78,14 +79,23 @@ func (s *Sim) recoveryOrder() []int {
 	for i := range order {
 		order[i] = i
 	}
-	slices.SortFunc(order, func(a, b int) int { return idNumber(s.state.Robots[a].ID) - idNumber(s.state.Robots[b].ID) })
+	slices.SortFunc(order, func(a, b int) int { return compareRobots(s.state.Robots[a], s.state.Robots[b]) })
 	return order
 }
 
 func (s *Sim) requiredCell(index int) (Point, bool) {
 	robot := s.state.Robots[index]
+	if s.maintenanceTravel(robot) {
+		return Point{}, false
+	}
 	recovery := s.recovery[robot.ID]
 	// resume also covers the last held tick, whose counter has just reached zero.
+	if turnout := recovery.turnout; turnout != nil {
+		if len(turnout.route) == 0 {
+			return Point{}, false
+		}
+		return turnout.route[0], true
+	}
 	if recovery.hold > 0 || recovery.resume && robot.WaitTicks == 0 {
 		return Point{}, false
 	}
@@ -321,15 +331,16 @@ func (s *Sim) recoverCycle(cycle []int, skip []bool) recoveryEvent {
 		event.cycle = append(event.cycle, s.state.Robots[i].ID)
 	}
 	reasons := []string{}
+	stranded := []int{}
 	candidates := slices.Clone(cycle)
 	slices.SortFunc(candidates, func(a, b int) int {
-		return idNumber(s.state.Robots[b].ID) - idNumber(s.state.Robots[a].ID)
+		return compareRobots(s.state.Robots[b], s.state.Robots[a])
 	})
 	// A legal but unaffordable higher-ID retreat must not suppress a feasible mover.
 	for _, i := range candidates {
 		robot := &s.state.Robots[i]
 		recovery := s.recovery[robot.ID]
-		if skip[i] || recovery.hold > 0 || recovery.resume && robot.WaitTicks == 0 || s.cfg.onAisle(Point{X: robot.X, Y: robot.Y}) {
+		if skip[i] || recovery.turnout != nil || recovery.hold > 0 || recovery.resume && robot.WaitTicks == 0 || s.cfg.onAisle(Point{X: robot.X, Y: robot.Y}) {
 			reasons = append(reasons, robot.ID+": moved/skipped, holding, or inside aisle")
 			continue
 		}
@@ -341,7 +352,14 @@ func (s *Sim) recoverCycle(cycle []int, skip []bool) recoveryEvent {
 			event.robot = robot.ID
 			return event
 		}
+		stranded = append(stranded, i)
 		reasons = append(reasons, robot.ID+": no legal energy-feasible retreat")
+	}
+	for _, i := range stranded {
+		if s.startPassageYield(i, cycle) {
+			event.robot = s.state.Robots[i].ID
+			return event
+		}
 	}
 	event.reason = strings.Join(reasons, "; ")
 	return event

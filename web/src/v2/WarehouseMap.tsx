@@ -1,16 +1,15 @@
-import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type Ref } from "react";
 import { Icon } from "./WarehouseIcon";
-import { chargerStatus, jobLabels, robotActivityLabel, robotTone, type PickEntity, type RobotTone, type Selection } from "./warehousePresentation";
+import { breakdownLabels, cellLabel, chargerStatus, jobLabels, maintenancePhaseLabel, robotActivityLabel, robotTone,
+  type PickEntity, type RobotTone, type Selection } from "./warehousePresentation";
 import type { Job, Layout, Point, Robot, Snapshot, Station, WarehouseFrame } from "./telemetry";
-import { mapTargetVisible, placeMapLabels, type Camera, type MapLabel } from "./warehouseLabels";
+import { mapRobotLabel, mapTargetVisible, placeMapLabels, type Camera, type MapLabel } from "./warehouseLabels";
+import { robotGlide, type RobotSample } from "./robotMotion";
 const mapKeys = [["road", "Aisle"], ["wall", "Wall"], ["bolt", "Charger"], ["parking", "Parking"], ["diamond", "Maintenance bay"]] as const;
 
-export function fitWarehouseCamera(layout: Layout, width: number, height: number, inspectorSpace = 0): Camera {
-  // Leave room for the desktop inspector without shifting the initial camera on selection.
-  const center = inspectorSpace ? width * 0.448 : width / 2;
-  const clearWidth = 2 * Math.min(center, width - inspectorSpace - center);
-  const scale = Math.max(1, Math.min((clearWidth - 24) / layout.width, (height - 16) / layout.height));
-  return { x: center - layout.width * scale / 2, y: (height - layout.height * scale) / 2, scale };
+export function fitWarehouseCamera(layout: Layout, width: number, height: number): Camera {
+  const scale = Math.max(1, Math.min((width - 24) / layout.width, (height - 16) / layout.height));
+  return { x: (width - layout.width * scale) / 2, y: (height - layout.height * scale) / 2, scale };
 }
 
 export function mapDragIntent(dx: number, dy: number, touch: boolean): "pending" | "pan" | "scroll" {
@@ -53,11 +52,12 @@ function wallBlocks(layout: Layout) {
   return blocks;
 }
 
-function MapTarget({ target, point, label, selection, pick, children, visible, tone, radius = 0.48 }: {
+function MapTarget({ target, point, label, selection, pick, children, visible, tone, radius = 0.48, marker }: {
   target: Selection; point: Point; label: string; selection: Selection | null; pick: PickEntity; children: ReactNode; visible: boolean; tone?: RobotTone; radius?: number;
+  marker?: Ref<SVGGElement>;
 }) {
   const active = target.kind === selection?.kind && target.id === selection.id;
-  return <g className="v2-map-target" transform={'translate(' + (point.x + 0.5) + ' ' + (point.y + 0.5) + ')'}
+  return <g ref={marker} className={marker ? "v2-map-target v2-robot-target" : "v2-map-target"} transform={'translate(' + (point.x + 0.5) + ' ' + (point.y + 0.5) + ')'}
     role="button" tabIndex={visible ? 0 : -1} aria-label={label} aria-pressed={active} data-tone={tone}
     aria-hidden={visible ? undefined : true}
     onClick={event => pick(target, event.currentTarget)}
@@ -96,19 +96,40 @@ function ChargerMarker({ station, selection, pick, label, visible }: MarkerProps
   </MapTarget>;
 }
 
-function RobotMarker({ robot, selection, pick, label, visible }: MarkerProps & { robot: Robot }) {
+function RobotMarker({ robot, frame, live, selection, pick, label, visible, work, highlight }: MarkerProps & {
+  robot: Robot; frame: WarehouseFrame; live: boolean; work?: string; highlight?: "target" | "worker" | "recovered";
+}) {
+  const marker = useRef<SVGGElement>(null);
+  const previous = useRef<RobotSample | null>(null);
+  useLayoutEffect(() => {
+    const current = { frame, point: robot, receivedAt: performance.now(), live };
+    const glide = robotGlide(previous.current, current);
+    previous.current = current;
+    if (!glide || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const motion = marker.current?.animate(
+      [{ translate: `${glide.x}px ${glide.y}px` }, { translate: "0px 0px" }],
+      { duration: glide.duration, easing: "linear" },
+    );
+    return () => motion?.cancel();
+  }, [frame, robot, live]);
+
   const tone = robotTone(robot);
   const centered = label && label.x === 0 && label.y === 0;
   const maintenance = robot.role === "maintenance";
-  return <MapTarget target={{ kind: "robot", id: robot.id }} point={robot} visible={visible} tone={tone}
-    label={robot.id + (maintenance ? " maintenance robot, " : ", ") + robotActivityLabel(robot) + ", battery " + robot.battery + "%"}
+  const mapLabel = mapRobotLabel(robot);
+  return <MapTarget marker={marker} target={{ kind: "robot", id: robot.id }} point={robot} visible={visible} tone={tone}
+    label={robot.id + (maintenance ? " maintenance robot, " : ", ") + (work ?? robotActivityLabel(robot)) +
+      (robot.activeFault ? ", " + breakdownLabels[robot.activeFault] : "") +
+      (work || robot.activeFault ? ", " + cellLabel(robot) : "") + ", battery " + robot.battery + "%"}
     selection={selection} pick={pick}>
+    {highlight && <rect className="v2-maintenance-cell" data-highlight={highlight} x={-.45} y={-.45} width={.9} height={.9} rx={.1}
+      aria-hidden="true" />}
     {maintenance
-      ? <polygon className="v2-robot-marker is-maintenance" points="-.42,0 -.26,-.29 .26,-.29 .42,0 .26,.29 -.26,.29" />
-      : !centered && <rect className="v2-robot-marker" x={-0.38} y={-0.29} width={0.76} height={0.58} rx={0.14} />}
+      ? <polygon className="v2-robot-marker is-maintenance" points="-.45,0 -.28,-.33 .28,-.33 .45,0 .28,.33 -.28,.33" />
+      : !centered && <rect className="v2-robot-marker" x={-0.42} y={-0.34} width={0.84} height={0.68} rx={0.14} />}
     {label && (maintenance && centered
-      ? <text className="v2-robot-id" style={{ fontSize: label.font }} textAnchor="middle" dominantBaseline="central">{robot.id}</text>
-      : <Label id={robot.id} label={label} robot />)}
+      ? <text className="v2-robot-id" style={{ fontSize: label.font }} textAnchor="middle" dominantBaseline="central">{mapLabel}</text>
+      : <Label id={mapLabel} label={label} robot />)}
     {tone && <g className="v2-status-glyph" data-status-glyph={tone} aria-hidden="true">
       {tone === "waiting" && <circle cx={0.36} cy={-0.31} r={0.085} />}
       {tone === "moving" && <path d="M .24 -.41 h .20 M .30 -.32 h .20" />}
@@ -170,37 +191,23 @@ function FindEntity({ snapshot, pick }: { snapshot: Snapshot; pick: PickEntity }
   </details>;
 }
 
-export function WarehouseMap({ frame, selection, job, pick }: { frame: WarehouseFrame; selection: Selection | null; job?: Job; pick: PickEntity }) {
+export function WarehouseMap({ frame, selection, job, pick, live }: { frame: WarehouseFrame; selection: Selection | null; job?: Job; pick: PickEntity; live: boolean }) {
   const { layout, snapshot } = frame;
   const walls = useMemo(() => wallBlocks(layout), [layout]);
   const occupied = (point: Point) => [...snapshot.robots, ...snapshot.stations].some(entity => entity.x === point.x && entity.y === point.y);
-  const svg = useRef<SVGSVGElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: number; pointer: Point; start: Camera; panning: boolean } | null>(null);
   const suppressDragClick = useRef(false);
-  const [viewport, setViewport] = useState({ width: 1250, height: 394, inspectorSpace: 332 });
-  const [stageWidth, setStageWidth] = useState(1250);
+  const [viewport, setViewport] = useState({ width: 1250, height: 394 });
   const [manualCamera, setCamera] = useState<Camera | null>(null);
-  const fit = fitWarehouseCamera(layout, viewport.width, viewport.height, viewport.inspectorSpace);
+  const fit = fitWarehouseCamera(layout, viewport.width, viewport.height);
   const camera = manualCamera ?? fit;
   const minScale = fit.scale / 2;
   const maxScale = fit.scale * 4;
-  const bounds = { width: stageWidth, height: viewport.height };
+  const bounds = viewport;
   const isVisible = (point: Point) => mapTargetVisible(point, camera, bounds);
   const pins = job ? [jobPin(job.from, occupied(job.from)), jobPin(job.to, occupied(job.to))] : [];
   const labels = placeMapLabels(snapshot.robots, snapshot.stations, camera, bounds, selection?.id, pins);
-
-  useLayoutEffect(() => {
-    const panel = stage.current;
-    if (!panel) return;
-    function measure() {
-      if (panel?.clientWidth) setStageWidth(panel.clientWidth);
-    }
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(panel);
-    return () => observer.disconnect();
-  }, []);
 
   useLayoutEffect(() => {
     const active = document.activeElement;
@@ -210,17 +217,16 @@ export function WarehouseMap({ frame, selection, job, pick }: { frame: Warehouse
   });
 
   useLayoutEffect(() => {
-    const canvas = svg.current;
+    const canvas = stage.current;
     if (!canvas) return;
-    let previous: { width: number; height: number; inspectorSpace: number } | undefined;
+    let previous: { width: number; height: number } | undefined;
     function measure() {
       if (!canvas?.clientWidth || !canvas.clientHeight) return;
-      const inspectorSpace = Number.parseFloat(getComputedStyle(canvas).getPropertyValue("--v2-inspector-space")) || 0;
-      const measured = { width: canvas.clientWidth, height: canvas.clientHeight, inspectorSpace };
-      if (previous?.width === measured.width && previous.height === measured.height && previous.inspectorSpace === inspectorSpace) return;
+      const measured = { width: canvas.clientWidth, height: canvas.clientHeight };
+      if (previous?.width === measured.width && previous.height === measured.height) return;
       if (previous) {
-        const previousFit = fitWarehouseCamera(layout, previous.width, previous.height, previous.inspectorSpace);
-        const nextFit = fitWarehouseCamera(layout, measured.width, measured.height, measured.inspectorSpace);
+        const previousFit = fitWarehouseCamera(layout, previous.width, previous.height);
+        const nextFit = fitWarehouseCamera(layout, measured.width, measured.height);
         setCamera(current => current && reframeWarehouseCamera(current, previousFit, nextFit));
       }
       previous = measured;
@@ -313,7 +319,7 @@ export function WarehouseMap({ frame, selection, job, pick }: { frame: Warehouse
         <button type="button" className="v2-map-control" aria-label="Zoom in" title="Zoom in" disabled={camera.scale >= maxScale}
           onClick={() => zoom(1.25)}><Icon name="plus" size={16} /></button>
         <button type="button" className="v2-map-control" aria-label="Fit warehouse map" title="Fit warehouse map"
-          onClick={() => setCamera(fitWarehouseCamera(layout, stage.current?.clientWidth ?? viewport.width, viewport.height))}>
+          onClick={() => setCamera(null)}>
           <Icon name="maximize" size={16} />
         </button>
       </div>
@@ -325,7 +331,7 @@ export function WarehouseMap({ frame, selection, job, pick }: { frame: Warehouse
         // A marker can lose implicit touch capture when the stage claims the drag.
         if (event.target === event.currentTarget) finishDrag(event.currentTarget, event.pointerId);
       }}>
-      <svg ref={svg} className="v2-map-svg" role="group" aria-label="Live warehouse floor plan"
+      <svg className="v2-map-svg" role="group" aria-label="Live warehouse floor plan"
         viewBox={'0 0 ' + viewport.width + ' ' + viewport.height}>
         <defs><pattern id="v2-wall-grid" width={1} height={1} patternUnits="userSpaceOnUse">
           <rect className="v2-wall-fill" width={1} height={1} />
@@ -346,8 +352,20 @@ export function WarehouseMap({ frame, selection, job, pick }: { frame: Warehouse
             </g>)}
           {snapshot.stations.map(station => <ChargerMarker key={station.id} station={station} selection={selection} pick={pick}
             label={labels.get(station.id)} visible={isVisible(station)} />)}
-          {snapshot.robots.map(robot => <RobotMarker key={robot.id} robot={robot} selection={selection} pick={pick}
-            label={labels.get(robot.id)} visible={isVisible(robot)} />)}
+          {snapshot.robots.map(robot => {
+            const active = snapshot.maintenance?.active;
+            const last = snapshot.maintenance?.history?.at(-1);
+            const isM1 = robot.role === "maintenance";
+            const target = active?.robotId === robot.id;
+            const recovered = !robot.activeFault && snapshot.maintenance?.phase === "returning" &&
+              last?.robotId === robot.id && last.outcome === "completed";
+            return <RobotMarker key={robot.id} robot={robot} frame={frame} live={live} selection={selection} pick={pick}
+              label={labels.get(robot.id)} visible={isVisible(robot)}
+              work={isM1 ? active ? maintenancePhaseLabel(snapshot) + ", target " + active.robotId
+                : snapshot.maintenance?.phase === "returning" ? maintenancePhaseLabel(snapshot) : undefined :
+                target ? robotActivityLabel(robot) + ", M1 assigned" : recovered ? "Recovery verified, " + robotActivityLabel(robot) : undefined}
+              highlight={active && isM1 ? "worker" : target ? "target" : recovered ? "recovered" : undefined} />;
+          })}
           {job && <><JobMarker job={job} pin={pins[0]} label="Pickup" selection={selection} pick={pick} isVisible={isVisible} />
             <JobMarker job={job} pin={pins[1]} label="Drop-off" selection={selection} pick={pick} isVisible={isVisible} /></>}
         </g>

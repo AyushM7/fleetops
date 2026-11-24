@@ -7,15 +7,19 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/AyushM7/fleetops/backend/db"
+	"github.com/AyushM7/fleetops/backend/sim"
 )
 
 type Config struct {
 	Mode, Origin, AssetsDir, EvidenceDir string
 	TrustedProxies                       []string
 	Database                             db.Config
+	WarehouseChargeTarget                int
+	StartInWarehouseV2                   bool
 }
 
 func ConfigFromEnv() (Config, error) {
@@ -25,8 +29,17 @@ func ConfigFromEnv() (Config, error) {
 	}
 	c := Config{Mode: os.Getenv("FLEETOPS_MODE"), Origin: os.Getenv("FLEETOPS_PUBLIC_ORIGIN"),
 		AssetsDir: os.Getenv("FLEETOPS_ASSETS_DIR"), EvidenceDir: os.Getenv("FLEETOPS_EVIDENCE_DIR"), Database: database}
+	c.StartInWarehouseV2 = os.Getenv("FLEETOPS_START_WAREHOUSE_V2") == "1" ||
+		c.Mode == "local" && os.Getenv("FLEETOPS_LOCAL_START_WAREHOUSE_V2") == "1"
 	if value := os.Getenv("FLEETOPS_TRUSTED_PROXIES"); value != "" {
 		c.TrustedProxies = strings.Split(value, ",")
+	}
+	if value, present := os.LookupEnv("FLEETOPS_WAREHOUSE_CHARGE_TARGET"); present {
+		target, err := strconv.Atoi(value)
+		if err != nil || target == 0 {
+			return Config{}, errors.New("FLEETOPS_WAREHOUSE_CHARGE_TARGET must be a nonzero integer percentage")
+		}
+		c.WarehouseChargeTarget = target
 	}
 	return c, c.validate()
 }
@@ -59,6 +72,9 @@ func (c Config) validate() error {
 	}
 	if relative, err := filepath.Rel(assets, evidence); err != nil || relative == "." || !strings.HasPrefix(relative, ".."+string(os.PathSeparator)) && relative != ".." {
 		return invalid
+	}
+	if c.WarehouseChargeTarget != 0 && c.WarehouseChargeTarget != sim.WarehouseV2Config().ChargeRelease {
+		return errors.New("FLEETOPS_WAREHOUSE_CHARGE_TARGET: this visitor release supports only the default 85%")
 	}
 	for _, cidr := range c.TrustedProxies {
 		_, network, err := net.ParseCIDR(cidr)

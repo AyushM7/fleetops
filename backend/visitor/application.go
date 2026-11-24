@@ -58,10 +58,17 @@ func New(ctx context.Context, config Config) (*Application, error) {
 		admin.Close()
 		return nil, errors.New("visitor database reconciliation required")
 	}
-	factory := visitorFactory{admin: admin, config: cfg, evidenceDir: config.EvidenceDir}
+	factory := visitorFactory{admin: admin, config: cfg, evidenceDir: config.EvidenceDir, warehouseChargeTarget: config.WarehouseChargeTarget}
+	if config.StartInWarehouseV2 {
+		factory.initialScenario = warehouseScenario
+	}
 	if os.Getenv("FLEETOPS_OPERATIONS_ENABLED") == "1" {
 		if manager, err := operations.Open(ctx, admin); err == nil {
-			factory.operations, factory.recordOperations = manager.Decide, manager.RecordActivity
+			if manager.RecoveryEnabled() {
+				factory.recovery = manager.InvestigateRecovery
+			} else {
+				factory.operations, factory.recordOperations = manager.Decide, manager.RecordActivity
+			}
 		} else {
 			slog.Warn("operations_manager_unavailable", "warehouse_mode", "deterministic")
 		}

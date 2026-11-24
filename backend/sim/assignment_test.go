@@ -19,7 +19,8 @@ func TestAssignJobBatchValidation(t *testing.T) {
 		{"leading zero", []JobAssignment{{"J01", "R1"}}},
 		{"wrong prefix", []JobAssignment{{"R1", "R2"}}},
 		{"overflow", []JobAssignment{{"J9999999999999999999", "R1"}}},
-		{"maintenance robot", []JobAssignment{{"J1", "R11"}}},
+		{"maintenance robot", []JobAssignment{{"J1", "M1"}}},
+		{"retired ID", []JobAssignment{{"J1", "R11"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := (AssignJobBatchRequest{tc.pairs}).Validate(); !errors.Is(err, ErrInvalidAssignmentBatch) {
@@ -52,6 +53,7 @@ func TestAssignJobBatchIsAtomicIntegration(t *testing.T) {
 	}{
 		{"unknown job", func(s *Sim) { s.state.Jobs[1].ID = "J3" }, ErrAssignmentConflict},
 		{"job already assigned", func(s *Sim) { s.state.Jobs[1].Status = JobAssigned }, ErrAssignmentConflict},
+		{"job deferred", func(s *Sim) { s.state.Jobs[1].Deferred = true }, ErrAssignmentConflict},
 		{"charger reserved", func(s *Sim) { s.state.Stations[0].ReservedBy = "R3" }, ErrAssignmentConflict},
 		{"faulted at pickup", func(s *Sim) {
 			r := &s.state.Robots[3]

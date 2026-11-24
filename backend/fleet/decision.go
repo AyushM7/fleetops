@@ -9,7 +9,7 @@ import (
 	"github.com/AyushM7/fleetops/backend/sim"
 )
 
-func (s *Service) decide(tx *db.Tx, id string, decision proposal.Decision, operator proposal.OperatorIdentity) (Result, error, error) {
+func (s *Service) decide(tx *db.Tx, id string, decision proposal.Decision, operator proposal.OperatorIdentity, validate func(*db.Tx) (error, error)) (Result, error, error) {
 	p := proposal.Proposal{ID: id}
 	var denied error
 	if s.poisoned {
@@ -39,6 +39,13 @@ func (s *Service) decide(tx *db.Tx, id string, decision proposal.Decision, opera
 	}
 	// Lock acquisition may have taken time; use a fresh clock for the lifecycle.
 	s.at = s.clock().UTC()
+	if validate != nil && decision == proposal.Approve && p.State == proposal.Pending && s.at.Before(p.ExpiresAt) {
+		if reason, err := validate(tx); err != nil {
+			return Result{}, nil, err
+		} else if reason != nil {
+			return s.deny(tx, p, decision, operator, reason)
+		}
+	}
 	candidate, denied := s.lifecycle.Decide(id, decision, operator)
 	result := Result{Proposal: candidate.Proposal, Execution: row.execution}
 	if err := s.save(tx, result.Proposal, result.Execution); err != nil {

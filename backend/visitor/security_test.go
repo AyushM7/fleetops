@@ -316,7 +316,7 @@ func TestPUB02RequestDeadlineBoundToSession(t *testing.T) {
 	s.controller.mu.Lock()
 	s.controller.run.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		deadline, ok := r.Context().Deadline()
-		if !ok || deadline.After(s.deadline) {
+		if !ok || deadline.After(s.expiresAt()) {
 			t.Error("operation outlives visitor capability")
 		}
 		w.WriteHeader(200)

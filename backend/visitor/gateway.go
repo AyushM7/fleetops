@@ -303,11 +303,10 @@ func (g *visitorGateway) bootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s != nil {
-		if !s.mu.TryLock() {
-			http.Error(w, "visitor busy", 429)
+		if !s.tryRequest(w) {
 			return
 		}
-		valid := !s.closed && time.Now().Before(s.deadline)
+		valid := !s.closed && time.Now().Before(s.expiresAt())
 		s.mu.Unlock()
 		if !valid {
 			http.Error(w, "visitor session expired", 401)
@@ -327,7 +326,7 @@ func (g *visitorGateway) bootstrap(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "visitor session unavailable", 503)
 			return
 		}
-		http.SetCookie(w, &http.Cookie{Name: g.cookieName, Value: id, Path: "/", HttpOnly: true, Secure: g.config.Mode == "production", SameSite: http.SameSiteStrictMode, Expires: created.deadline, MaxAge: int(visitorTTL.Seconds())})
+		http.SetCookie(w, &http.Cookie{Name: g.cookieName, Value: id, Path: "/", HttpOnly: true, Secure: g.config.Mode == "production", SameSite: http.SameSiteStrictMode, Expires: created.expiresAt(), MaxAge: int(visitorTTL.Seconds())})
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write(g.index)
@@ -366,5 +365,6 @@ func (g *visitorGateway) operation(w http.ResponseWriter, r *http.Request) {
 }
 
 func visitorOperation(path string) bool {
-	return path == "/demo/status" || path == "/demo/restart" || isTimeControl(path) || strings.HasPrefix(path, "/demo/scenario/") && allowedScenario(strings.TrimPrefix(path, "/demo/scenario/"))
+	_, _, recovery := warehouseRecoveryCommand(path)
+	return recovery || path == "/demo/recovery" || path == "/demo/status" || path == "/demo/restart" || isTimeControl(path) || strings.HasPrefix(path, "/demo/scenario/") && allowedScenario(strings.TrimPrefix(path, "/demo/scenario/"))
 }

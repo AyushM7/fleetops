@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -19,7 +20,7 @@ type visitorSession struct {
 	mu         sync.Mutex
 	controller *demoController
 	operator   string
-	deadline   time.Time
+	deadline   atomic.Pointer[time.Time]
 	closed     bool
 	cleanup    func() error
 	done       chan struct{}
@@ -100,7 +101,7 @@ func (m *visitorManager) create() (string, *visitorSession, error) {
 		m.mu.Unlock()
 		return "", nil, errors.New("visitor initialization unavailable")
 	}
-	s.deadline = time.Now().Add(m.ttl)
+	s.deadline.Store(new(time.Now().Add(m.ttl)))
 	s.done = make(chan struct{})
 	m.sessions[id] = s
 	m.workers.Add(1)
@@ -123,10 +124,7 @@ func (m *visitorManager) run(id string, s *visitorSession) {
 	defer m.workers.Done()
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
-	s.mu.Lock()
-	remaining := time.Until(s.deadline)
-	s.mu.Unlock()
-	timer := time.NewTimer(remaining)
+	timer := time.NewTimer(time.Until(s.expiresAt()))
 	defer timer.Stop()
 	for {
 		select {
@@ -139,11 +137,12 @@ func (m *visitorManager) run(id string, s *visitorSession) {
 			return
 		case <-ticker.C:
 			s.mu.Lock()
-			expired := !time.Now().Before(s.deadline)
+			sessionDeadline := s.expiresAt()
+			expired := !time.Now().Before(sessionDeadline)
 			if !s.closed && !expired {
 				deadline := time.Now().Add(10 * time.Second)
-				if s.deadline.Before(deadline) {
-					deadline = s.deadline
+				if sessionDeadline.Before(deadline) {
+					deadline = sessionDeadline
 				}
 				ctx, cancel := context.WithDeadline(context.Background(), deadline)
 				s.advance(ctx)
@@ -242,9 +241,23 @@ func (m *visitorManager) close() error {
 	return errors.Join(m.cleanupErrors...)
 }
 
+func (s *visitorSession) expiresAt() time.Time { return *s.deadline.Load() }
+
+func (s *visitorSession) tryRequest(w http.ResponseWriter) bool {
+	if s.mu.TryLock() {
+		return true
+	}
+	// A long tick or write may hold the lock past the session deadline.
+	if !time.Now().Before(s.expiresAt()) {
+		http.Error(w, "visitor session expired", http.StatusUnauthorized)
+	} else {
+		http.Error(w, "visitor busy; refresh status", http.StatusTooManyRequests)
+	}
+	return false
+}
+
 func (s *visitorSession) serve(w http.ResponseWriter, r *http.Request) {
-	if !s.mu.TryLock() {
-		http.Error(w, "visitor busy; refresh status", 429)
+	if !s.tryRequest(w) {
 		return
 	}
 	defer s.mu.Unlock()
@@ -254,7 +267,8 @@ func (s *visitorSession) serve(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "visitor runtime unavailable; reconcile unknown outcomes", 503)
 		}
 	}()
-	if s.closed || !time.Now().Before(s.deadline) {
+	deadline := s.expiresAt()
+	if s.closed || !time.Now().Before(deadline) {
 		http.Error(w, "visitor session expired; open a new session", 401)
 		return
 	}
@@ -272,7 +286,7 @@ func (s *visitorSession) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		s.restarts++
 	}
-	ctx, cancel := context.WithDeadline(r.Context(), s.deadline)
+	ctx, cancel := context.WithDeadline(r.Context(), deadline)
 	defer cancel()
 	forward := r.Clone(ctx)
 	forward.Header = r.Header.Clone()

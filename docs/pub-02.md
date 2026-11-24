@@ -157,12 +157,15 @@ or reinterpret an unknown execution outcome.
 | `FLEETOPS_DATABASE_URL` | Private connection for a dedicated DB/role with schema creation privileges; supply verified database TLS appropriate to the deployment. Never build credentials into an image. |
 | `FLEETOPS_ASSETS_DIR` | Built `web/dist`, separate from evidence. |
 | `FLEETOPS_EVIDENCE_DIR` | Persistent private writable directory, outside assets; production rejects group/world permissions and symlinks within evidence. |
+| `FLEETOPS_WAREHOUSE_CHARGE_TARGET` | Optional setting for Warehouse V2 visitor sessions. Omit it for the supported 85% target, or set it explicitly to `85`. Other targets fail startup validation. |
 | `FLEETOPS_TRUSTED_PROXIES` | Optional comma-separated actual peer CIDRs for the Application API; required operationally when the normal HTTP executable is behind a TLS proxy. Local mode rejects proxies. `/0` is invalid. |
 | `PORT` | Existing integer 1–65535, default 8080. |
 
 `FLEETOPS_AUTH_TOKENS` and `FLEETOPS_CHARGING_DEMO` no longer configure the public
 visitor path. Identities and fixed presets are owned per visitor. Enabled
 `FLEETOPS_AUTO_TICK` is rejected; approved controls own each visitor's progression.
+
+The standalone diagnostic command `go run ./cmd/simrun -layout warehouse-v2 -charge-target 100` reproduces the experimental policy. Its seed-2 workload can stall with faulted R9 blocking R7 and too little battery for R3 to reach an available dock. The deployable visitor application supports 85%.
 The existing pure helpers remain covered for historical regression purposes.
 
 The normal executable listens HTTP behind a TLS terminator; it does not load TLS

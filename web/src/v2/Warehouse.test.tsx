@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import V2Shell from "./V2Shell";
 import { Warehouse } from "./Warehouse";
 import { fitWarehouseCamera, mapDragIntent, reframeWarehouseCamera } from "./WarehouseMap";
+import { robotGlide, type RobotSample } from "./robotMotion";
 import { mapTargetVisible, placeMapLabels } from "./warehouseLabels";
 import { robotActivityLabel, robotTone, warehouseCounts, type Selection } from "./warehousePresentation";
 import type { Job, Layout, Robot, Station, WarehouseFrame } from "./telemetry";
@@ -26,7 +27,7 @@ const job: Job = {
   from: { x: 4, y: 3 }, to: { x: 18, y: 1 }, deadlineTick: 90, deadlineMissed: true,
 };
 const robots: Robot[] = Array.from({ length: 11 }, (_, index) => ({
-  id: "R" + (index + 1),
+  id: index === 10 ? "M1" : "R" + (index + 1),
   x: index === 10 ? 9 : index === 0 ? 1 : index === 7 ? 4 : index * 2,
   y: index === 10 || index === 0 ? 0 : index === 7 ? 5 : 12,
   status: index === 0 ? "charging" : index === 7 ? "moving" : "idle",
@@ -58,6 +59,29 @@ describe("Warehouse V2", () => {
     expect(output).not.toContain("Robot details");
   });
 
+  it("moves M1 to the reported cell and keeps cargo with the faulted robot", () => {
+    const active = {
+      id: "MA1", robotId: "R8", faultId: "F1", fault: "sensor_failure" as const, jobId: job.id,
+      targetCell: { x: 4, y: 10 }, serviceCell: { x: 5, y: 10 },
+      startedTick: 161, repairTicks: 0, requiredRepairTicks: 3,
+    };
+    const traveling = (x: number, y: number): WarehouseFrame => ({ ...frame, snapshot: {
+      ...frame.snapshot,
+      faults: [{ id: "F1", type: "sensor_failure", robots: ["R8"], tick: 160 }],
+      robots: robots.map(robot => robot.id === "M1" ? { ...robot, x, y, status: "moving", activity: "GOING_TO_REPAIR" }
+        : robot.id === "R8" ? { ...robot, ...active.targetCell, status: "faulted", activity: "FAULTED", activeFault: "sensor_failure" }
+        : robot),
+      jobs: [{ ...job, cargoRobotId: "R8" }], maintenance: { phase: "traveling", active },
+    } });
+    const first = render({ kind: "robot", id: "R8" }, traveling(9, 1));
+    const next = render({ kind: "robot", id: "R8" }, traveling(8, 1));
+    expect(first).toMatch(/transform="translate\(9\.5 1\.5\)"[^>]*aria-label="M1 maintenance robot, Traveling to repair, target R8/);
+    expect(next).toMatch(/transform="translate\(8\.5 1\.5\)"[^>]*aria-label="M1 maintenance robot, Traveling to repair, target R8/);
+    expect(next).toContain('data-highlight="target"');
+    expect(next).toContain("Onboard R8 · J18");
+    expect(next).toContain("Sensor failure · F1");
+  });
+
   it("renders the full supplied layout, 11 robots, four chargers, and the fleet strip", () => {
     const output = render();
     expect(output.match(/data-cell-kind=/g)).toHaveLength(260);
@@ -68,11 +92,14 @@ describe("Warehouse V2", () => {
     expect(output.match(/class="v2-wall-block"/g)).toHaveLength(12);
     expect(output).toMatch(/class="v2-wall-block"[^>]*height="7.84"/);
     expect(output.match(/aria-label="C\d charging station/g)).toHaveLength(4);
-    expect(output.match(/aria-label="Inspect R\d/g)).toHaveLength(11);
-    expect(output.match(/class="v2-card-charge" id="v2-fleet-battery-R\d+"[^>]*><svg aria-hidden="true"[^>]*>.*?<\/svg>\d+%<\/span>/g))
+    expect(output.match(/aria-label="Inspect R\d/g)).toHaveLength(10);
+    expect(output).toContain('aria-label="Inspect M1 maintenance robot"');
+    expect(output.match(/class="v2-card-charge" id="v2-fleet-battery-(?:R\d+|M1)"[^>]*><svg aria-hidden="true"[^>]*>.*?<\/svg>\d+%<\/span>/g))
       .toHaveLength(11);
     expect(output).toContain('aria-label="Battery charge 21%, critical"');
-    expect(output).toContain('aria-label="R11 maintenance robot, Parked, battery 89%"');
+    expect(output).toContain('aria-label="M1 maintenance robot, Parked, battery 89%"');
+    const mapLabels = [...output.matchAll(/class="v2-robot-id"[^>]*>([^<]+)</g)].map(match => match[1]);
+    expect(mapLabels).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "M"]);
     expect(output).toContain('data-status-glyph="moving" aria-hidden="true"');
     expect(output).toContain('data-status-glyph="charging" aria-hidden="true"');
     expect(output).not.toContain("Pickup for");
@@ -129,15 +156,34 @@ describe("Warehouse V2", () => {
       .toEqual({ x: 13, y: 4, scale: 4 });
   });
 
-  it("fits the real aspect ratio inside the inspector-safe viewport and explicitly centers Fit", () => {
-    const initial = fitWarehouseCamera(layout, 1250, 394, 332);
+  it("fits square cells and centers the warehouse in the measured stage", () => {
+    const initial = fitWarehouseCamera(layout, 1250, 394);
     expect(initial.y).toBe(8);
-    expect(initial.x + initial.scale * layout.width).toBeLessThan(918);
+    expect(initial.x + initial.scale * layout.width / 2).toBe(625);
     const explicit = fitWarehouseCamera(layout, 918, 394);
     expect(explicit.x + explicit.scale * layout.width / 2).toBe(459);
     const mobile = fitWarehouseCamera(layout, 366, 260);
     expect(mobile.x).toBe(12);
     expect(mobile.x + mobile.scale * layout.width).toBe(354);
+  });
+
+  it("scales each single-edge glide by the tick interval and snaps for discontinuities", () => {
+    const before: RobotSample = { frame: { ...frame, state: "running", eventId: 7 },
+      point: { x: 2, y: 3 }, receivedAt: 100, live: true };
+    const next: RobotSample = { ...before, receivedAt: 600, point: { x: 3, y: 3 },
+      frame: { ...before.frame, type: "tick", eventId: 8, snapshot: { ...frame.snapshot, tick: frame.snapshot.tick + 1 } } };
+    expect(robotGlide(before, next)).toEqual({ x: -1, y: 0, duration: 410 });
+    expect(robotGlide(before, { ...next, receivedAt: 350 })).toEqual({ x: -1, y: 0, duration: 205 });
+    expect(robotGlide(before, { ...next, receivedAt: 1300 })?.duration).toBe(900);
+    for (const sample of [
+      { ...next, receivedAt: 110 }, { ...next, receivedAt: 2600 }, { ...next, live: false },
+      { ...next, point: { x: 3, y: 4 } }, { ...next, point: { x: 5, y: 3 } },
+      { ...next, frame: { ...next.frame, state: "paused" as const } },
+      { ...next, frame: { ...next.frame, eventId: 9 } },
+      { ...next, frame: { ...next.frame, generation: "replacement" } },
+      { ...next, frame: { ...next.frame, runtimeId: "replacement" } },
+    ]) expect(robotGlide(before, sample)).toBeNull();
+    expect(robotGlide(null, next)).toBeNull();
   });
 
   it("maps confirmed activity with fault and traffic taking precedence over moving", () => {
