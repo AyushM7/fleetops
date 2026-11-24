@@ -15,7 +15,8 @@ import (
 )
 
 func TestNormalRecoveryManagerAdvancesDuringInvestigation(t *testing.T) {
-	_, pool, _, _ := visitorArchiveFixture(t)
+	f, pool, owner, dir := visitorArchiveFixture(t)
+	t.Cleanup(func() { cleanupVisitorArchiveFixture(t, f, owner, dir) })
 	cfg := sim.WarehouseV2Config()
 	cfg.InitialJobs = 0
 	cfg.ScheduledBreakdowns = []sim.ScheduledBreakdown{{Tick: 1, RobotID: "R4", Type: sim.FaultMotorFailure}}
@@ -97,7 +98,8 @@ func TestNormalRecoveryManagerAdvancesDuringInvestigation(t *testing.T) {
 }
 
 func TestNormalRecoveryManagerHandsSelectionToIndependentOperator(t *testing.T) {
-	_, pool, _, _ := visitorArchiveFixture(t)
+	f, pool, owner, dir := visitorArchiveFixture(t)
+	t.Cleanup(func() { cleanupVisitorArchiveFixture(t, f, owner, dir) })
 	ctx := context.Background()
 	a, tokens, _, err := visitorCredentials()
 	if err != nil {

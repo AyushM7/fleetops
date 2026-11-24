@@ -195,7 +195,8 @@ func TestWarehouseVisitorLifecycleIntegration(t *testing.T) {
 }
 
 func TestWarehouseConfiguredChargeTargetIntegration(t *testing.T) {
-	_, pool, _, dir := visitorArchiveFixture(t)
+	f, pool, owner, dir := visitorArchiveFixture(t)
+	t.Cleanup(func() { cleanupVisitorArchiveFixture(t, f, owner, dir) })
 	ctx := context.Background()
 	authenticator, tokens, _, err := visitorCredentials()
 	if err != nil {
