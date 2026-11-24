@@ -26,7 +26,8 @@ func TestWarehouseV3OperatorHandoffIntegration(t *testing.T) {
 
 func testWarehouseV3OperatorDecision(t *testing.T, decisionAction proposal.Decision, wantState string, wantExecution fleet.Execution, wantExecutions int) {
 	t.Helper()
-	_, pool, _, _ := visitorArchiveFixture(t)
+	f, pool, owner, dir := visitorArchiveFixture(t)
+	defer cleanupVisitorArchiveFixture(t, f, owner, dir)
 	ctx := context.Background()
 	a, tokens, _, err := visitorCredentials()
 	if err != nil {
