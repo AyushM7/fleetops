@@ -273,7 +273,7 @@
 .v2-target-ring { fill: transparent; stroke: transparent; stroke-width: .055; pointer-events: none; }
 .v2-maintenance-cell { fill: none; stroke: var(--v2-moving); stroke-width: 1.6px; vector-effect: non-scaling-stroke; pointer-events: none; }
 .v2-maintenance-cell[data-highlight="target"] { stroke: var(--v2-fault); stroke-dasharray: 3 2; }
-.v2-maintenance-cell[data-highlight="recovered"] { stroke: var(--v2-charging); stroke-dasharray: 1 2; }
+.v2-maintenance-cell[data-highlight="recovered"] { stroke: var(--v2-green); stroke-dasharray: 1 2; }
 .v2-map-target:active .v2-target-ring,
 .v2-map-target[aria-pressed=true] .v2-target-ring { stroke: var(--v2-selection-ink); stroke-width: 2px; vector-effect: non-scaling-stroke; }
 .v2-map-target:focus-visible .v2-target-ring { stroke: var(--v2-focus); stroke-width: 2px; vector-effect: non-scaling-stroke; stroke-dasharray: 3 2; }
@@ -391,7 +391,7 @@
   white-space: nowrap;
 }
 .v2-card-charge .v2-icon { stroke-width: 2; }
-.v2-card-charge[data-charge="healthy"] .v2-icon { color: var(--v2-charging); }
+.v2-card-charge[data-charge="healthy"] .v2-icon { color: var(--v2-green); }
 .v2-card-charge[data-charge="low"] .v2-icon { color: var(--v2-waiting); }
 .v2-card-charge[data-charge="critical"] .v2-icon { color: var(--v2-fault); }
 .v2-fleet-scroll .v2-robot-card { column-gap: 4px; padding-inline: 6px; }

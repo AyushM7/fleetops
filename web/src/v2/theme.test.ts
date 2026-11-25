@@ -39,7 +39,7 @@ describe("Warehouse appearance", () => {
   });
 
   it("keeps status and focus distinct over tints and selection", () => {
-    for (const status of ["moving", "charging", "waiting", "fault"]) {
+    for (const status of ["moving", "green", "waiting", "fault"]) {
       expect(ratio(status, status + "-wash"), status).toBeGreaterThanOrEqual(4.5);
       expect(ratio(status, "selected"), status).toBeGreaterThanOrEqual(4.5);
       expect(ratio("text", status + "-fill"), status).toBeGreaterThanOrEqual(4.5);

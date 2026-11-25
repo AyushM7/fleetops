@@ -11,8 +11,9 @@ type Filter = keyof typeof filters;
 
 function JobRow({ job, selected, pick }: { job: Job; selected: boolean; pick: PickEntity }) {
   const overdue = isPriorityOverdue(job);
-  const outcome = job.status === "done" && job.outcome ? jobOutcomeLabels[job.outcome] : null;
-  const tone = overdue ? "fault" : job.status === "pending" ? "waiting" : undefined;
+  const completed = job.status === "done";
+  const outcome = completed && job.outcome ? jobOutcomeLabels[job.outcome] : null;
+  const tone = completed ? "completed" : overdue ? "fault" : job.status === "pending" ? "waiting" : undefined;
   return <li>
     <button type="button" className="v2-job-row" aria-pressed={selected} data-tone={tone}
       onClick={event => pick({ kind: "job", id: job.id }, event.currentTarget)}>
