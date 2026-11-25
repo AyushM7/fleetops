@@ -45,16 +45,18 @@ credentials with a new session. Retiring resources were not included in capacity
   calls this a visitor demo and gives accurate expired-session renewal guidance.
 
 Cookies are server-generated 256-bit opaque capabilities, host-only, HttpOnly,
-SameSite=Strict, fixed 20-minute lifetime. Production adds Secure and a `__Host-`
-name. Credentials never appear in HTML, status JSON, URLs, frontend storage or
-application logs. Set-Cookie is their intended browser delivery channel. Duplicate,
+SameSite=Lax, fixed 20-minute lifetime. Lax allows an existing cookie to be sent
+when a visitor follows a top-level link to FleetOps. Production adds Secure and
+a `__Host-` name. Credentials never appear in HTML, status JSON, URLs, frontend
+storage or application logs. Set-Cookie is their intended browser delivery channel. Duplicate,
 malformed, unknown, expired or revoked capabilities are rejected; invalid root
 credentials do not create a replacement visitor. Every protected route checks
 session validity; refresh never extends lifetime.
 
 Every request validates exact Host and configured Origin, rejects query parameters,
-absolute-form request targets, hostile Fetch-Site values and ambiguous boundary
-headers. Protected requests require JSON POST, the same-origin CSRF marker and no
+absolute-form request targets and ambiguous boundary headers. Cross-origin Fetch
+Metadata is permitted only for top-level GET document navigation to `/`.
+Protected requests require JSON POST, the same-origin CSRF marker and no
 browser Authorization header. Controls require exactly `{}` with a bounded read.
 GraphQL retains its existing 64 KiB body, token, complexity, depth, selection,
 single-mutation and ten-second context limits.

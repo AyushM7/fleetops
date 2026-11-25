@@ -120,7 +120,15 @@ func (g *visitorGateway) boundary(r *http.Request) bool {
 	if origin := r.Header.Get("Origin"); origin != "" && origin != g.origin {
 		return false
 	}
-	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {
+	switch r.Header.Get("Sec-Fetch-Site") {
+	case "", "same-origin", "none":
+	case "cross-site", "same-site":
+		if r.Method != http.MethodGet || r.URL.RequestURI() != "/" ||
+			len(r.Header.Values("Sec-Fetch-Mode")) != 1 || r.Header.Get("Sec-Fetch-Mode") != "navigate" ||
+			len(r.Header.Values("Sec-Fetch-Dest")) != 1 || r.Header.Get("Sec-Fetch-Dest") != "document" {
+			return false
+		}
+	default:
 		return false
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -353,7 +361,7 @@ func (g *visitorGateway) bootstrap(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "visitor session unavailable", 503)
 			return
 		}
-		http.SetCookie(w, &http.Cookie{Name: g.cookieName, Value: id, Path: "/", HttpOnly: true, Secure: g.config.Mode == "production", SameSite: http.SameSiteStrictMode, Expires: created.expiresAt(), MaxAge: int(visitorTTL.Seconds())})
+		http.SetCookie(w, &http.Cookie{Name: g.cookieName, Value: id, Path: "/", HttpOnly: true, Secure: g.config.Mode == "production", SameSite: http.SameSiteLaxMode, Expires: created.expiresAt(), MaxAge: int(visitorTTL.Seconds())})
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write(g.index)

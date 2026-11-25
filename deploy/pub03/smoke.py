@@ -33,7 +33,7 @@ class Visitor:
         cookie = cookies[0]
         self.capabilities.append(cookie.value)
         assert cookie.name.startswith("__Host-") and cookie.secure and cookie.path == "/"
-        assert "HttpOnly" in cookie._rest and cookie._rest.get("SameSite") == "Strict"
+        assert "HttpOnly" in cookie._rest and cookie._rest.get("SameSite") == "Lax"
         assert not cookie.domain_specified
         assert cookie.value.encode() not in body
 
