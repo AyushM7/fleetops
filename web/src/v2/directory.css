@@ -100,6 +100,7 @@
 .v2-job-row-endpoints span { color: var(--v2-muted); }
 .v2-job-row-endpoints strong { color: var(--v2-text); font-weight: 550; }
 .v2-job-row .v2-status-chip { margin: 0; background: var(--tone-fill, var(--v2-panel)); }
+.v2-shell .v2-job-row[data-tone="charging"] { border-color: color-mix(in srgb, var(--tone), var(--v2-border)); }
 .v2-shell .v2-job-row[aria-pressed=true] { border-color: var(--v2-selection-ink); background: var(--v2-selected); }
 .v2-shell .v2-job-row[aria-pressed=true] .v2-job-row-id strong { color: var(--v2-selection-ink); }
 @media (hover: hover) {
