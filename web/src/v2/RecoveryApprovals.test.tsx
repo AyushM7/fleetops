@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
-import { parseRecoveryItems, RecoveryProposalList } from "./RecoveryApprovals";
+import { parseRecoveryItems, parseRecoveryReport, RecoveryInvestigations, RecoveryProposalList } from "./RecoveryApprovals";
 
 const row = {
   runId: "A" + "1".repeat(32), state: "pending", execution: "none",
@@ -56,4 +56,22 @@ it("shows the current job owner and robot after successful execution", () => {
   const html = renderToStaticMarkup(<RecoveryProposalList items={items} blocked={false} pending={null} snapshot={snapshot} decide={() => {}} />);
   expect(html).toContain("Owner R3");
   expect(html).toContain("71% battery");
+});
+
+it("distinguishes confirmed live abstention, failed live runs, and offline outcomes", () => {
+  const investigations = [
+    { runId: row.runId, source: "live-model", status: "abstained", providerConfirmed: true },
+    { runId: "A" + "2".repeat(32), source: "live-model", status: "failed", providerConfirmed: false },
+    { runId: "A" + "3".repeat(32), source: "deterministic", status: "proposal_not_admitted", providerConfirmed: false },
+  ];
+  const report = parseRecoveryReport({ live: true, proposals: [], investigations });
+  const html = renderToStaticMarkup(<RecoveryInvestigations report={report} />);
+  for (const label of ["Abstained", "OpenAI response confirmed", "Investigation failed",
+    "response unconfirmed", "Deterministic result", "Go did not admit the proposal"]) expect(html).toContain(label);
+  expect(html.match(/OpenAI response confirmed/g)).toHaveLength(1);
+  expect(renderToStaticMarkup(<RecoveryInvestigations report={{ ...report, live: false, investigations: [] }} />))
+    .toContain("Live OpenAI recovery is off.");
+  expect(() => parseRecoveryReport({
+    live: true, proposals: [], investigations: [{ ...investigations[2], providerConfirmed: true }],
+  })).toThrow();
 });

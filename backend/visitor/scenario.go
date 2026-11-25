@@ -260,18 +260,63 @@ type warehouseRecoveryItem struct {
 	Incidents []fleet.AgentIncident `json:"incidents"`
 }
 
-func (s *demoScenario) warehouseRecoveryHistory(ctx context.Context, header string) ([]warehouseRecoveryItem, error) {
+type warehouseRecoveryReport struct {
+	Live           bool                             `json:"live"`
+	Proposals      []warehouseRecoveryItem          `json:"proposals"`
+	Investigations []warehouseRecoveryInvestigation `json:"investigations"`
+}
+
+type warehouseRecoveryInvestigation struct {
+	RunID             string `json:"runId"`
+	Source            string `json:"source"`
+	Status            string `json:"status"`
+	ProviderConfirmed bool   `json:"providerConfirmed"`
+}
+
+func recoveryInvestigation(run fleet.AgentRun) warehouseRecoveryInvestigation {
+	result := warehouseRecoveryInvestigation{RunID: run.ID, Source: run.Metadata.Source, Status: "investigating"}
+	if c := run.Completion; c != nil {
+		result.ProviderConfirmed = run.Metadata.Source == "live-model" && c.Status == "accepted" &&
+			c.Requests > 0 && c.ActualModel == "openai/gpt-6-luna" && c.Usage.Status == "reported"
+	}
+	switch c := run.Completion; {
+	case c == nil:
+	case c.Status == "failed":
+		result.Status = "failed"
+		if c.Failure == "cancelled" {
+			result.Status = "cancelled"
+		}
+	case !run.DecisionVerified || c.Decision == nil:
+		result.Status = "validation_rejected"
+	case c.Decision.Kind == "abstain":
+		result.Status = "abstained"
+	case run.ProposalID == nil:
+		result.Status = "proposal_not_admitted"
+	default:
+		result.Status = "proposal_admitted"
+	}
+	return result
+}
+
+func (s *demoScenario) warehouseRecoveryHistory(ctx context.Context, header string) (warehouseRecoveryReport, error) {
 	operatorCtx, _, err := s.recoveryOperator(ctx, header)
 	if err != nil {
-		return nil, err
+		return warehouseRecoveryReport{}, err
 	}
 	runs, err := s.service.ReadAgentRuns(operatorCtx, "", 20)
 	if err != nil {
-		return nil, err
+		return warehouseRecoveryReport{}, err
 	}
-	items := make([]warehouseRecoveryItem, 0, len(runs))
+	report := warehouseRecoveryReport{
+		Live: s.factory.recovery != nil, Proposals: make([]warehouseRecoveryItem, 0, len(runs)),
+		Investigations: make([]warehouseRecoveryInvestigation, 0, len(runs)),
+	}
 	for _, run := range runs {
-		if run.Metadata.Contract != "recovery-decision-v3" || !run.DecisionVerified ||
+		if run.Metadata.Contract != "recovery-decision-v3" {
+			continue
+		}
+		report.Investigations = append(report.Investigations, recoveryInvestigation(run))
+		if !run.DecisionVerified ||
 			run.Proposal == nil || run.Completion == nil || run.Completion.Decision == nil || run.Completion.Decision.Selected == nil {
 			continue
 		}
@@ -294,7 +339,7 @@ func (s *demoScenario) warehouseRecoveryHistory(ctx context.Context, header stri
 				item.Incidents = append(item.Incidents, incident)
 			}
 		}
-		items = append(items, item)
+		report.Proposals = append(report.Proposals, item)
 	}
-	return items, nil
+	return report, nil
 }

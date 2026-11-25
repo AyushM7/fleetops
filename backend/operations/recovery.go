@@ -33,9 +33,8 @@ type RecoveryInput struct {
 }
 
 type recoveryWorker struct {
-	node, entrypoint       string
-	send                   func(context.Context, []byte) ([]byte, error)
-	dayRequests, dayMicros int64
+	node, entrypoint string
+	send             func(context.Context, []byte) ([]byte, error)
 }
 
 type workerMessage struct {
@@ -111,8 +110,11 @@ func (w *recoveryWorker) investigate(ctx context.Context, input RecoveryInput, l
 			return fleet.AgentCompletion{}, failed
 		}
 		seen[digest] = true
-		r, err := ledger.reserveRecovery(ctx, input.RuntimeID, input.ID, w.dayRequests, w.dayMicros)
+		r, err := ledger.reserveRecovery(ctx, input.RuntimeID, input.ID, requests == 0)
 		if err != nil {
+			if errors.Is(err, errRecoveryReplay) {
+				logRecoveryFailure(input.ID, requests+1, recoveryProviderFailure{stage: "duplicate_run"})
+			}
 			return fleet.AgentCompletion{}, err
 		}
 		requests++

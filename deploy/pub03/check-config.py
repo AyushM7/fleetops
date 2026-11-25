@@ -37,6 +37,19 @@ class DeploymentTests(unittest.TestCase):
             self.assertEqual(CONFIG["services"][service]["tmpfs"], ["/tmp:size=16m,mode=1777"])
         self.assertIn("postgres_data:/var/lib/postgresql", CONFIG["services"]["postgres"]["volumes"])
 
+    def test_live_recovery_overlay_is_app_only(self) -> None:
+        overlay = yaml.safe_load((ROOT / "compose.operations.yml").read_text())
+        self.assertEqual(set(overlay["services"]), {"app"})
+        app = overlay["services"]["app"]
+        self.assertEqual(set(app), {"environment", "networks"})
+        self.assertEqual(app["networks"], {"operations-egress": {}})
+        self.assertEqual(overlay["networks"], {"operations-egress": {}})
+        env = app["environment"]
+        self.assertEqual(env["FLEETOPS_OPERATIONS_ENABLED"], "1")
+        self.assertEqual(env["FLEETOPS_OPERATIONS_PROTOCOL"], "v3")
+        self.assertTrue(env["OPENAI_API_KEY"].startswith("${OPENAI_API_KEY:?"))
+        self.assertFalse(any("DAILY" in key for key in env))
+
     def test_forwarding_is_overwritten(self) -> None:
         caddy = (ROOT / "Caddyfile").read_text()
         for directive in ("header_up -Forwarded", "header_up -X-Real-IP", "header_up X-Forwarded-Proto https", "header_up X-Forwarded-Host {http.request.hostport}", "header_up X-Forwarded-For {http.request.remote.host}"):

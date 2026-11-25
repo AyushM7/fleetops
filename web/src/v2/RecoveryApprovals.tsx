@@ -21,6 +21,20 @@ const basisLabels: Record<string, string> = {
   admitted_option: "Selected from Go-admitted options",
   tradeoff: "Compared pickup and battery tradeoffs",
 };
+const investigationLabels = {
+  investigating: "Investigating",
+  failed: "Investigation failed",
+  cancelled: "Investigation cancelled",
+  validation_rejected: "Go rejected the decision",
+  abstained: "Abstained",
+  proposal_not_admitted: "Go did not admit the proposal",
+  proposal_admitted: "Go admitted the proposal for operator review",
+};
+const investigationSources = new Set(["live-model", "mocked", "deterministic", "recorded"]);
+type RecoveryInvestigation = {
+  runId: string; source: string; status: keyof typeof investigationLabels; providerConfirmed: boolean;
+};
+type RecoveryReport = { live: boolean; proposals: RecoveryItem[]; investigations: RecoveryInvestigation[] };
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid recovery record");
@@ -57,6 +71,37 @@ export function parseRecoveryItems(value: unknown): RecoveryItem[] {
   });
 }
 
+export function parseRecoveryReport(value: unknown): RecoveryReport {
+  const report = record(value);
+  if (typeof report.live !== "boolean" || !Array.isArray(report.investigations) || report.investigations.length > 20) {
+    throw new Error("Invalid recovery report");
+  }
+  const investigations = report.investigations.map((value: unknown): RecoveryInvestigation => {
+    const row = record(value);
+    if (typeof row.runId !== "string" || !/^A[a-f0-9]{32}$/.test(row.runId) ||
+        typeof row.source !== "string" || !investigationSources.has(row.source) ||
+        typeof row.status !== "string" || !Object.hasOwn(investigationLabels, row.status) ||
+        typeof row.providerConfirmed !== "boolean" || (row.providerConfirmed && row.source !== "live-model")) {
+      throw new Error("Invalid recovery investigation");
+    }
+    return { runId: row.runId, source: row.source, status: row.status as RecoveryInvestigation["status"], providerConfirmed: row.providerConfirmed };
+  });
+  return { live: report.live, proposals: parseRecoveryItems(report.proposals), investigations };
+}
+
+export function RecoveryInvestigations({ report }: { report: RecoveryReport }) {
+  return <>
+    <p>{report.live ? "Live OpenAI recovery is enabled for warehouse incidents." : "Live OpenAI recovery is off."}</p>
+    {report.investigations.length > 0 && <ul className="v2-recovery-list" aria-label="Recovery investigations">
+      {report.investigations.map(item => <li key={item.runId}>
+        <strong>{investigationLabels[item.status]}</strong>
+        <p>{item.providerConfirmed ? "OpenAI response confirmed" : item.source === "live-model" ? "Live recovery run · response unconfirmed"
+          : item.source === "recorded" ? "Recorded result" : item.source === "mocked" ? "Offline test result" : "Deterministic result"}</p>
+      </li>)}
+    </ul>}
+  </>;
+}
+
 type Decision = "approve" | "reject";
 
 export function RecoveryProposalList({ items, blocked, pending, submitted, snapshot, decide }: {
@@ -89,13 +134,14 @@ export function RecoveryProposalList({ items, blocked, pending, submitted, snaps
 }
 
 export function RecoveryApprovals({ generation, live, snapshot }: { generation: string; live: boolean; snapshot: Snapshot }) {
-  const [items, setItems] = useState<RecoveryItem[]>([]);
+  const [report, setReport] = useState<RecoveryReport | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [ready, setReady] = useState(false);
   const decisionRef = useRef(false);
   const uncertainRef = useRef(new Set<string>());
   const lifetime = useRef<AbortController | null>(null);
+  const items = report?.proposals ?? [];
 
   useEffect(() => {
     const scope = new AbortController();
@@ -103,11 +149,11 @@ export function RecoveryApprovals({ generation, live, snapshot }: { generation: 
     let timer: ReturnType<typeof setTimeout>;
     async function refresh() {
       try {
-        const result = await postVisitor("/demo/recovery", generation, AbortSignal.any([scope.signal, AbortSignal.timeout(8000)]));
+        const result = await postVisitor("/demo/recovery/report", generation, AbortSignal.any([scope.signal, AbortSignal.timeout(8000)]));
         if (!result.ok) throw new Error("Recovery status unavailable");
-        const rows = parseRecoveryItems(await result.json());
+        const current = parseRecoveryReport(await result.json());
         if (scope.signal.aborted) return;
-        setItems(rows);
+        setReport(current);
         setReady(true);
       } catch {
         if (!scope.signal.aborted) setReady(false);
@@ -142,6 +188,7 @@ export function RecoveryApprovals({ generation, live, snapshot }: { generation: 
   return <section className="v2-panel v2-ops-group" aria-labelledby="recovery-proposals-title">
     <header><h2 id="recovery-proposals-title">Recovery proposals</h2></header>
     {!ready && <p role="status">Waiting for current Go proposal records.</p>}
+    {ready && report && <RecoveryInvestigations report={report} />}
     {notice && <p role="status">{notice}</p>}
     {(ready || items.length > 0) && <RecoveryProposalList items={items} blocked={!live || !ready} pending={pending}
       submitted={uncertainRef.current} snapshot={snapshot} decide={(id, action) => { void decide(id, action); }} />}

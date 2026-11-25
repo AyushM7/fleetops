@@ -31,7 +31,7 @@ type demoRun struct {
 	inspect            func(context.Context) (*model.FleetState, bool, error)
 	step               func(context.Context) error
 	warehouse          func() sim.State
-	recoveryHistory    func(context.Context, string) ([]warehouseRecoveryItem, error)
+	recoveryHistory    func(context.Context, string) (warehouseRecoveryReport, error)
 	recovery           func(context.Context, string, string, proposal.Decision) (fleet.Result, error)
 	events             warehouseEvents
 	evidence           *demoExplanation
@@ -121,9 +121,10 @@ func (c *demoController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "scenario unavailable; evidence capture or restart failed", http.StatusServiceUnavailable)
 		return
 	}
+	recoveryRead := r.URL.Path == "/demo/recovery" || r.URL.Path == "/demo/recovery/report"
 	if c.run.warehouse != nil {
-		if r.URL.Path == "/demo/recovery" && c.run.recoveryHistory != nil {
-			items, err := c.run.recoveryHistory(r.Context(), r.Header.Get("Authorization"))
+		if recoveryRead && c.run.recoveryHistory != nil {
+			report, err := c.run.recoveryHistory(r.Context(), r.Header.Get("Authorization"))
 			if errors.Is(err, fleet.ErrUnauthorized) {
 				http.Error(w, "operator authorization required", http.StatusForbidden)
 				return
@@ -133,7 +134,11 @@ func (c *demoController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(items)
+			if r.URL.Path == "/demo/recovery/report" {
+				_ = json.NewEncoder(w).Encode(report)
+			} else {
+				_ = json.NewEncoder(w).Encode(report.Proposals)
+			}
 			return
 		}
 		id, decision, ok := warehouseRecoveryCommand(r.URL.Path)
@@ -156,7 +161,7 @@ func (c *demoController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if _, _, ok := warehouseRecoveryCommand(r.URL.Path); ok || r.URL.Path == "/demo/recovery" {
+	if _, _, ok := warehouseRecoveryCommand(r.URL.Path); ok || recoveryRead {
 		http.NotFound(w, r)
 		return
 	}
