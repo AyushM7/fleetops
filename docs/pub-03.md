@@ -229,15 +229,15 @@ Database traffic uses SCRAM authentication over a private, single-host internal
 bridge (sslmode=disable). It is not encrypted on that bridge. No remote database
 or transit TLS is claimed; changing that topology requires verified DB TLS.
 
-Production retains PUB-02's Secure/HttpOnly/SameSite=Strict/host-only cookies,
-twenty-minute lifetime, eight-owner admission cap, human approval and Go safety
-gates. App restart invalidates all visitor sessions and archives them on graceful
+Production uses Secure/HttpOnly/SameSite=Lax/host-only cookies with a
+twenty-minute lifetime. The eight-visitor admission cap, human approval, and Go
+safety gates still apply. App restart invalidates all visitor sessions and archives them on graceful
 shutdown. It doesn't restore a live simulator from a cookie. Crash-retained schemas
 block admission until manual reconciliation. Evidence admission stops at 512 MiB,
 10,000 entries, or less than five GiB free plus headroom; preserve and export it,
 don't delete it to bypass admission. Maintain at least 10 GiB host free operationally.
-External-link navigation can be denied by existing strict Fetch-Site policy; open
-the demo via direct address navigation. That policy was not changed in this ticket.
+External links can open the homepage as top-level GET document navigations.
+Cross-site API requests, form submissions, iframes and subresources remain blocked.
 
 Logs use Docker's local driver capped at 3 × 10 MB per service. Caddy access/debug
 logs are disabled so request headers, cookie capabilities and query strings aren't

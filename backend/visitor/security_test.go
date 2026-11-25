@@ -63,7 +63,7 @@ func openVisitor(t *testing.T, g *visitorGateway) *http.Cookie {
 		t.Fatal("bootstrap failed", w.Code, w.Body.String())
 	}
 	c := cookies[0]
-	if !c.HttpOnly || c.SameSite != http.SameSiteStrictMode || c.Domain != "" || len(c.Value) != 64 || c.Path != "/" {
+	if !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Domain != "" || len(c.Value) != 64 || c.Path != "/" {
 		t.Fatal("unsafe visitor cookie")
 	}
 	if strings.Contains(w.Body.String(), c.Value) {

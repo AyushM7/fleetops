@@ -89,7 +89,7 @@ func TestPUB02ProductionTLSAndForwarding(t *testing.T) {
 			}
 			if w.Code == 200 {
 				cookies := w.Result().Cookies()
-				if len(cookies) != 1 || !cookies[0].Secure || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode || cookies[0].Domain != "" {
+				if len(cookies) != 1 || !cookies[0].Secure || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteLaxMode || cookies[0].Domain != "" {
 					t.Fatal("unsafe production cookie")
 				}
 				if w.Header().Get("Strict-Transport-Security") == "" {
@@ -97,6 +97,104 @@ func TestPUB02ProductionTLSAndForwarding(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPUB02ExternalDocumentNavigation(t *testing.T) {
+	g, _ := visitorUnitGateway(t)
+	g.config.Mode, g.origin, g.host = "production", "https://fleet.example", "fleet.example"
+	g.cookieName = "__Host-fleetops-fixture"
+	_, proxy, _ := net.ParseCIDR("127.0.0.1/32")
+	g.proxies = []*net.IPNet{proxy}
+
+	request := func(path, site, mode, dest string, cookie *http.Cookie) *http.Request {
+		r := rawRequest(g, path)
+		r.Header.Set("X-Forwarded-Proto", "https")
+		r.Header.Set("Sec-Fetch-Site", site)
+		r.Header.Set("Sec-Fetch-Mode", mode)
+		r.Header.Set("Sec-Fetch-Dest", dest)
+		if cookie != nil {
+			r.AddCookie(cookie)
+		}
+		return r
+	}
+	serve := func(r *http.Request) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		g.ServeHTTP(w, r)
+		return w
+	}
+	direct := serve(request("/", "none", "navigate", "document", nil))
+	if direct.Code != http.StatusOK || len(direct.Result().Cookies()) != 1 {
+		t.Fatal("direct navigation could not start a session", direct.Code)
+	}
+	github := request("/", "cross-site", "navigate", "document", nil)
+	github.Header.Set("Referer", "https://github.com/")
+	github.Header.Set("Sec-Fetch-User", "?1")
+	first := serve(github)
+	cookies := first.Result().Cookies()
+	if first.Code != http.StatusOK || len(cookies) != 1 {
+		t.Fatal("external link could not start a session", first.Code, first.Body.String())
+	}
+	cookie := cookies[0]
+	if cookie.SameSite != http.SameSiteLaxMode || !cookie.Secure || !cookie.HttpOnly ||
+		cookie.Path != "/" || cookie.Domain != "" || cookie.Name != g.cookieName {
+		t.Fatal("unsafe visitor cookie")
+	}
+	session := g.manager.lookup(cookie.Value)
+	if session == nil {
+		t.Fatal("created session missing")
+	}
+	deadline := session.expiresAt()
+	for _, tc := range []struct {
+		name, method, path, mode, dest string
+		provideOrigin                  bool
+	}{
+		{"graphql", "POST", "/graphql", "cors", "empty", false},
+		{"recovery", "POST", "/demo/recovery", "cors", "empty", false},
+		{"form-POST", "POST", "/", "navigate", "document", false},
+		{"SSE", "GET", "/demo/events", "cors", "empty", false},
+		{"iframe", "GET", "/", "navigate", "iframe", false},
+		{"root fetch", "GET", "/", "cors", "empty", false},
+		{"script", "GET", "/assets/main.js", "no-cors", "script", false},
+		{"another document", "GET", "/readyz", "navigate", "document", false},
+		{"query", "GET", "/?via=github", "navigate", "document", false},
+		{"missing metadata", "GET", "/", "", "", false},
+		{"foreign origin", "GET", "/", "navigate", "document", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := request(tc.path, "cross-site", tc.mode, tc.dest, cookie)
+			r.Method = tc.method
+			if tc.provideOrigin {
+				r.Header.Set("Origin", "https://github.com")
+			}
+			if w := serve(r); w.Code != http.StatusForbidden || w.Body.String() != "request boundary denied\n" || w.Header().Get("Set-Cookie") != "" {
+				t.Fatal("external request escaped the document boundary", w.Code)
+			}
+		})
+	}
+	duplicate := request("/", "cross-site", "navigate", "document", cookie)
+	duplicate.Header.Add("Sec-Fetch-Dest", "iframe")
+	if w := serve(duplicate); w.Code != http.StatusForbidden {
+		t.Fatal("ambiguous destination accepted", w.Code)
+	}
+	for range visitorLimit - 2 {
+		if _, _, err := g.manager.create(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	budget := g.creations
+	busy := serve(request("/", "cross-site", "navigate", "document", nil))
+	if busy.Code != http.StatusServiceUnavailable || busy.Header().Get("Retry-After") != "60" ||
+		busy.Header().Get("Set-Cookie") != "" || !strings.Contains(busy.Body.String(), "All simulation slots are in use") ||
+		g.creations != budget {
+		t.Fatal("external link bypassed capacity or spent creation budget", busy.Code)
+	}
+	for _, site := range []string{"cross-site", "same-site", "none"} {
+		again := serve(request("/", site, "navigate", "document", cookie))
+		if again.Code != http.StatusOK || again.Header().Get("Set-Cookie") != "" ||
+			g.manager.lookup(cookie.Value) != session || !session.expiresAt().Equal(deadline) || g.creations != budget {
+			t.Fatal("navigation did not reuse the existing session", site, again.Code)
+		}
 	}
 }
 
