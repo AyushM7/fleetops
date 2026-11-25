@@ -215,6 +215,63 @@ func TestPUB02ReadinessRecoveryAndRetentionBackpressure(t *testing.T) {
 	check("/healthz", 200)
 }
 
+func TestVisitorCapacityPageAndReadiness(t *testing.T) {
+	g, _ := visitorUnitGateway(t)
+	cookie := openVisitor(t, g)
+	session := g.manager.lookup(cookie.Value)
+	for range visitorLimit - 1 {
+		if _, _, err := g.manager.create(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	g.creations = bucket{tokens: 1, at: time.Now()}
+	initialBudget := g.creations
+
+	get := func(path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		g.ServeHTTP(w, rawRequest(g, path))
+		return w
+	}
+	busy := get("/")
+	if busy.Code != http.StatusServiceUnavailable || busy.Header().Get("Retry-After") != "60" ||
+		busy.Header().Get("Set-Cookie") != "" || busy.Header().Get("Cache-Control") != "no-store" ||
+		!strings.Contains(busy.Header().Get("Content-Type"), "text/html") ||
+		!strings.Contains(busy.Body.String(), "All simulation slots are in use") ||
+		!strings.Contains(busy.Body.String(), `href="/">Try again`) || g.creations != initialBudget {
+		t.Fatalf("bad capacity response: %d %v %s", busy.Code, busy.Header(), busy.Body)
+	}
+	if css := get("/visitor-busy.css"); css.Code != http.StatusOK || !strings.Contains(css.Header().Get("Content-Type"), "text/css") {
+		t.Fatal("capacity stylesheet unavailable", css.Code)
+	}
+	existing := rawRequest(g, "/")
+	existing.AddCookie(cookie)
+	current := httptest.NewRecorder()
+	g.ServeHTTP(current, existing)
+	if current.Code != http.StatusOK || g.creations != initialBudget {
+		t.Fatal("at-capacity request with an existing session was rejected or charged", current.Code)
+	}
+	if ready := get("/readyz"); ready.Code != http.StatusServiceUnavailable ||
+		ready.Header().Get("Retry-After") != "60" || !strings.Contains(ready.Body.String(), "capacity exhausted") {
+		t.Fatal("readiness did not report capacity", ready.Code, ready.Body)
+	}
+	g.manager.admit = func(context.Context) error { return errors.New("private database or storage failure") }
+	for _, path := range []string{"/", "/readyz"} {
+		w := get(path)
+		if w.Code != http.StatusServiceUnavailable || w.Header().Get("Retry-After") != "" ||
+			strings.Contains(w.Body.String(), "slots") || strings.Contains(w.Body.String(), "private") {
+			t.Fatal("infrastructure failure misclassified or disclosed", path, w.Code, w.Body)
+		}
+	}
+	g.manager.admit = nil
+	g.manager.retire(cookie.Value, session)
+	if ready := get("/readyz"); ready.Code != http.StatusOK {
+		t.Fatal("readiness did not recover after cleanup", ready.Code)
+	}
+	if home := get("/"); home.Code != http.StatusOK || len(home.Result().Cookies()) != 1 {
+		t.Fatal("visitor was not admitted after cleanup", home.Code)
+	}
+}
+
 func TestPUB02ClosingResourcesConsumeCapacity(t *testing.T) {
 	g, _ := visitorUnitGateway(t)
 	cookie := openVisitor(t, g)
