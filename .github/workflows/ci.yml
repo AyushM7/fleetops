@@ -55,12 +55,15 @@ jobs:
           package-manager-cache: false
       - run: npm ci --prefix web
       - run: npm --prefix web run build
+      - run: npm ci --prefix agent
+      - run: npm --prefix agent run build
       - run: mkdir -m 700 "$RUNNER_TEMP/pub02-evidence" "$RUNNER_TEMP/pub02-private-evidence"
       - run: make test-integration
         env:
           FLEETOPS_PUB02_ASSETS: ${{ github.workspace }}/web/dist
           FLEETOPS_PUB02_EVIDENCE: ${{ runner.temp }}/pub02-evidence
           FLEETOPS_PUB02_PRIVATE_EVIDENCE: ${{ runner.temp }}/pub02-private-evidence
+          FLEETOPS_TEST_V3_WORKER: ${{ github.workspace }}/agent/dist/operations-worker.js
 
   gitleaks:
     runs-on: ubuntu-latest

@@ -98,8 +98,8 @@ func (c *demoController) finishRecovery(cycle *operationsCycle, run *fleet.Agent
 	service := cycle.run.operations.service
 	allowed := cycle.ctx.Err() == nil && c.run == cycle.run && c.ready && c.running && !c.closed
 	failure := "investigation_failed"
-	if errors.Is(err, operations.ErrBudget) {
-		failure = "budget_exhausted"
+	if errors.Is(err, operations.ErrUsage) {
+		failure = "invalid_usage"
 	}
 	if errors.Is(cycle.ctx.Err(), context.DeadlineExceeded) {
 		failure = "timeout"

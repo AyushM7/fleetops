@@ -151,6 +151,7 @@ func TestPUB02ExternalDocumentNavigation(t *testing.T) {
 	}{
 		{"graphql", "POST", "/graphql", "cors", "empty", false},
 		{"recovery", "POST", "/demo/recovery", "cors", "empty", false},
+		{"recovery report", "POST", "/demo/recovery/report", "cors", "empty", false},
 		{"form-POST", "POST", "/", "navigate", "document", false},
 		{"SSE", "GET", "/demo/events", "cors", "empty", false},
 		{"iframe", "GET", "/", "navigate", "iframe", false},

@@ -67,12 +67,10 @@ func Open(ctx context.Context, pool *db.Pool) (*Manager, error) {
 		return nil, err
 	}
 	if os.Getenv("FLEETOPS_OPERATIONS_PROTOCOL") == "v3" {
-		requests, requestErr := strconv.ParseInt(os.Getenv("FLEETOPS_OPERATIONS_DAILY_REQUESTS"), 10, 64)
-		micros, budgetErr := strconv.ParseInt(os.Getenv("FLEETOPS_OPERATIONS_DAILY_MICRO_USD"), 10, 64)
-		if requestErr != nil || budgetErr != nil || requests < 1 || micros < 1 || !ledger.pricing.validFor(recoveryOutput) {
+		if !ledger.pricing.validFor(recoveryOutput) {
 			return nil, unavailable
 		}
-		return &Manager{ledger: ledger, slots: make(chan struct{}, 2), recovery: &recoveryWorker{node: node, entrypoint: entrypoint, send: recoveryProvider(apiKey), dayRequests: requests, dayMicros: micros}}, nil
+		return &Manager{ledger: ledger, slots: make(chan struct{}, 2), recovery: &recoveryWorker{node: node, entrypoint: entrypoint, send: recoveryProvider(apiKey)}}, nil
 	}
 	return &Manager{ledger: ledger, slots: make(chan struct{}, 2),
 		generate: func(ctx context.Context, observation []byte, reservationID int64) (modelResult, error) {

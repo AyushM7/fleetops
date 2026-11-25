@@ -14,7 +14,7 @@ import (
 	"github.com/AyushM7/fleetops/backend/sim"
 )
 
-func TestNormalRecoveryManagerAdvancesDuringInvestigation(t *testing.T) {
+func TestNormalRecoveryManagerAdvancesDuringInvestigationIntegration(t *testing.T) {
 	f, pool, owner, dir := visitorArchiveFixture(t)
 	t.Cleanup(func() { cleanupVisitorArchiveFixture(t, f, owner, dir) })
 	cfg := sim.WarehouseV2Config()
@@ -84,6 +84,11 @@ func TestNormalRecoveryManagerAdvancesDuringInvestigation(t *testing.T) {
 	if err != nil || len(rows) != 1 || !rows[0].DecisionVerified || rows[0].ProposalID != nil {
 		t.Fatal(rows, err)
 	}
+	report, err := scenario.warehouseRecoveryHistory(context.Background(), "Bearer "+tokens["operator"])
+	if err != nil || report.Live || len(report.Proposals) != 0 || len(report.Investigations) != 1 ||
+		report.Investigations[0] != (warehouseRecoveryInvestigation{RunID: input.ID, Source: "mocked", Status: "abstained"}) {
+		t.Fatal(report, err)
+	}
 	c.mu.Lock()
 	err = c.advanceInteractive(context.Background(), now.Add(6*time.Second))
 	c.mu.Unlock()
@@ -97,7 +102,30 @@ func TestNormalRecoveryManagerAdvancesDuringInvestigation(t *testing.T) {
 	}
 }
 
-func TestNormalRecoveryManagerHandsSelectionToIndependentOperator(t *testing.T) {
+func TestRecoveryInvestigationDistinguishesProviderConfirmation(t *testing.T) {
+	run := fleet.AgentRun{Metadata: fleet.AgentMetadata{Source: "live-model"}}
+	if got := recoveryInvestigation(run); got.ProviderConfirmed || got.Status != "investigating" {
+		t.Fatal(got)
+	}
+	run.Completion = &fleet.AgentCompletion{Status: "failed", Failure: "invalid_usage"}
+	if got := recoveryInvestigation(run); got.ProviderConfirmed || got.Status != "failed" {
+		t.Fatal(got)
+	}
+	run.Completion = &fleet.AgentCompletion{
+		Status: "accepted", ActualModel: "openai/gpt-6-luna", Requests: 2,
+		Usage: fleet.AgentUsage{Status: "reported"}, Decision: &fleet.AgentDecision{Kind: "abstain"},
+	}
+	run.DecisionVerified = true
+	if got := recoveryInvestigation(run); !got.ProviderConfirmed || got.Status != "abstained" {
+		t.Fatal(got)
+	}
+	run.Metadata.Source = "mocked"
+	if got := recoveryInvestigation(run); got.ProviderConfirmed || got.Status != "abstained" {
+		t.Fatal(got)
+	}
+}
+
+func TestNormalRecoveryManagerHandsSelectionToIndependentOperatorIntegration(t *testing.T) {
 	f, pool, owner, dir := visitorArchiveFixture(t)
 	t.Cleanup(func() { cleanupVisitorArchiveFixture(t, f, owner, dir) })
 	ctx := context.Background()
@@ -150,8 +178,8 @@ func TestNormalRecoveryManagerHandsSelectionToIndependentOperator(t *testing.T) 
 	if !reflect.DeepEqual(before, service.Snapshot()) {
 		t.Fatal("worker changed the simulation")
 	}
-	pending, err := scenario.warehouseRecoveryHistory(ctx, "Bearer "+tokens["operator"])
-	if err != nil || len(pending) != 1 || pending[0].RunID != id || pending[0].State != "pending" {
+	report, err := scenario.warehouseRecoveryHistory(ctx, "Bearer "+tokens["operator"])
+	if pending := report.Proposals; err != nil || len(pending) != 1 || pending[0].RunID != id || pending[0].State != "pending" {
 		t.Fatal(pending, err)
 	}
 	got, err := scenario.decideWarehouseRecovery(ctx, "Bearer "+tokens["operator"], id, proposal.Approve)

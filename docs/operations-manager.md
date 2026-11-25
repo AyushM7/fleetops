@@ -108,22 +108,28 @@ the normal server, the compiled Mastra worker and the React build.
 Use the normal visitor server configuration for the database, private evidence
 directory and public origin. In an independently approved live environment, set
 `FLEETOPS_OPERATIONS_ENABLED=1`, `FLEETOPS_OPERATIONS_PROTOCOL=v3`, the two existing
-upper-bound token prices, and positive integer caps
-`FLEETOPS_OPERATIONS_DAILY_REQUESTS` and `FLEETOPS_OPERATIONS_DAILY_MICRO_USD`.
-Supply the provider credential to Go through the server environment. The
-Operations image already sets the worker path. A native installation uses the
-absolute path to the compiled `agent/dist/operations-worker.js`.
+upper-bound token prices and a server-only provider key. For the Lightsail
+Compose deployment, add [the Operations override](../deploy/pub03/compose.operations.yml)
+to the existing Compose files. It enables V3 and gives only the app container
+an outbound network. PostgreSQL and the app's HTTP port stay private.
+Supply the key through the private server environment file and avoid printing
+resolved Compose configuration. The Operations image already sets the worker
+path. A native installation uses the absolute path to the compiled
+`agent/dist/operations-worker.js`.
 
 Go starts one proposer-scoped run per active incident episode and sends the worker
 a detached snapshot. The simulator continues ticking. Each worker provider
 request travels over bounded stdio to Go. The worker receives no provider key.
 Go reserves the configured worst case in the shared ledger before forwarding a
 request to the fixed Responses endpoint. A review allows at most six sends and
-30 seconds with zero retries. The daily caps use the shared database day, include
-outstanding reservations, and serialize across visitor runtimes. Confirmed usage
-is linked by provider response ID and settled using configured upper rates.
-Uncertain sends retain their full reservation. Invalid or out-of-budget results
-produce an audit outcome without a proposal.
+30 seconds with zero retries. The first reservation for a run blocks a
+second worker from replaying that run. V3 has no daily request or spending
+ceiling. The UTC date groups accounting entries, and usage anomalies still
+fail closed. Confirmed usage is linked by provider response ID and settled
+using configured upper rates. Uncertain sends retain their full reservation.
+Invalid responses, provider failures and abstentions never create a proposal.
+The Warehouse dashboard shows each investigation outcome and distinguishes
+confirmed OpenAI responses from failed or offline runs.
 
 Go can admit a recent completion across harmless revisions only when the
 verified evidence still matches. Any admitted proposal waits for a separate

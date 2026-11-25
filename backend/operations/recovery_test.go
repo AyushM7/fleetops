@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"testing/iotest"
 	"time"
@@ -71,40 +72,67 @@ func TestRecoveryProviderDiagnosesTransportFailures(t *testing.T) {
 	}
 }
 
-func TestRecoveryReservationsReuseProjectLedger(t *testing.T) {
+func TestUncappedRecoveryLedgerIntegration(t *testing.T) {
 	ctx := context.Background()
-	l, err := openLedger(ctx, testDatabase(t), pricing{minInputRate, minOutputRate})
+	entry := filepath.Join(t.TempDir(), "worker.js")
+	if err := os.WriteFile(entry, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FLEETOPS_OPERATIONS_AGENT", entry)
+	t.Setenv("FLEETOPS_OPERATIONS_PROTOCOL", "v3")
+	t.Setenv("FLEETOPS_OPERATIONS_INPUT_MICRO_USD_PER_MILLION", "275000")
+	t.Setenv("FLEETOPS_OPERATIONS_OUTPUT_MICRO_USD_PER_MILLION", "825000")
+	t.Setenv(providerKeyVariable, "offline-fixture")
+	t.Setenv("FLEETOPS_OPERATIONS_DAILY_REQUESTS", "")
+	t.Setenv("FLEETOPS_OPERATIONS_DAILY_MICRO_USD", "")
+	manager, err := Open(ctx, testDatabase(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, run := runtimeFixture(t), "A"+strings.Repeat("1", 32)
-	max := l.pricing.cost(maxInputTokens, recoveryOutput)
-	if _, err := l.reserveRecovery(ctx, runtime, run, 2, max-1); !errors.Is(err, ErrBudget) {
-		t.Fatal(err)
+	l := manager.ledger
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	const visitors = 8
+	var wg sync.WaitGroup
+	for i := range visitors {
+		runtime := runtimeFixture(t)
+		run := "A" + runtime[1:]
+		wg.Go(func() {
+			for ordinal := range recoveryRequests {
+				request, err := l.reserveRecovery(ctx, runtime, run, ordinal == 0)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				if ordinal == recoveryRequests-1 {
+					// A send with an uncertain response remains accounted at its estimate.
+					return
+				}
+				u := providerUsage{ID: fmt.Sprintf("resp_uncapped_%d_%d", i, ordinal), usage: usage{Model: modelID, Input: 20, Output: 10}}
+				if err := l.settleRecovery(ctx, request, u); err != nil {
+					t.Error(err)
+					return
+				}
+			}
+		})
 	}
-	first, err := l.reserveRecovery(ctx, runtime, run, 2, max)
-	if err != nil {
-		t.Fatal(err)
+	wg.Wait()
+	var total, responses, settledTokens int
+	if err := l.db.QueryRow(ctx, `SELECT count(*), count(provider_response_id),
+		count(*) FILTER (WHERE input_tokens=20 AND output_tokens=10 AND accounted_micro_usd>0)
+		FROM fleetops_operations.requests`).Scan(&total, &responses, &settledTokens); err != nil ||
+		total != visitors*recoveryRequests || responses != visitors*(recoveryRequests-1) || settledTokens != responses {
+		t.Fatal(total, responses, settledTokens, err)
 	}
-	if _, err := l.reserveRecovery(ctx, runtime, run, 2, max); !errors.Is(err, ErrBudget) {
-		t.Fatal("uncertain reservation was released", err)
-	}
-	if err := l.settleRecovery(ctx, first, providerUsage{ID: "resp_verified_test", usage: usage{Model: modelID, Input: 20, Output: 10}}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := l.reserveRecovery(ctx, runtime, run, 2, max+100); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := l.reserveRecovery(ctx, runtime, run, 2, 3*max); !errors.Is(err, ErrBudget) {
-		t.Fatal("per-day request limit failed", err)
-	}
-	var linked int
-	if err := l.db.QueryRow(ctx, "SELECT count(*) FROM fleetops_operations.requests WHERE recovery_run_id=$1 AND provider_response_id=$2", run, "resp_verified_test").Scan(&linked); err != nil || linked != 1 {
-		t.Fatal(linked, err)
+	var recorded, expected int64
+	if err := l.db.QueryRow(ctx, `SELECT (SELECT sum(micro_usd) FROM fleetops_operations.days),
+		sum(COALESCE(accounted_micro_usd,reserved_micro_usd)) FROM fleetops_operations.requests`).Scan(&recorded, &expected); err != nil ||
+		recorded != expected || recorded <= int64(visitors)*l.pricing.cost(maxInputTokens, recoveryOutput) {
+		t.Fatal(recorded, expected, err)
 	}
 }
 
-func TestRecoveryBrokerRunsCompiledMastra(t *testing.T) {
+func TestRecoveryBrokerRunsCompiledMastraIntegration(t *testing.T) {
 	entry := os.Getenv("FLEETOPS_TEST_V3_WORKER")
 	if entry == "" {
 		t.Skip("compiled V3 worker unavailable")
@@ -171,7 +199,7 @@ func TestRecoveryBrokerRunsCompiledMastra(t *testing.T) {
 				return json.Marshal(map[string]any{"id": fmt.Sprintf("resp_%s_%d", incident, sends), "object": "response", "model": modelID, "created_at": 1, "status": "completed", "output": output,
 					"usage": map[string]any{"input_tokens": 200, "output_tokens": 30, "total_tokens": 230, "input_tokens_details": map[string]int{"cached_tokens": 0}, "output_tokens_details": map[string]int{"reasoning_tokens": 0}}})
 			}
-			worker := &recoveryWorker{node: node, entrypoint: entry, dayRequests: 30, dayMicros: 30_000_000, send: respond}
+			worker := &recoveryWorker{node: node, entrypoint: entry, send: respond}
 			runtime := runtimeFixture(t)
 			ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 			defer cancel()
@@ -213,7 +241,6 @@ func testRecoverySecondRequestFailure(t *testing.T, worker *recoveryWorker, inpu
 		t.Fatal(err)
 	}
 	copy := *worker
-	copy.dayRequests = 2
 	var calls int
 	copy.send = func(ctx context.Context, request []byte) ([]byte, error) {
 		calls++
@@ -249,12 +276,12 @@ func testRecoverySecondRequestFailure(t *testing.T, worker *recoveryWorker, inpu
 	if err != nil || settled != wantSettled || retained != wantRetained || retainedMicroUSD != wantMicros {
 		t.Fatal("unexpected settled and retained requests", settled, retained, retainedMicroUSD, err)
 	}
-	if _, err := l.reserveRecovery(audit, input.RuntimeID, input.ID, copy.dayRequests, copy.dayMicros); !errors.Is(err, ErrBudget) {
-		t.Fatal("retry could reserve a third request", err)
+	if _, err := l.reserveRecovery(audit, input.RuntimeID, input.ID, true); !errors.Is(err, errRecoveryReplay) {
+		t.Fatal("retry could restart the same investigation", err)
 	}
 }
 
-func TestRecoveryBrokerDeniesDuplicateRequestFrame(t *testing.T) {
+func TestRecoveryBrokerDeniesDuplicateRequestFrameIntegration(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("node worker runtime unavailable")
@@ -277,15 +304,29 @@ await lines.next();`
 	if err != nil {
 		t.Fatal(err)
 	}
+	var mu sync.Mutex
 	calls := 0
-	w := recoveryWorker{node: node, entrypoint: entry, dayRequests: 6, dayMicros: 3_524_400, send: func(context.Context, []byte) ([]byte, error) {
+	w := recoveryWorker{node: node, entrypoint: entry, send: func(context.Context, []byte) ([]byte, error) {
+		mu.Lock()
 		calls++
+		mu.Unlock()
 		return []byte(`{"id":"resp_duplicate_fixture","model":"gpt-6-luna","status":"completed","usage":{"input_tokens":10,"output_tokens":1,"total_tokens":11}}`), nil
 	}}
 	runtime := runtimeFixture(t)
 	input := RecoveryInput{ID: "A" + runtime[1:], RuntimeID: runtime, Snapshot: json.RawMessage(`{}`)}
-	if got, err := w.investigate(ctx, input, l); err == nil || calls != 1 || got.Decision != nil {
-		t.Fatal("broker did not stop duplicate frame", calls, got, err)
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			got, err := w.investigate(ctx, input, l)
+			if err == nil || got.Decision != nil {
+				t.Error("duplicate completed", got, err)
+			}
+			errs <- err
+		}()
+	}
+	first, second := <-errs, <-errs
+	if calls != 1 || errors.Is(first, errRecoveryReplay) == errors.Is(second, errRecoveryReplay) {
+		t.Fatal("broker did not stop duplicate frame and replay", calls, first, second)
 	}
 	var reserved int
 	if err := l.db.QueryRow(ctx, "SELECT count(*) FROM fleetops_operations.requests WHERE recovery_run_id=$1", input.ID).Scan(&reserved); err != nil || reserved != 1 {

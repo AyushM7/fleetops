@@ -1,0 +1,14 @@
+# Opt-in only. Apply with a worker-preserving image and a private server env file.
+services:
+  app:
+    environment:
+      FLEETOPS_OPERATIONS_ENABLED: "1"
+      FLEETOPS_OPERATIONS_PROTOCOL: v3
+      FLEETOPS_OPERATIONS_INPUT_MICRO_USD_PER_MILLION: ${FLEETOPS_OPERATIONS_INPUT_MICRO_USD_PER_MILLION:?set the reviewed input accounting rate}
+      FLEETOPS_OPERATIONS_OUTPUT_MICRO_USD_PER_MILLION: ${FLEETOPS_OPERATIONS_OUTPUT_MICRO_USD_PER_MILLION:?set the reviewed output accounting rate}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?supply the provider key in the private server environment}
+    networks:
+      operations-egress: {}
+
+networks:
+  operations-egress: {}

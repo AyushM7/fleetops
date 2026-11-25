@@ -96,6 +96,28 @@ func testWarehouseV3OperatorDecision(t *testing.T, decisionAction proposal.Decis
 	if item := history()[0]; item.RunID != run.ID || item.State != "pending" || item.Selection != pick.Key || item.Metrics["requiredBattery"] != pick.Metrics["requiredBattery"] {
 		t.Fatalf("incorrect pending evidence: %+v", item)
 	}
+	report := func(generation string, handler http.Handler) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/demo/recovery/report", strings.NewReader("{}"))
+		req.Header.Set("X-FleetOps-Generation", generation)
+		handler.ServeHTTP(w, req)
+		return w
+	}
+	if !visitorOperation("/demo/recovery/report") {
+		t.Fatal("report route is missing")
+	}
+	if w := report("warehouse-test", session.controller); w.Code != http.StatusForbidden {
+		t.Fatal("operator-less report was served", w.Code)
+	}
+	if w := report("other-session", http.HandlerFunc(session.serve)); w.Code != http.StatusConflict {
+		t.Fatal("foreign generation was served a report", w.Code)
+	}
+	w := report("warehouse-test", http.HandlerFunc(session.serve))
+	var summary warehouseRecoveryReport
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &summary) != nil || len(summary.Investigations) != 1 ||
+		summary.Investigations[0] != (warehouseRecoveryInvestigation{RunID: run.ID, Source: "mocked", Status: "proposal_admitted"}) {
+		t.Fatalf("incorrect investigation report: %d %s", w.Code, w.Body)
+	}
 	path := "/demo/recovery/" + run.ID + "/" + string(decisionAction)
 	if !visitorOperation(path) || visitorOperation(path+"/extra") || visitorOperation("/demo/recovery/invalid/approve") {
 		t.Fatal("invalid recovery routing")

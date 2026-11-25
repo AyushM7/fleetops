@@ -171,8 +171,8 @@ func TestCompiledV3NormalOperations(t *testing.T) {
 				t.Fatalf("selection had no pending proposal: %+v", rows[0])
 			}
 			token := "Bearer " + tokens["operator"]
-			pending, err := scenario.warehouseRecoveryHistory(ctx, token)
-			if err != nil || len(pending) != 1 || pending[0].State != "pending" || pending[0].Selection != mock.selected {
+			report, err := scenario.warehouseRecoveryHistory(ctx, token)
+			if pending := report.Proposals; err != nil || len(pending) != 1 || pending[0].State != "pending" || pending[0].Selection != mock.selected {
 				t.Fatal("pending proposal mismatch", pending, err)
 			}
 			proposalID := *rows[0].ProposalID
@@ -311,11 +311,11 @@ func awaitRehearsalBrowser(t *testing.T, scenario *demoScenario, run *demoRun, s
 	}
 	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
-		items, err := scenario.warehouseRecoveryHistory(context.Background(), "Bearer "+operator)
+		report, err := scenario.warehouseRecoveryHistory(context.Background(), "Bearer "+operator)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(items) == 1 && items[0].State == wantState && items[0].Execution == string(wantExecution) {
+		if items := report.Proposals; len(items) == 1 && items[0].State == wantState && items[0].Execution == string(wantExecution) {
 			t.Logf("BROWSER_FIXTURE_%s", strings.ToUpper(wantState))
 			return
 		}

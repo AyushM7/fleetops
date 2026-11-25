@@ -30,9 +30,10 @@ const (
 )
 
 var (
-	ErrBudget      = errors.New("shared operations budget cannot admit another request")
-	ErrUsage       = errors.New("model usage is unavailable or outside the reviewed limits")
-	runtimePattern = regexp.MustCompile(`^P[0-9a-f]{32}$`)
+	ErrBudget         = errors.New("shared operations budget cannot admit another request")
+	ErrUsage          = errors.New("model usage is unavailable or outside the reviewed limits")
+	errRecoveryReplay = errors.New("recovery run already reserved a provider request")
+	runtimePattern    = regexp.MustCompile(`^P[0-9a-f]{32}$`)
 )
 
 var recoveryRunID = regexp.MustCompile(`^A[0-9a-f]{32}$`)
@@ -129,8 +130,10 @@ func openLedger(ctx context.Context, pool *db.Pool, price pricing) (*ledger, err
 				ADD COLUMN IF NOT EXISTS cached_input_tokens bigint CHECK (cached_input_tokens BETWEEN 0 AND input_tokens),
 				ADD COLUMN IF NOT EXISTS cache_write_input_tokens bigint CHECK (cache_write_input_tokens BETWEEN 0 AND input_tokens-COALESCE(cached_input_tokens,0)),
 				ADD COLUMN IF NOT EXISTS pricing_basis text,
- ADD COLUMN IF NOT EXISTS recovery_run_id text,
- ADD COLUMN IF NOT EXISTS provider_response_id text UNIQUE`,
+				ADD COLUMN IF NOT EXISTS recovery_run_id text,
+				ADD COLUMN IF NOT EXISTS provider_response_id text UNIQUE`,
+			`CREATE INDEX IF NOT EXISTS operations_requests_recovery_run
+				ON fleetops_operations.requests (recovery_run_id) WHERE recovery_run_id IS NOT NULL`,
 		} {
 			if _, err := tx.Exec(query); err != nil {
 				return err
@@ -149,17 +152,17 @@ type reservation struct {
 }
 
 func (l *ledger) reserve(ctx context.Context, runtime string) (reservation, error) {
-	return l.reserveBounded(ctx, runtime, "", maxOutputTokens, 0, 0)
+	return l.reserveBounded(ctx, runtime, "", maxOutputTokens, false)
 }
 
-func (l *ledger) reserveRecovery(ctx context.Context, runtime, run string, requests, micros int64) (reservation, error) {
-	if !recoveryRunID.MatchString(run) || requests < 1 || micros < 1 || !l.pricing.validFor(recoveryOutput) {
+func (l *ledger) reserveRecovery(ctx context.Context, runtime, run string, first bool) (reservation, error) {
+	if !recoveryRunID.MatchString(run) || !l.pricing.validFor(recoveryOutput) {
 		return reservation{}, ErrBudget
 	}
-	return l.reserveBounded(ctx, runtime, run, recoveryOutput, requests, micros)
+	return l.reserveBounded(ctx, runtime, run, recoveryOutput, first)
 }
 
-func (l *ledger) reserveBounded(ctx context.Context, runtime, run string, output, requests, micros int64) (reservation, error) {
+func (l *ledger) reserveBounded(ctx context.Context, runtime, run string, output int64, first bool) (reservation, error) {
 	if !runtimePattern.MatchString(runtime) {
 		return reservation{}, ErrBudget
 	}
@@ -171,7 +174,7 @@ func (l *ledger) reserveBounded(ctx context.Context, runtime, run string, output
 			return err
 		}
 		now = now.UTC()
-		if now.Hour() == 23 && now.Minute() == 59 && now.Second() >= 60-int(utcCutoff/time.Second) {
+		if run == "" && now.Hour() == 23 && now.Minute() == 59 && now.Second() >= 60-int(utcCutoff/time.Second) {
 			return ErrBudget
 		}
 		day := now.Format(time.DateOnly)
@@ -179,17 +182,17 @@ func (l *ledger) reserveBounded(ctx context.Context, runtime, run string, output
 			VALUES ($1::text::date,0) ON CONFLICT DO NOTHING`, day); err != nil {
 			return err
 		}
-		if run != "" {
-			var spent, used int64
-			var frozen bool
-			if err := tx.QueryRow("SELECT micro_usd,frozen FROM fleetops_operations.days WHERE utc_day=$1::text::date FOR UPDATE", day).Scan(&spent, &frozen); err != nil {
+		if first {
+			// Serialize the first send even when two hosts receive the same run.
+			if _, err := tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended($1, 38834255091308))", run); err != nil {
 				return err
 			}
-			if err := tx.QueryRow("SELECT count(*) FROM fleetops_operations.requests WHERE utc_day=$1::text::date", day).Scan(&used); err != nil {
+			var reserved bool
+			if err := tx.QueryRow("SELECT EXISTS (SELECT 1 FROM fleetops_operations.requests WHERE recovery_run_id=$1)", run).Scan(&reserved); err != nil {
 				return err
 			}
-			if frozen || used >= requests || maximum > micros-spent {
-				return ErrBudget
+			if reserved {
+				return errRecoveryReplay
 			}
 		}
 		tag, err := tx.Exec(`UPDATE fleetops_operations.days SET micro_usd=micro_usd+$2
@@ -198,6 +201,9 @@ func (l *ledger) reserveBounded(ctx context.Context, runtime, run string, output
 			return err
 		}
 		if tag.RowsAffected() != 1 {
+			if run != "" {
+				return ErrUsage
+			}
 			return ErrBudget
 		}
 		return tx.QueryRow(`INSERT INTO fleetops_operations.requests

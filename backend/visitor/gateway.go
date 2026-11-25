@@ -401,5 +401,5 @@ func (g *visitorGateway) operation(w http.ResponseWriter, r *http.Request) {
 
 func visitorOperation(path string) bool {
 	_, _, recovery := warehouseRecoveryCommand(path)
-	return recovery || path == "/demo/recovery" || path == "/demo/status" || path == "/demo/restart" || isTimeControl(path) || strings.HasPrefix(path, "/demo/scenario/") && allowedScenario(strings.TrimPrefix(path, "/demo/scenario/"))
+	return recovery || path == "/demo/recovery" || path == "/demo/recovery/report" || path == "/demo/status" || path == "/demo/restart" || isTimeControl(path) || strings.HasPrefix(path, "/demo/scenario/") && allowedScenario(strings.TrimPrefix(path, "/demo/scenario/"))
 }
