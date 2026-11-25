@@ -2,6 +2,7 @@ package visitor
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"io"
 	"mime"
@@ -14,6 +15,12 @@ import (
 	"sync"
 	"time"
 )
+
+//go:embed visitor-busy.html
+var visitorBusyPage []byte
+
+//go:embed visitor-busy.css
+var visitorBusyStyles []byte
 
 type bucket struct {
 	tokens float64
@@ -102,6 +109,7 @@ func newVisitorGateway(m *visitorManager, config Config) (*visitorGateway, error
 		g.assets["/"+filepath.ToSlash(relative)] = raw
 		return err
 	})
+	g.assets["/visitor-busy.css"] = visitorBusyStyles
 	return g, err
 }
 
@@ -256,17 +264,33 @@ func (g *visitorGateway) health(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/readyz" {
 		g.manager.mu.Lock()
-		ready := !g.manager.closed && !g.manager.blocked && g.manager.owned < visitorLimit
+		available := !g.manager.closed && !g.manager.blocked
+		full := g.manager.owned >= visitorLimit
 		g.manager.mu.Unlock()
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-		if !ready || g.manager.admit != nil && g.manager.admit(ctx) != nil {
+		if !available || !g.infrastructureReady(r.Context()) {
 			http.Error(w, "visitor readiness unavailable", 503)
+			return
+		}
+		if full {
+			w.Header().Set("Retry-After", "60")
+			http.Error(w, "visitor capacity exhausted", http.StatusServiceUnavailable)
 			return
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = io.WriteString(w, `{"status":"ok"}`)
+}
+
+func (g *visitorGateway) infrastructureReady(ctx context.Context) bool {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	return g.manager.admit == nil || g.manager.admit(ctx) == nil
+}
+
+func (g *visitorGateway) allowCreation() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.creations.take(time.Now(), 8, 1.0/60)
 }
 
 func (g *visitorGateway) credential(r *http.Request) (string, int) {
@@ -313,16 +337,19 @@ func (g *visitorGateway) bootstrap(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		g.mu.Lock()
-		allowed := g.creations.take(time.Now(), 8, 1.0/60)
-		g.mu.Unlock()
-		if !allowed {
+		id, created, err := g.manager.createWithLimit(g.allowCreation)
+		switch {
+		case errors.Is(err, errVisitorCapacity) && g.infrastructureReady(r.Context()):
+			w.Header().Set("Retry-After", "60")
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write(visitorBusyPage)
+			return
+		case errors.Is(err, errVisitorCreationRate):
 			w.Header().Set("Retry-After", "60")
 			http.Error(w, "visitor creation rate exceeded", 429)
 			return
-		}
-		id, created, err := g.manager.create()
-		if err != nil {
+		case err != nil:
 			http.Error(w, "visitor session unavailable", 503)
 			return
 		}

@@ -532,6 +532,12 @@ section.v2-inspector-group { padding-block-start: 10px; }
   .v2-metric dd { font-size: 1.25rem; }
   .v2-metric-icon { display: none; }
   .v2-map-panel > .v2-panel-title { flex-wrap: wrap; row-gap: 0; }
+  .v2-map-svg .v2-robot-id {
+    /* Center the numeral ink instead of the font's full ascent and descent. */
+    dominant-baseline: alphabetic;
+    transform: translateY(.36em);
+    transform: translateY(.5cap);
+  }
   .v2-map-footer { flex-wrap: wrap; gap: 4px; padding: 5px 8px 0; }
   .v2-map-meta { inline-size: 100%; justify-content: space-between; }
   .v2-find summary, .v2-shell .v2-find-list button, .v2-shell .v2-fleet-link { min-block-size: 44px; }

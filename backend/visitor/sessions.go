@@ -16,6 +16,9 @@ import (
 const visitorLimit = 8
 const visitorTTL = 20 * time.Minute
 
+var errVisitorCapacity = errors.New("visitor capacity exhausted")
+var errVisitorCreationRate = errors.New("visitor creation rate exceeded")
+
 type visitorSession struct {
 	mu         sync.Mutex
 	controller *demoController
@@ -61,10 +64,22 @@ func visitorRandom() (string, error) {
 }
 
 func (m *visitorManager) create() (string, *visitorSession, error) {
+	return m.createWithLimit(nil)
+}
+
+func (m *visitorManager) createWithLimit(allowCreation func() bool) (string, *visitorSession, error) {
 	m.mu.Lock()
-	if m.closed || m.blocked || m.owned >= visitorLimit {
+	if m.closed || m.blocked {
 		m.mu.Unlock()
-		return "", nil, errors.New("visitor capacity unavailable")
+		return "", nil, errors.New("visitor admission unavailable")
+	}
+	if m.owned >= visitorLimit {
+		m.mu.Unlock()
+		return "", nil, errVisitorCapacity
+	}
+	if allowCreation != nil && !allowCreation() {
+		m.mu.Unlock()
+		return "", nil, errVisitorCreationRate
 	}
 	m.initializing++
 	m.owned++
