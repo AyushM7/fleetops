@@ -1,0 +1,169 @@
+name: Publish FleetOps Operations image
+
+on:
+  push:
+    branches: ['release/operations-*']
+
+permissions: {}
+
+concurrency:
+  group: fleetops-ghcr-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'AyushM7/fleetops' && startsWith(github.ref, 'refs/heads/release/operations-') && github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    env:
+      DOCKER_CONFIG: /tmp/fleetops-operations-docker
+      NODE_IMAGE: node@sha256:3d27e5c11e5786e309ec3e03f93ae536eb36e6e5eb3714d5eb3300a36157add0
+    steps:
+      - name: Select a verified main commit
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sha="${GITHUB_REF_NAME#release/operations-}"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          api="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY"
+          headers=(-H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json')
+          main=$(curl -fsS "${headers[@]}" "$api/commits/main")
+          test "$(jq -er .sha <<< "$main")" = "$sha"
+          tree=$(jq -er .commit.tree.sha <<< "$main")
+          [[ "$tree" =~ ^[0-9a-f]{40}$ ]]
+          runs=$(curl -fsS "${headers[@]}" "$api/actions/runs?head_sha=$sha&per_page=50")
+          for name in 'CI' 'Publish production image'; do
+            jq -e --arg name "$name" --arg sha "$sha" \
+              'any(.workflow_runs[]; .name == $name and .head_sha == $sha and .head_branch == "main" and .conclusion == "success")' \
+              <<< "$runs" >/dev/null
+          done
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+          printf 'RELEASE_SHA=%s\nRELEASE_TREE=%s\n' "$sha" "$tree" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          persist-credentials: false
+
+      - name: Verify source and prepare BuildKit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$(git rev-parse 'HEAD^{tree}')" = "$RELEASE_TREE"
+          test "$(uname -m)" = x86_64
+          test "$(tr -d '\r\n' < .nvmrc)" = 24.21.0
+          mkdir -m 700 "$DOCKER_CONFIG"
+          docker buildx create --name fleetops-operations-publisher --driver docker-container --use
+          docker buildx inspect --bootstrap
+
+      - name: Authenticate to GHCR
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Pin the published Go and React payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo=ghcr.io/ayushm7/fleetops
+          index="$(docker buildx imagetools inspect "$repo:$RELEASE_SHA" --format '{{json .Manifest}}' | jq -er .digest)"
+          amd="$(docker buildx imagetools inspect "$repo@$index" --raw |
+            jq -er '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest] | if length == 1 then .[0] else error("expected one amd64 manifest") end')"
+          [[ "$amd" =~ ^sha256:[a-f0-9]{64}$ ]]
+          printf 'PUBLISHED_GO=%s@%s\n' "$repo" "$amd" >> "$GITHUB_ENV"
+
+      - name: Verify, publish, and resolve the immutable Operations image
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo=ghcr.io/ayushm7/fleetops
+          image="$repo:operations-$RELEASE_SHA"
+          source="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          staged=fleetops-operations-check:local
+
+          # Use the exact published server and React files in the existing Operations runtime.
+          python3 - "$RUNNER_TEMP/Dockerfile.operations" <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          original = Path("Dockerfile").read_text()
+          start = "FROM ${NODE_IMAGE} AS operations\n"
+          end = "\nFROM scratch"
+          before, rest = original.split(start)
+          operations, after = rest.split(end, 1)
+          for instruction in (
+              "COPY --from=backend /fleetops /fleetops",
+              "COPY --from=backend /healthcheck /healthcheck",
+              "COPY --from=web /src/web/dist /web",
+          ):
+              assert operations.count(instruction) == 1, instruction
+              file = instruction.split()[-1]
+              operations = operations.replace(instruction, f"COPY --from=published_go {file} {file}")
+          upstream = os.environ["PUBLISHED_GO"]
+          Path(sys.argv[1]).write_text(
+              before + f"FROM {upstream} AS published_go\n" + start + operations + end + after
+          )
+          PY
+
+          verify_payload() {
+            local reference="$1" official operations
+            official=$(docker create --network none "$PUBLISHED_GO")
+            operations=$(docker create --network none "$reference")
+            local temp
+            temp=$(mktemp -d)
+            mkdir "$temp/official" "$temp/operations"
+            for file in fleetops healthcheck web; do
+              docker cp "$official:/$file" "$temp/official/$file"
+              docker cp "$operations:/$file" "$temp/operations/$file"
+            done
+            diff -qr "$temp/official" "$temp/operations"
+            docker rm "$official" "$operations" >/dev/null
+            docker run --rm --network none --user 65532:65532 --entrypoint /usr/local/bin/node \
+              "$reference" --check /agent/dist/operations-worker.js
+            test "$(docker image inspect "$reference" --format '{{.Os}}/{{.Architecture}} {{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "org.opencontainers.image.source"}}')" \
+              = "linux/amd64 $RELEASE_SHA $source"
+          }
+
+          docker pull --platform linux/amd64 "$PUBLISHED_GO"
+          test "$(docker image inspect "$PUBLISHED_GO" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$RELEASE_SHA"
+          if docker buildx imagetools inspect "$image" > /dev/null 2> "$RUNNER_TEMP/operations-inspect.err"; then
+            echo "Existing release tag will be verified and reused."
+          elif grep -Eqi 'manifest unknown|name unknown|not found|no such manifest' "$RUNNER_TEMP/operations-inspect.err"; then
+            build=(--platform linux/amd64 --file "$RUNNER_TEMP/Dockerfile.operations" --target operations
+                   --build-arg "NODE_IMAGE=$NODE_IMAGE"
+                   --label "org.opencontainers.image.source=$source"
+                   --label "org.opencontainers.image.revision=$RELEASE_SHA"
+                   --label "org.opencontainers.image.base.digest=${PUBLISHED_GO#*@}")
+            docker buildx build "${build[@]}" --provenance=false --tag "$staged" --load .
+            verify_payload "$staged"
+            docker buildx build "${build[@]}" --provenance=mode=min --tag "$image" --push .
+          else
+            cat "$RUNNER_TEMP/operations-inspect.err" >&2
+            exit 1
+          fi
+
+          index="$(docker buildx imagetools inspect "$image" --format '{{json .Manifest}}' | jq -er .digest)"
+          digest="$(docker buildx imagetools inspect "$repo@$index" --raw |
+            jq -er '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest] | if length == 1 then .[0] else error("expected one amd64 manifest") end')"
+          [[ "$index" =~ ^sha256:[a-f0-9]{64}$ && "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          docker pull --platform linux/amd64 "$repo@$digest"
+          verify_payload "$repo@$digest"
+          printf 'Operations tag: %s\nOCI index: %s\nVerified amd64: %s@%s\n' "$image" "$index" "$repo" "$digest" |
+            tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove registry session
+        if: always()
+        shell: bash
+        run: docker logout ghcr.io
