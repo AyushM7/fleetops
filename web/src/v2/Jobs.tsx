@@ -13,7 +13,7 @@ function JobRow({ job, selected, pick }: { job: Job; selected: boolean; pick: Pi
   const overdue = isPriorityOverdue(job);
   const completed = job.status === "done";
   const outcome = completed && job.outcome ? jobOutcomeLabels[job.outcome] : null;
-  const tone = completed ? "charging" : overdue ? "fault" : job.status === "pending" ? "waiting" : undefined;
+  const tone = completed ? "completed" : overdue ? "fault" : job.status === "pending" ? "waiting" : undefined;
   return <li>
     <button type="button" className="v2-job-row" aria-pressed={selected} data-tone={tone}
       onClick={event => pick({ kind: "job", id: job.id }, event.currentTarget)}>

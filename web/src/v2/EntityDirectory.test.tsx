@@ -94,8 +94,8 @@ describe("Jobs", () => {
     expect(rows[0]).toContain('data-tone="waiting"');
     expect(rows[1]).not.toContain("data-tone=");
     expect(rows[2]).toMatch(/data-tone="fault".*In progress.*Overdue/);
-    expect(rows[3]).toMatch(/aria-pressed="false" data-tone="charging".*<strong>J5<\/strong>.*class="v2-status-chip">Completed<\/span>.*Delivered/);
-    expect(rows[4]).toMatch(/aria-pressed="true" data-tone="charging".*<strong>J4<\/strong>.*class="v2-status-chip">Completed<\/span>.*Late/);
+    expect(rows[3]).toMatch(/aria-pressed="false" data-tone="completed".*<strong>J5<\/strong>.*class="v2-status-chip">Completed<\/span>.*Delivered/);
+    expect(rows[4]).toMatch(/aria-pressed="true" data-tone="completed".*<strong>J4<\/strong>.*class="v2-status-chip">Completed<\/span>.*Late/);
     expect(rows[4]).not.toContain("Overdue");
   });
 
