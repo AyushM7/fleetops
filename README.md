@@ -1,166 +1,121 @@
 # FleetOps
 
-**AI-assisted warehouse robot fleet management, with deterministic simulation and human-controlled recovery.**
+FleetOps is a warehouse robot fleet management simulator. Robots receive transport jobs, navigate shared routes, charge their batteries, and deal with breakdowns while an operator follows the warehouse from a browser.
 
-FleetOps connects robot telemetry and incident detection to bounded response proposals, operational safety checks, operator review, and audited execution. It combines a Go fleet simulator, a TypeScript/Mastra agent, and a React dashboard to make each step from recommendation to outcome inspectable.
-
-**LLM proposes. Go validates. Human approves. Go executes.**
+Go assigns routine work and enforces safety. An optional AI recovery worker can investigate exceptional incidents and recommend an action. Go owns validation and execution, and the recovery proposal needs independent operator approval. The public deployment runs deterministic Go operations with paid OpenAI inference disabled.
 
 ## Live demo
 
-**[Open the public visitor demo →](https://fleetops-ai.duckdns.org)**
+Open [fleetops-ai.freeddns.org](https://fleetops-ai.freeddns.org) and press **Play** in Warehouse. The floor has ten transport robots and one maintenance robot, marked **M**. Watch jobs get assigned and delivered, inspect robot movement and charging, and follow faults and repair attempts in the Maintenance and Operations AI views.
 
-The public demo uses **Go-scripted incident proposals, with no live model calls**. Real-model reasoning was evaluated separately using the Mastra agent; the recorded results appear below.
+Each visitor gets a separate simulation and database schema. A session lasts up to 20 minutes, and the server supports eight concurrent visitors. This release adds a FleetOps busy page with a retry link for when all eight slots are in use.
 
-When available, open the demo to start an isolated visitor session:
+![Warehouse dashboard with numbered transport robots and the M maintenance robot](docs/warehouse-demo.jpg)
 
-1. Choose **Blocked job recovery**, **Routine charging**, **Healthy fleet operations**, or **No eligible recovery**.
-2. Inspect the warehouse map, robot telemetry, incident evidence, and any pending proposal.
-3. Approve or reject a proposal as the operator, then advance the simulation to observe the result. Transferring a job and delivering it are separate events.
-4. Switch scenarios or restart for a fresh run. Sessions expire after 20 minutes; each visitor has separate simulation state, database schema, and proposer/operator identities.
+## How FleetOps works
 
-[Features](#features) · [Architecture](#architecture) · [Safety](#safety-and-human-approval) · [Evaluations](#evaluations-and-measured-results) · [Getting started](#getting-started) · [Limitations](#limitations-and-future-work)
+1. A job arrives with a pickup and delivery cell. Go evaluates eligible transport robots and assigns the work.
+2. The simulator uses A* to find a route through the warehouse grid. Robots reserve upcoming cells so they can share aisles without occupying the same space.
+3. Go manages battery use and sends eligible robots to available chargers. If a robot breaks down, the simulator can send the maintenance robot to a reachable service cell and verify the repair before resuming work. Some faults still need outside help.
+4. With the recovery worker enabled, Go can send an incident snapshot for investigation. The worker can recommend a bounded intervention or abstain when the evidence is insufficient. A recommendation is a request for review.
+5. An operator approves or rejects a recovery proposal. Go rechecks authorization and live conditions before applying an approved action. PostgreSQL holds proposal and audit records, and the browser receives fleet updates over Server-Sent Events (SSE).
 
-## Features
-
-- **Deterministic warehouse simulation:** seeded ticks, robot telemetry, job scheduling, battery and charging dynamics, A* pathfinding, and bounded traffic recovery.
-- **Incident response:** Go-classified conditions and eligible recovery candidates, with TypeScript/Mastra observation, investigation, and structured recommendation workflows.
-- **Controlled execution:** deterministic Go validation, independent operator approval, and execution-time revalidation for charging in place and transferring an uncollected job.
-- **Authenticated GraphQL API:** role-scoped reads, proposal submission, and operator decisions, backed by PostgreSQL proposal and audit records.
-- **React operator dashboard:** warehouse map, fleet/job views, incidents, agent activity, approval inbox, and simulation controls.
-- **Isolated visitor sessions:** server-owned scenario presets, private runtime resources, bounded session lifetimes, and evidence archival.
-- **Reproducible evaluations:** labelled decision scenarios, saved model-response replay, adversarial contract probes, and paired simulator recovery experiments.
-
-## Architecture
+### Current architecture — Go-led operations
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 16, "rankSpacing": 26}}}%%
 flowchart TD
-    UI[React operator dashboard] -->|Authenticated reads and decisions| API[GraphQL API]
-    PRESET[Public visitor presets: Go-scripted proposals] -->|Separate proposer identity| API
-    AGENT[TypeScript / Mastra agent integration] <-->|Observations and proposal tools| API
-    MODEL[Separate real-model evaluation] --> EVAL[Mastra generation and TypeScript host validation]
-    EVAL --> RESULT[Scored recommendations: no submission or execution]
-    API --> SERVICE[Go fleet service]
-    SERVICE <-->|Snapshots and serialized ticks| SIM[Deterministic Go simulator]
-    SERVICE --> VALIDATE[Go proposal validation]
-    VALIDATE --> PENDING[Pending proposal]
-    PENDING --> REVIEW[Independent human review in dashboard]
-    REVIEW -->|Decision through GraphQL| GATE[Go authorization and execution revalidation]
-    GATE -->|Approved and still eligible| COMMAND[Bounded simulator command]
-    COMMAND --> SIM
-    SERVICE <-->|Proposals and audit attempts| DB[(PostgreSQL)]
+    UI["React Dashboard<br/>Warehouse · Fleet · Jobs<br/>Maintenance · Operations AI"]
+    GO["Go Scheduler<br/>Assign jobs and select robots<br/>Manage charging"]
+    SIM["Go Simulator<br/>A* routing and reservations<br/>Movement, battery and maintenance"]
+    AI["AI Recovery Manager<br/>Optional incident investigation<br/>Bounded recommendations"]
+    GATE["Go Validation + Operator Approval<br/>Safety and authorization<br/>Recheck at execution"]
+
+    UI --> GO --> SIM
+    SIM -.->|Eligible incident| AI
+    AI -->|Proposal| GATE
+    GATE -->|Approved action| SIM
 ```
 
-The diagram separates proposal sources; the visitor server does not invoke Mastra or a model. The live-model evaluation harness exercises recommendation generation and TypeScript host validation without submitting proposals or executing commands. The agent integration can read fleet state and submit proposals through GraphQL, but has no approval, execution, ticking, or fault-injection tools.
+Job J25 arrives. Go selects an eligible robot, assigns the job, and plans its route. If a robot develops a problem, the optional recovery worker can investigate and propose an intervention. Go validates the proposal and checks it again before an approved action executes.
 
-The Go fleet service owns the simulator and serializes state access, submissions, and decisions. PostgreSQL stores workflow records; simulator state remains in memory. Each public visitor receives a separate service/runtime and private schema.
+### Planned architecture — not yet implemented
 
-See the [architecture reference](docs/architecture.md), [engineering decisions](docs/decisions.md), and [visitor isolation and security](docs/pub-02.md). Historical sections retain their original scope; the current visitor entry point is [server application wiring](backend/cmd/server/application.go).
+```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 16, "rankSpacing": 26}}}%%
+flowchart TD
+    UI["React Dashboard<br/>Warehouse · Fleet<br/>Jobs · AI decisions"]
+    AI["AI Operations Manager<br/>Evaluate jobs and priorities<br/>Plan assignments and recovery"]
+    GO["Go Safety Validator<br/>Check routes, collisions,<br/>battery and authorization<br/>Reject unsafe decisions"]
+    ROUTINE["Routine<br/>Execute if authorized"]
+    REVIEW["Exceptional<br/>Operator approves"]
+    EXEC["Go Simulator + Execution<br/>Apply actions, update state<br/>and record outcomes"]
 
-## Technology stack
+    UI --> AI --> GO
+    GO --> ROUTINE --> EXEC
+    GO --> REVIEW --> EXEC
+```
 
-| Layer | Technologies |
+In this design, J25 arrives and the AI Operations Manager proposes assigning it to R6. Go checks eligibility and safety before execution. An exceptional intervention still waits for an operator. The next step is to move routine assignment and prioritization into this proposal flow while keeping validation results, decisions, and outcomes auditable.
+
+### Technical infrastructure
+
+```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 12, "rankSpacing": 26}}}%%
+flowchart TD
+    B["Browser<br/>React dashboard"]
+    C["AWS Lightsail · Docker Compose<br/>Caddy HTTPS proxy"]
+    G["Go app container<br/>GraphQL · sessions · SSE<br/>Scheduler + simulator"]
+    D["Private storage<br/>PostgreSQL container<br/>Evidence files"]
+    M["Optional AI · off in public<br/>Go ↔ TypeScript / Mastra<br/>Go → OpenAI API"]
+    B <-->|HTTPS| C <--> G
+    G --> D
+    G -.-> M
+```
+
+Caddy and the Go app run in separate containers. When enabled, the Mastra worker exchanges incident snapshots and recommendations with Go over standard input and output. Go sends OpenAI requests on the worker's behalf.
+
+## Stack and engineering decisions
+
+| Technology | Responsibility |
 | --- | --- |
-| Simulation and service | Go, deterministic grid simulation, A* routing |
-| API and persistence | gqlgen GraphQL, PostgreSQL, pgx |
-| Agent | TypeScript, Mastra, Zod |
-| Operator interface | React, TypeScript, Vite, SVG warehouse map |
-| Testing | Go tests and race checks, Vitest, TypeScript checks |
-| Packaging and delivery | Docker / Docker Compose, GitHub Actions, GHCR |
-| Hosting configuration | AWS Lightsail target, Caddy reverse proxy / HTTPS |
+| Go | Owns scheduling, simulation state, collision and battery rules, and command execution. Deterministic rules can be checked against the live simulator state at execution time. |
+| React and TypeScript | Render the warehouse map and operator views. TypeScript also defines the worker's observation and decision contracts. |
+| GraphQL and SSE | GraphQL provides role-scoped reads and proposal decisions. SSE streams warehouse state and activity updates to the dashboard. |
+| PostgreSQL | Stores proposals, audit records, and optional provider accounting. Per-visitor schemas isolate workflow data. The simulator itself runs in memory. |
+| Mastra and OpenAI | Mastra investigates a detached incident snapshot. In the optional V3 path, Go applies request and spending limits before forwarding provider calls. The worker cannot approve or execute a proposal. |
+| Docker and Docker Compose | Package the React build and Go server, with the worker in the optional Operations image. Compose runs the app, database, and proxy with private database networking and persistent storage. |
+| Caddy and AWS Lightsail | Caddy terminates HTTPS on the Lightsail host. The app and database ports stay private. |
+| GitHub Actions | Runs test, integration, and secret-scanning checks. The main branch image workflow publishes to GHCR. |
 
-The repository includes an image publishing workflow and Lightsail deployment configuration. These files do not establish the current health of the public service; see the [deployment runbook](docs/pub-03.md).
+## Limits and further reading
 
-## Safety and human approval
+FleetOps simulates a warehouse grid. It cannot control physical robots. Visitor capacity and session time are bounded. A completed session's workflow evidence is archived before its schema is removed. In-memory fleet state cannot be resumed from the audit archive.
 
-An AI recommendation never directly becomes an executed command. The system separates four responsibilities:
+Recovery recommendations are limited to supported actions and must be grounded in observed fleet state. Paid inference is off in production, and Go still owns routine dispatch. The AI-led dispatch diagram describes planned work.
 
-1. **Propose:** the reasoning host checks structured output against observed facts and allowed statements. Go validates identity, canonical parameters, runtime ownership, expiry, and operational eligibility before admitting a pending proposal.
-2. **Review:** an authenticated operator independently approves or rejects. The proposer cannot approve its own proposal.
-3. **Revalidate and execute:** immediately before execution, Go checks authorization and current safety conditions again, including robot health, the 30% battery floor, job ownership, and relevant station/route eligibility.
-4. **Record:** PostgreSQL stores proposal lifecycle and domain audit attempts, distinguishing rejection, command outcome, and committed evidence.
+- [Architecture and design decisions](docs/architecture.md) · [Safety rules](docs/safety-rules.md)
+- [Visitor isolation and limits](docs/pub-02.md) · [Lightsail deployment runbook](docs/pub-03.md)
+- [Recovery decision contract](docs/recovery-decision-v3.md) · [Operations Manager configuration](docs/operations-manager.md)
+- [Evaluation guide](evals/README.md) · [Recorded evaluation results and methodology](docs/phase5-evaluation-report.md)
 
-The supported operator commands are `SetCharging` for a robot already at a station and `ReassignUnstartedJob` for a job not yet collected. Reassignment transfers ownership; later simulator ticks determine delivery. It does not repair the obstructing robot. Background scheduling and automatic charging are simulator dynamics, separate from operator commands.
+## Run locally
 
-Simulator memory and SQL commits cannot be rolled back atomically. Persistence uncertainty poisons the runtime and stops further ticks/mutations pending reconciliation; clients retain unknown outcomes instead of automatically retrying. Failed database writes cannot guarantee durable audit records, and domain audits are not a complete HTTP access log.
-
-See the [safety rules](docs/safety-rules.md) and [proposal lifecycle implementation](backend/fleet/README.md).
-
-## Evaluations and measured results
-
-These are **recorded, scoped results**, verified against the [evaluation report](docs/phase5-evaluation-report.md) and [saved real-model responses](docs/evidence/p5-04-live-full.json). They measure different layers of the system:
-
-| Measurement | Supported result | What it establishes |
-| --- | --- | --- |
-| Labelled decision dataset | **12 scenarios** | Selected fixture and synthetic cases covering supported actions and abstention |
-| Real-model recommendations | **11/12 passed**, one trial per scenario | Recommendation/scoring and host acceptance on this small sample; no submission or execution |
-| Failed recommendation | Poisoned-runtime reassignment rejected by the TypeScript host | The model proposed an action where abstention was required; the request never reached Go execution |
-| Adversarial output contracts | **16/16 rejected** after fixing two grounding gaps | Tested false approval/delivery claims and other invalid outputs were rejected; not general prompt-injection resistance |
-| Paired Go recovery | Blocked job delivered **three ticks after intervention**; baseline unfinished across **200 observation ticks** | A controlled simulator outcome following validated reassignment and test-supplied approval |
-
-The recovery experiment starts at tick 42 with seed 42: treatment delivers J1 at tick 45, while baseline J1 remains unfinished at tick 242. Five experiment criteria passed overall: two successful commands and three no-intervention controls, with one delivery improvement. The harness uses a trusted test operator; it does not measure human response time or an end-to-end live-model intervention.
-
-The model prompt includes a deterministic supported-action hint and exact allowed statements. These results measure assisted contract compliance rather than autonomous incident diagnosis. Twelve non-random cases with one trial each do not establish general production reliability. The unfinished baseline does not support a percentage speedup or a broad throughput claim. Adversarial input defenses used a deterministic adapter, not a live model.
-
-For methodology, denominators, evidence provenance, and replay commands, see the [detailed report](docs/phase5-evaluation-report.md) and [evaluation guide](evals/README.md).
-
-## Getting started
-
-### Public visitor demo
-
-Use the [public URL](https://fleetops-ai.duckdns.org) when accessible. No local installation or model API key is needed. Visitor proposals are scripted in Go.
-
-### Local scripted demo
-
-Prerequisites: **PowerShell 7**, **Node.js 24.21.0**, **Go 1.27.1**, and a running **Docker** engine able to run PostgreSQL 18.6. From the repository root:
+Use Node.js 24.21.0, Go 1.27.1, and PostgreSQL 18.6. Create a dedicated local database and role that can create schemas, then supply its connection URL through the private `FLEETOPS_DATABASE_URL` environment variable. From the repository root in PowerShell 7:
 
 ```powershell
-npm ci --prefix agent
 npm ci --prefix web
-pwsh -NoProfile -File evals/phase4/start-demo.ps1 -LocalDemo -Submit
+npm --prefix web run build
+
+$env:PORT = '8080'
+$env:FLEETOPS_MODE = 'local'
+$env:FLEETOPS_PUBLIC_ORIGIN = 'http://127.0.0.1:8080'
+$env:FLEETOPS_ASSETS_DIR = (Resolve-Path web/dist).Path
+$env:FLEETOPS_EVIDENCE_DIR = (New-Item -ItemType Directory (Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString()))).FullName
+$env:FLEETOPS_START_WAREHOUSE_V2 = '1'
+$env:FLEETOPS_OPERATIONS_ENABLED = '0'
+Set-Location backend
+go run ./cmd/server
 ```
 
-The launcher builds the agent and dashboard, creates a temporary backend test copy and PostgreSQL container, and prints a loopback URL after `READY`. It uses a **deterministic Mastra adapter**, requires **no model API key**, and submits a pending proposal without approving it. This local test harness uses a shared demo operator identity; it differs from the isolated public visitor server.
-
-Inspect the blocked job, approve or reject the transfer, then advance time to distinguish transfer from delivery. Stop gracefully from a second terminal at the repository root:
-
-```powershell
-New-Item evals/dist/p405/stop -ItemType File -Force | Out-Null
-```
-
-The launcher cleans up temporary infrastructure after a successful shutdown; failures retain resources for investigation. See the [local demo guide](docs/phase4-demo.md) for evidence, failure handling, and cleanup. To run the normal isolated visitor server instead, follow the [visitor server configuration](docs/pub-02.md); production requires separate HTTPS, database, and evidence-storage setup.
-
-### Evaluation workflow
-
-Install the evaluation dependencies, then inspect the model-evaluation plan without calling a provider:
-
-```powershell
-npm ci --prefix evals
-npm --prefix evals run benchmark --silent -- --model-eval --scenario-limit 2 --plan
-```
-
-Omitting `--plan` runs the offline Mastra adapter by default, without an API key. Saved real-model responses can also be replayed without new inference; the [evaluation guide](evals/README.md) documents that test and Windows temporary-directory setup.
-
-New real-model trials are a separate, explicitly enabled workflow requiring provider credentials, a selected model, request/token limits, a reviewed cost file and hash, and a budget. Follow the [live evaluation configuration](evals/README.md#future-live-configuration-and-cost-review) before enabling `--live`. Recommendation acceptance in this harness does not submit, approve, or execute commands.
-
-## Project structure
-
-| Path | Responsibility |
-| --- | --- |
-| [`backend/`](backend/) | Simulator, routing, scheduling, incidents, safety/proposal lifecycle, GraphQL, persistence, visitor isolation |
-| [`agent/`](agent/) | Mastra agents, observation/proposal tools, structured reasoning, grounding, evaluation adapters |
-| [`web/`](web/) | React dashboard, warehouse visualization, simulation controls, operator decisions |
-| [`evals/`](evals/) | Labelled scenarios, decision/adversarial benchmarks, recovery and demo harnesses |
-| [`docs/`](docs/) | Architecture, safety rules, evaluation reports, operational guides, historical evidence |
-| [`deploy/`](deploy/) | Container deployment, proxy, database initialization, configuration checks, smoke tools |
-| [`Dockerfile`](Dockerfile), [`.github/workflows/`](.github/workflows/) | Production image build, CI checks, GHCR publication |
-
-## Limitations and future work
-
-- **Simulation scope:** discrete grid dynamics are not physical robot control. Traffic recovery is bounded and cannot resolve every delay; historical acceptance evidence includes an unresolved long-wait case.
-- **Reasoning scope:** supported actions and explanation vocabulary are deliberately narrow. Future evaluation should test broader, held-out cases, repeated trials, and live adversarial inputs before expanding capabilities.
-- **Persistence scope:** proposal/audit persistence is not a resumable simulator checkpoint. Process failure can require evidence preservation and reconciliation of retained visitor schemas.
-- **Operational scope:** the visitor server has bounded capacity and targets one application process. Distributed simulator ownership, horizontal scaling, and production throughput have not been demonstrated.
-- **Evidence scope:** recorded model responses, host checks, command execution, human approval, and delivered jobs require separate evidence. A polished demo does not establish production reliability.
-
-Further reading: [evaluation methodology](docs/phase5-evaluation-report.md), [visitor security and operational limits](docs/pub-02.md), [deployment and recovery runbook](docs/pub-03.md), and [historical limitations](docs/known-limitations.md). Older status sections in these detailed records describe their original verification context.
+Open [127.0.0.1:8080](http://127.0.0.1:8080) and stop the server with Ctrl+C so it can archive sessions. See the [visitor configuration](docs/pub-02.md#configuration-and-deployment-preparation) for environment details. The [scripted proposal demo](docs/phase4-demo.md) and [evaluation workflows](evals/README.md) are separate from the normal application.
